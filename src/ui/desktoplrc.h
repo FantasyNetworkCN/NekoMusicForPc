@@ -3,9 +3,9 @@
 #include <QWidget>
 #include <QColor>
 #include <QFont>
-#include <QMap>
 #include <QPoint>
 #include <QTimer>
+#include <QVector>
 
 class QPaintEvent;
 class QMouseEvent;
@@ -38,6 +38,12 @@ protected:
     void changeEvent(QEvent *event) override;
 
 private:
+    struct ParsedLyricLine {
+        qint64 timeMs = 0;
+        QString text;
+        QString translation;
+    };
+
     bool useLayerShellPath() const;
     void ensureLayerShellConfigured();
     void applyLayerShellGeometry();
@@ -45,6 +51,7 @@ private:
     void saveLayerShellGeometry();
 
     void parseLyrics(const QString &lyricsText);
+    ParsedLyricLine getLyricEntryAtTime(qint64 timeMs) const;
     QString getLyricAtTime(qint64 timeMs) const;
     void updateLyricDisplay();
     void restoreGeometry();
@@ -64,9 +71,9 @@ private:
     QPoint m_cachedScreenPos;
     QScreen *m_dragScreen = nullptr;
     int m_panelW = 380;
-    int m_panelH = 64;
+    int m_panelH = 80;
 
-    QMap<qint64, QString> m_lyricsMap;
+    QVector<ParsedLyricLine> m_lyrics;
     qint64 m_currentPosition = 0;
     QString m_currentSongTitle;
     QString m_currentSongArtist;

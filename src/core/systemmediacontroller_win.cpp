@@ -152,6 +152,11 @@ void SystemMediaController::syncVolumeFromEngine(double volume01)
     m_volume = qBound(0.0, volume01, 1.0);
 }
 
+void SystemMediaController::notifySeeked(qlonglong positionUs)
+{
+    Q_UNUSED(positionUs);
+}
+
 void SystemMediaController::onPositionMsChanged(qint64 positionMs)
 {
     Q_UNUSED(positionMs);

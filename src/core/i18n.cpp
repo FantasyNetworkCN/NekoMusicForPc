@@ -106,6 +106,7 @@ static QMap<QString, QString> zhCN()
     m["shortcutGlobalInactive"] = QStringLiteral("全局快捷键未启用");
     m["shortcutGlobalUnavailable"] = QStringLiteral("当前环境不支持全局快捷键（需要 xdg-desktop-portal GlobalShortcuts）");
     m["shortcutGlobalPortalFailed"] = QStringLiteral("全局快捷键注册失败：%1（已尝试窗口内回退）");
+    m["shortcutGlobalConfigureFailed"] = QStringLiteral("无法打开系统快捷键授权界面：%1");
     m["playModeList"] = QStringLiteral("列表循环");
     m["playModeSingle"] = QStringLiteral("单曲循环");
     m["playModeRandom"] = QStringLiteral("随机播放");
@@ -700,6 +701,7 @@ static QMap<QString, QString> nyaCN()
     m["shortcutGlobalInactive"] = QStringLiteral("全局快捷键还没启用喵");
     m["shortcutGlobalUnavailable"] = QStringLiteral("这环境不支持全局快捷键喵（要 xdg-desktop-portal GlobalShortcuts）");
     m["shortcutGlobalPortalFailed"] = QStringLiteral("全局快捷键注册失败：%1（已尝试窗口内回退）喵");
+    m["shortcutGlobalConfigureFailed"] = QStringLiteral("系统快捷键授权界面打不开喵：%1");
     m["showWindow"] = QStringLiteral("快现身喵~");
     m["exitApp"] = QStringLiteral("残忍离去喵...");
 
@@ -910,6 +912,7 @@ static QMap<QString, QString> enUS()
     m["shortcutGlobalUnavailable"] =
         "Global shortcuts unavailable (xdg-desktop-portal GlobalShortcuts required)";
     m["shortcutGlobalPortalFailed"] = "Global shortcut registration failed: %1 (in-window fallback tried)";
+    m["shortcutGlobalConfigureFailed"] = "Could not open system shortcut authorization dialog: %1";
     m["playModeList"] = "List Loop";
     m["playModeSingle"] = "Single Loop";
     m["playModeRandom"] = "Random";

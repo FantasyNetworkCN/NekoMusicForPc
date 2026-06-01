@@ -4,6 +4,8 @@
 #include <QWidget>
 #include <QLabel>
 
+class RoundCoverLabel;
+
 class PlaylistListItem : public QWidget {
     Q_OBJECT
 
@@ -34,7 +36,7 @@ private:
     int m_musicCount;
     bool m_hovered = false;
     Mode m_mode = UserPlaylist;
-    QLabel *m_coverLbl = nullptr;
+    RoundCoverLabel *m_coverLbl = nullptr;
     QLabel *m_nameLbl = nullptr;
     void setPlaceholderCover();
 };

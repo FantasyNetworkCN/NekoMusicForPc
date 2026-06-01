@@ -54,6 +54,9 @@ cmake --build build/linux-release -j"$(nproc)"
 # Windows / macOS（需在对应系统或 CI 上）
 cmake --preset windows-release
 cmake --preset macos-release
+
+# macOS 一键打通用 pkg（arm64 + x86_64）
+./build_macos.sh
 ```
 
 手动配置示例：
@@ -83,7 +86,7 @@ cmake --install build/linux-release --prefix /usr/local
 | --- | --- |
 | Linux | 可执行文件在构建目录；`build_linux.sh` 可用 CPack 打 deb（若已配置） |
 | Windows | `build_windows.sh` 完成后一般在 `dist/` 下生成安装包（见脚本输出） |
-| macOS | 可在本机 Xcode 工具链构建；CI 见 `.github/workflows/build-macos.yml`（产出 `.pkg`） |
+| macOS | `build_macos.sh` 完成后在 `dist/` 下生成通用架构 `.pkg`（arm64 + x86_64）；CI 见 `.github/workflows/build-macos.yml` |
 
 ---
 

@@ -41,6 +41,7 @@ public:
     void updateCapabilities(bool canNext, bool canPrev, bool canSeek);
     void updateLoopShuffle(const QString &playMode);
     void syncVolumeFromEngine(double volume01);
+    void notifySeeked(qlonglong positionUs);
 
     void fireRaise() { emit raiseRequested(); }
     void fireQuit() { emit quitRequested(); }
@@ -67,6 +68,10 @@ public:
     bool mprisCanSeek() const { return m_canSeek; }
     QString mprisCurrentTrackPath() const { return m_currentTrackId.path(); }
     void applyVolumeFromMpris(double v);
+    void applyLoopStatusFromMpris(const QString &status);
+    void applyShuffleFromMpris(bool shuffle);
+    void syncPlaybackStatusFromEngine();
+    QString computeMprisPlaybackStatus() const;
 #endif
 
 public slots:
@@ -84,6 +89,8 @@ signals:
     void seekRelativeUs(qint64 deltaUs);
     void seekAbsoluteUs(qint64 positionUs);
     void volumeSetByOs(double volume01);
+    void loopStatusSetRequested(const QString &status);
+    void shuffleSetRequested(bool shuffle);
 
 private:
 #if defined(Q_OS_LINUX)
@@ -105,6 +112,7 @@ private:
     bool m_canGoNext = false;
     bool m_canGoPrevious = false;
     bool m_canSeek = false;
+    bool m_hasActiveTrack = false;
     qint64 m_lastPositionEmitMs = -1;
 
 #if defined(Q_OS_LINUX)

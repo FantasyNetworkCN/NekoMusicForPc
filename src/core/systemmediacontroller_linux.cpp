@@ -1,5 +1,8 @@
 #include "systemmediacontroller.h"
+#include "core/covercache.h"
 #include "core/playerengine.h"
+#include "theme/theme.h"
+
 #include <QDBusAbstractAdaptor>
 #include <QDBusConnection>
 #include <QDBusError>
@@ -48,9 +51,9 @@ class MprisPlayerAdaptor : public QDBusAbstractAdaptor
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.mpris.MediaPlayer2.Player")
     Q_PROPERTY(QString PlaybackStatus READ playbackStatus NOTIFY playbackStatusChanged)
-    Q_PROPERTY(QString LoopStatus READ loopStatus NOTIFY loopStatusChanged)
+    Q_PROPERTY(QString LoopStatus READ loopStatus WRITE setLoopStatus NOTIFY loopStatusChanged)
     Q_PROPERTY(double Rate READ rate CONSTANT)
-    Q_PROPERTY(bool Shuffle READ shuffle NOTIFY shuffleChanged)
+    Q_PROPERTY(bool Shuffle READ shuffle WRITE setShuffle NOTIFY shuffleChanged)
     Q_PROPERTY(QVariantMap Metadata READ metadata NOTIFY metadataChanged)
     Q_PROPERTY(double Volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(qlonglong Position READ position NOTIFY positionChanged)
@@ -68,8 +71,10 @@ public:
 
     QString playbackStatus() const;
     QString loopStatus() const;
+    void setLoopStatus(const QString &status);
     double rate() const;
     bool shuffle() const;
+    void setShuffle(bool shuffle);
     QVariantMap metadata() const;
     double volume() const;
     void setVolume(double v);
@@ -104,6 +109,7 @@ public slots:
     void tellCanPlayChanged() { emit canPlayChanged(); }
     void tellCanPauseChanged() { emit canPauseChanged(); }
     void tellCanSeekChanged() { emit canSeekChanged(); }
+    void tellSeeked(qlonglong positionUs) { emit Seeked(positionUs); }
 
 signals:
     void playbackStatusChanged();
@@ -117,16 +123,49 @@ signals:
     void canPlayChanged();
     void canPauseChanged();
     void canSeekChanged();
+    void Seeked(qlonglong position);
 
 private:
     SystemMediaController *m_ctrl;
 };
 
 namespace {
+
 constexpr char kMprisPath[] = "/org/mpris/MediaPlayer2";
 constexpr char kMprisService[] = "org.mpris.MediaPlayer2.NekoMusic";
 constexpr int kPositionEmitIntervalMs = 900;
+
+const QDBusObjectPath kNoTrackId(QStringLiteral("/org/mpris/MediaPlayer2/Track/NoTrack"));
+
+QString absoluteArtUrl(const MusicInfo &music)
+{
+    const QString resolved = CoverCache::resolveCoverUrl(music.coverUrl);
+    if (resolved.isEmpty())
+        return {};
+    if (resolved.startsWith(QLatin1String("file:"), Qt::CaseInsensitive)
+        || resolved.startsWith(QLatin1String("http://"), Qt::CaseInsensitive)
+        || resolved.startsWith(QLatin1String("https://"), Qt::CaseInsensitive)) {
+        return resolved;
+    }
+    return resolved;
 }
+
+QString trackUrlForMetadata(const MusicInfo &music, PlayerEngine *engine)
+{
+    if (music.isLocalFile())
+        return QUrl::fromLocalFile(music.localPath).toString();
+    if (engine) {
+        const QUrl src = engine->currentMediaUrl();
+        if (src.isValid())
+            return src.toString();
+    }
+    if (music.id > 0) {
+        return QStringLiteral("%1/detail/%2").arg(QString::fromUtf8(Theme::kApiBase)).arg(music.id);
+    }
+    return {};
+}
+
+} // namespace
 
 MprisRootAdaptor::MprisRootAdaptor(SystemMediaController *parent)
     : QDBusAbstractAdaptor(parent)
@@ -142,7 +181,7 @@ bool MprisRootAdaptor::hasTrackList() const { return false; }
 
 QString MprisRootAdaptor::identity() const
 {
-    return QStringLiteral("Neko云音乐");
+    return QStringLiteral("NekoMusic");
 }
 
 QString MprisRootAdaptor::desktopEntry() const
@@ -158,7 +197,7 @@ QStringList MprisRootAdaptor::supportedUriSchemes() const
 QStringList MprisRootAdaptor::supportedMimeTypes() const
 {
     return {QStringLiteral("audio/mpeg"), QStringLiteral("audio/flac"), QStringLiteral("audio/ogg"),
-            QStringLiteral("audio/x-wav")};
+            QStringLiteral("audio/x-wav"), QStringLiteral("audio/mp4"), QStringLiteral("audio/aac")};
 }
 
 void MprisRootAdaptor::Raise()
@@ -179,8 +218,20 @@ MprisPlayerAdaptor::MprisPlayerAdaptor(SystemMediaController *parent)
 
 QString MprisPlayerAdaptor::playbackStatus() const { return m_ctrl->mprisPlaybackStatus(); }
 QString MprisPlayerAdaptor::loopStatus() const { return m_ctrl->mprisLoopStatus(); }
+
+void MprisPlayerAdaptor::setLoopStatus(const QString &status)
+{
+    m_ctrl->applyLoopStatusFromMpris(status);
+}
+
 double MprisPlayerAdaptor::rate() const { return 1.0; }
 bool MprisPlayerAdaptor::shuffle() const { return m_ctrl->mprisShuffle(); }
+
+void MprisPlayerAdaptor::setShuffle(bool shuffle)
+{
+    m_ctrl->applyShuffleFromMpris(shuffle);
+}
+
 QVariantMap MprisPlayerAdaptor::metadata() const { return m_ctrl->mprisMetadata(); }
 double MprisPlayerAdaptor::volume() const { return m_ctrl->mprisVolume(); }
 
@@ -263,7 +314,8 @@ SystemMediaController::SystemMediaController(QObject *parent)
         return;
     }
 
-    if (!bus.registerObject(QString::fromLatin1(kMprisPath), this, QDBusConnection::ExportAdaptors)) {
+    if (!bus.registerObject(QString::fromLatin1(kMprisPath), this,
+                            QDBusConnection::ExportAdaptors | QDBusConnection::ExportScriptableSlots)) {
         qWarning() << "MPRIS: registerObject failed:" << bus.lastError().message();
         bus.unregisterService(QString::fromLatin1(kMprisService));
         return;
@@ -290,82 +342,90 @@ void SystemMediaController::setPlayerEngine(PlayerEngine *engine)
     m_engine = engine;
 }
 
-void SystemMediaController::updateFromEngineState(PlayerEngine::PlaybackState state)
+QString SystemMediaController::computeMprisPlaybackStatus() const
 {
-    QString next;
-    switch (state) {
-    case PlayerEngine::Playing:
-        next = QStringLiteral("Playing");
-        break;
-    case PlayerEngine::Paused:
-        next = QStringLiteral("Paused");
-        break;
-    default:
-        next = QStringLiteral("Stopped");
-        break;
+    if (!m_engine || !m_hasActiveTrack)
+        return QStringLiteral("Stopped");
+    if (m_engine->isFadingOut() && m_engine->isActuallyPlaying())
+        return QStringLiteral("Paused");
+    if (m_engine->isActuallyPlaying())
+        return QStringLiteral("Playing");
+    if (m_engine->playbackState() == PlayerEngine::Paused
+        || m_engine->transportStateForOs() == PlayerEngine::Paused) {
+        return QStringLiteral("Paused");
     }
-    if (m_playbackStatus == next) {
-        if (state == PlayerEngine::Playing)
-            startPositionTimer();
-        else
-            stopPositionTimer();
-        // PlaybackStatus 未变但底层 QMediaPlayer 与 m_state 曾脱节时，CanPlay/CanPause 仍需刷新（KDE 等会读）
-        m_playerAdaptor->tellCanPlayChanged();
-        m_playerAdaptor->tellCanPauseChanged();
+    return QStringLiteral("Stopped");
+}
+
+void SystemMediaController::syncPlaybackStatusFromEngine()
+{
+    if (!m_playerAdaptor)
         return;
+
+    const QString next = computeMprisPlaybackStatus();
+    if (m_playbackStatus != next) {
+        m_playbackStatus = next;
+        m_playerAdaptor->tellPlaybackStatusChanged();
     }
-    m_playbackStatus = next;
-    m_playerAdaptor->tellPlaybackStatusChanged();
+
     m_playerAdaptor->tellCanPlayChanged();
     m_playerAdaptor->tellCanPauseChanged();
 
-    if (state == PlayerEngine::Playing)
+    if (next == QStringLiteral("Playing"))
         startPositionTimer();
     else
         stopPositionTimer();
 }
 
+void SystemMediaController::updateFromEngineState(PlayerEngine::PlaybackState state)
+{
+    Q_UNUSED(state);
+    syncPlaybackStatusFromEngine();
+}
+
 void SystemMediaController::updateMetadata(const MusicInfo &music, qint64 durationMs)
 {
     QVariantMap meta;
+    m_hasActiveTrack = false;
+
+    const auto putCommonFields = [&](const MusicInfo &info, const QString &trackPath) {
+        m_currentTrackId = QDBusObjectPath(trackPath);
+        meta.insert(QStringLiteral("mpris:trackid"), QVariant::fromValue(m_currentTrackId));
+        if (!info.title.isEmpty())
+            meta.insert(QStringLiteral("xesam:title"), info.title);
+        if (!info.artist.isEmpty()) {
+            meta.insert(QStringLiteral("xesam:artist"), QStringList{info.artist});
+            meta.insert(QStringLiteral("xesam:albumArtist"), QStringList{info.artist});
+        }
+        if (!info.album.isEmpty())
+            meta.insert(QStringLiteral("xesam:album"), info.album);
+        const QString art = absoluteArtUrl(info);
+        if (!art.isEmpty())
+            meta.insert(QStringLiteral("mpris:artUrl"), art);
+        const QString url = trackUrlForMetadata(info, m_engine);
+        if (!url.isEmpty())
+            meta.insert(QStringLiteral("xesam:url"), url);
+        const qint64 lenMs = qMax(durationMs, static_cast<qint64>(info.duration) * 1000);
+        if (lenMs > 0)
+            meta.insert(QStringLiteral("mpris:length"), lenMs * 1000LL);
+        m_hasActiveTrack = true;
+    };
+
     if (music.id > 0) {
-        const QString trackPath = QStringLiteral("/org/mpris/MediaPlayer2/track/%1").arg(music.id);
-        m_currentTrackId = QDBusObjectPath(trackPath);
-        meta.insert(QStringLiteral("mpris:trackid"), QVariant::fromValue(m_currentTrackId));
-        meta.insert(QStringLiteral("xesam:title"), music.title);
-        if (!music.artist.isEmpty())
-            meta.insert(QStringLiteral("xesam:artist"), QStringList{music.artist});
-        if (!music.album.isEmpty())
-            meta.insert(QStringLiteral("xesam:album"), music.album);
-        if (!music.coverUrl.isEmpty())
-            meta.insert(QStringLiteral("mpris:artUrl"), music.coverUrl);
-        const qint64 lenMs = qMax(durationMs, static_cast<qint64>(music.duration) * 1000);
-        if (lenMs > 0)
-            meta.insert(QStringLiteral("mpris:length"), lenMs * 1000);
+        putCommonFields(music, QStringLiteral("/org/mpris/MediaPlayer2/track/%1").arg(music.id));
     } else if (music.isLocalFile()) {
-        const QString trackPath = QStringLiteral("/org/mpris/MediaPlayer2/track/local%1")
-            .arg(qHash(music.localPath));
-        m_currentTrackId = QDBusObjectPath(trackPath);
-        meta.insert(QStringLiteral("mpris:trackid"), QVariant::fromValue(m_currentTrackId));
-        meta.insert(QStringLiteral("xesam:title"), music.title);
-        if (!music.artist.isEmpty())
-            meta.insert(QStringLiteral("xesam:artist"), QStringList{music.artist});
-        if (!music.album.isEmpty())
-            meta.insert(QStringLiteral("xesam:album"), music.album);
-        if (!music.coverUrl.isEmpty())
-            meta.insert(QStringLiteral("mpris:artUrl"), music.coverUrl);
-        meta.insert(QStringLiteral("xesam:url"), QUrl::fromLocalFile(music.localPath).toString());
-        const qint64 lenMs = qMax(durationMs, static_cast<qint64>(music.duration) * 1000);
-        if (lenMs > 0)
-            meta.insert(QStringLiteral("mpris:length"), lenMs * 1000);
+        putCommonFields(music, QStringLiteral("/org/mpris/MediaPlayer2/track/local%1")
+                                   .arg(qHash(music.localPath)));
     } else {
-        m_currentTrackId = QDBusObjectPath();
+        m_currentTrackId = kNoTrackId;
+        meta.insert(QStringLiteral("mpris:trackid"), QVariant::fromValue(kNoTrackId));
     }
 
     m_metadata = meta;
     m_playerAdaptor->tellMetadataChanged();
     m_playerAdaptor->tellPositionChanged();
     m_lastPositionEmitMs = -1;
+    syncPlaybackStatusFromEngine();
 }
 
 void SystemMediaController::updateCapabilities(bool canNext, bool canPrev, bool canSeek)
@@ -403,6 +463,16 @@ void SystemMediaController::updateLoopShuffle(const QString &playMode)
         m_shuffle = shuf;
         m_playerAdaptor->tellShuffleChanged();
     }
+}
+
+void SystemMediaController::applyLoopStatusFromMpris(const QString &status)
+{
+    emit loopStatusSetRequested(status);
+}
+
+void SystemMediaController::applyShuffleFromMpris(bool shuffle)
+{
+    emit shuffleSetRequested(shuffle);
 }
 
 void SystemMediaController::syncVolumeFromEngine(double volume01)
@@ -463,6 +533,12 @@ void SystemMediaController::applyVolumeFromMpris(double v)
     emit volumeSetByOs(v);
 }
 
+void SystemMediaController::notifySeeked(qlonglong positionUs)
+{
+    if (m_playerAdaptor)
+        m_playerAdaptor->tellSeeked(positionUs);
+}
+
 qlonglong SystemMediaController::mprisPositionUs() const
 {
     if (!m_engine)
@@ -472,17 +548,19 @@ qlonglong SystemMediaController::mprisPositionUs() const
 
 bool SystemMediaController::mprisCanPlay() const
 {
-    if (!m_engine)
+    if (!m_engine || !m_hasActiveTrack)
         return false;
-    // Keep capability evaluation consistent with exported PlaybackStatus to avoid
-    // transient state drift in desktop media UIs.
+    if (m_engine->isActuallyPlaying())
+        return false;
     return m_playbackStatus != QStringLiteral("Playing");
 }
 
 bool SystemMediaController::mprisCanPause() const
 {
-    if (!m_engine)
+    if (!m_engine || !m_hasActiveTrack)
         return false;
+    if (m_engine->isActuallyPlaying() && !m_engine->isFadingOut())
+        return true;
     return m_playbackStatus == QStringLiteral("Playing");
 }
 

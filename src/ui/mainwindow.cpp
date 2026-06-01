@@ -35,6 +35,7 @@
 #include "core/apiclient.h"
 #include "core/httpprotocollabel.h"
 #include "core/musicdownloader.h"
+#include "core/linuxtmpfscache.h"
 #include "core/usermanager.h"
 #include "core/playlistdb.h"
 #include "core/playlistmanager.h"
@@ -282,6 +283,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         if (ms < 0)
             ms = 0;
         m_engine->setPosition(ms);
+        if (m_systemMedia)
+            m_systemMedia->notifySeeked(ms * 1000);
     });
     connect(m_systemMedia, &SystemMediaController::seekAbsoluteUs, this, [this](qint64 us) {
         if (!m_engine)
@@ -290,6 +293,29 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         if (ms < 0)
             ms = 0;
         m_engine->setPosition(ms);
+        if (m_systemMedia)
+            m_systemMedia->notifySeeked(ms * 1000);
+    });
+    connect(m_systemMedia, &SystemMediaController::loopStatusSetRequested, this, [this](const QString &status) {
+        auto &mgr = PlaylistManager::instance();
+        if (status == QStringLiteral("Track"))
+            mgr.setPlayMode(QStringLiteral("single"));
+        else if (status == QStringLiteral("Playlist"))
+            mgr.setPlayMode(QStringLiteral("list"));
+        else
+            mgr.setPlayMode(mgr.playMode() == QStringLiteral("random") ? QStringLiteral("list")
+                                                                       : mgr.playMode());
+        syncPlayModeUi();
+        refreshSystemMediaIntegration();
+    });
+    connect(m_systemMedia, &SystemMediaController::shuffleSetRequested, this, [this](bool shuffle) {
+        auto &mgr = PlaylistManager::instance();
+        if (shuffle)
+            mgr.setPlayMode(QStringLiteral("random"));
+        else if (mgr.playMode() == QStringLiteral("random"))
+            mgr.setPlayMode(QStringLiteral("list"));
+        syncPlayModeUi();
+        refreshSystemMediaIntegration();
     });
     connect(m_systemMedia, &SystemMediaController::volumeSetByOs, this, [this](double v) {
         if (m_engine)
@@ -428,6 +454,9 @@ void MainWindow::setupUi()
     // 加载播放队列
     PlaylistManager::instance().load();
 
+#ifdef Q_OS_LINUX
+    LinuxTmpfsCache::runStartupMaintenance();
+#endif
     MusicDownloader::purgeLegacyMd5CacheFiles();
 
     // 恢复上次播放的音乐
@@ -1255,6 +1284,9 @@ void MainWindow::startRemotePlaybackWithBackgroundCache(int musicId, quint64 pla
 {
     const QString cachedPath = MusicDownloader::cachedAudioFilePath(musicId);
     if (QFile::exists(cachedPath)) {
+#ifdef Q_OS_LINUX
+        LinuxTmpfsCache::touchAudioCacheFile(cachedPath);
+#endif
         // 已有整文件：本地播，避免单曲循环/切回已缓存曲时反复开 HTTP 流导致卡顿
         cancelStreamWatch();
         m_streamRetryActive = false;
@@ -1624,11 +1656,11 @@ void MainWindow::openPlayerPage()
     if (!host)
         host = this;
     const QRect area = playerPageOverlayGeometry();
-    // 先抓取主界面再挂播放页，避免 grab 进播放页自身
-    m_playerPage->refreshUnderlayBackdrop(host, area.size());
+    // 先挂到 host 但保持隐藏，低分辨率 render 主界面后再 show，避免全屏 grab 卡顿
     m_playerPage->setParent(host);
     m_playerPage->setGeometry(area);
     m_playerPage->move(0, area.height());
+    m_playerPage->refreshUnderlayBackdrop(host, area.size());
     m_playerPage->show();
     m_playerPage->raise();
     syncPlayModeUi();
@@ -2091,9 +2123,7 @@ void MainWindow::togglePlaybackForSystemUi()
 {
     if (!m_engine)
         return;
-    // 使用playbackState()而不是transportStateForOs()来判断
-    // 因为transportStateForOs()在fadeOut期间返回Paused，即使QMediaPlayer还在播放
-    if (m_engine->playbackState() == PlayerEngine::Playing)
+    if (m_engine->isActuallyPlaying() && !m_engine->isFadingOut())
         m_engine->fadeOut();
     else
         m_engine->fadeIn();
@@ -2109,7 +2139,7 @@ void MainWindow::setupKeyboardShortcuts()
     connect(&global, &GlobalShortcutController::previousTrackTriggered, this,
             &MainWindow::playPrevious);
     connect(&AppShortcuts::instance(), &AppShortcuts::shortcutsChanged, &global,
-            &GlobalShortcutController::rebind);
+            &GlobalShortcutController::scheduleRebindAfterSettingsChange);
     connect(&global, &GlobalShortcutController::bindingFailed, this,
             [this](const QString &reason) {
                 Toast::show(this, reason, Toast::Info, 4500);
@@ -2130,20 +2160,14 @@ void MainWindow::resumePlaybackForSystemUi()
 {
     if (!m_engine)
         return;
-    // 使用playbackState()而不是transportStateForOs()来判断
-    if (m_engine->playbackState() != PlayerEngine::Playing) {
+    if (!m_engine->isActuallyPlaying())
         m_engine->fadeIn();
-    }
 }
 
 void MainWindow::pausePlaybackForSystemUi()
 {
     if (!m_engine)
         return;
-    // 当系统媒体控制器请求暂停时，总是尝试暂停
-    // 检查是否正在播放或淡出过程中
-    if (m_engine->playbackState() == PlayerEngine::Playing
-        || m_engine->transportStateForOs() == PlayerEngine::Playing) {
+    if (m_engine->isActuallyPlaying())
         m_engine->fadeOut();
-    }
 }

@@ -212,6 +212,11 @@ qint64 PlayerEngine::position() const
     return m_player->position();
 }
 
+QUrl PlayerEngine::currentMediaUrl() const
+{
+    return m_player ? m_player->source() : QUrl();
+}
+
 int PlayerEngine::audioBitRateBps() const
 {
     if (!m_player)

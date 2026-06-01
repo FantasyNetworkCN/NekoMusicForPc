@@ -256,6 +256,11 @@ void SystemMediaController::syncVolumeFromEngine(double volume01)
     Q_UNUSED(m_volume);
 }
 
+void SystemMediaController::notifySeeked(qlonglong positionUs)
+{
+    Q_UNUSED(positionUs);
+}
+
 void SystemMediaController::onPositionMsChanged(qint64 positionMs)
 {
     if (m_playbackStatus != QStringLiteral("Playing"))

@@ -1,4 +1,5 @@
 #include "ui/playlistlistitem.h"
+#include "ui/roundcoverlabel.h"
 #include "core/i18n.h"
 #include "theme/thememanager.h"
 
@@ -23,9 +24,8 @@ PlaylistListItem::PlaylistListItem(int playlistId, const QString& name, int musi
     lay->setSpacing(10);
 
     // Cover
-    m_coverLbl = new QLabel(this);
+    m_coverLbl = new RoundCoverLabel(8, this);
     m_coverLbl->setFixedSize(36, 36);
-    m_coverLbl->setScaledContents(false);
     lay->addWidget(m_coverLbl);
 
     if (!coverUrl.isEmpty()) {
@@ -75,12 +75,7 @@ void PlaylistListItem::setMusicCount(int count) {
 
 void PlaylistListItem::setPlaceholderCover() {
     QPixmap pix(36, 36);
-    pix.fill(Qt::transparent);
-    QPainter p(&pix);
-    p.setRenderHint(QPainter::Antialiasing);
-    QPainterPath path;
-    path.addRoundedRect(0, 0, 36, 36, 6, 6);
-    p.fillPath(path, QColor(128, 128, 128, 60));
+    pix.fill(QColor(128, 128, 128, 60));
     m_coverLbl->setPixmap(pix);
 }
 

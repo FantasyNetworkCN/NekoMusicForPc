@@ -17,6 +17,7 @@
 #include <QScreen>
 #include <QSettings>
 #include <QShowEvent>
+#include <algorithm>
 
 #if defined(NEKO_HAS_LAYERSHELL_QT)
 #include <LayerShellQt/Window>
@@ -25,8 +26,8 @@
 namespace {
 
 constexpr int kDefaultDesktopLyricsW = 380;
-constexpr int kDefaultDesktopLyricsH = 64;
-constexpr int kDesktopLyricsGeomVersion = 6;
+constexpr int kDefaultDesktopLyricsH = 80;
+constexpr int kDesktopLyricsGeomVersion = 7;
 
 bool isReasonableDesktopLyricsSize(int w, int h, const QScreen *screen)
 {
@@ -56,7 +57,7 @@ void migrateDesktopLyricsGeometry(QSettings &settings)
     if (version >= kDesktopLyricsGeomVersion && isReasonableDesktopLyricsSize(w, h, screen))
         return;
 
-    if (!isReasonableDesktopLyricsSize(w, h, screen)) {
+    if (!isReasonableDesktopLyricsSize(w, h, screen) || h < kDefaultDesktopLyricsH) {
         settings.remove(QStringLiteral("desktopLyricsX"));
         settings.remove(QStringLiteral("desktopLyricsY"));
         settings.setValue(QStringLiteral("desktopLyricsW"), kDefaultDesktopLyricsW);
@@ -94,7 +95,7 @@ DesktopLrc::DesktopLrc(QWidget *parent)
 
     setWindowTitle(QStringLiteral("NekoMusic — %1")
                  .arg(I18n::instance().tr(QStringLiteral("desktopLyrics"))));
-    resize(380, 64);
+    resize(kDefaultDesktopLyricsW, kDefaultDesktopLyricsH);
 
     m_font = QFont(QStringLiteral("Microsoft YaHei"), 12, QFont::Bold);
     m_textColor = Qt::white;
@@ -446,14 +447,14 @@ void DesktopLrc::applyFallbackText()
 void DesktopLrc::loadLrcText(const QString &lrcText)
 {
     if (lrcText.trimmed().isEmpty()) {
-        m_lyricsMap.clear();
+        m_lyrics.clear();
         applyFallbackText();
         update();
         return;
     }
 
     parseLyrics(lrcText);
-    if (m_lyricsMap.isEmpty()) {
+    if (m_lyrics.isEmpty()) {
         applyFallbackText();
     } else {
         m_currentLyrics = getLyricAtTime(m_currentPosition);
@@ -463,7 +464,7 @@ void DesktopLrc::loadLrcText(const QString &lrcText)
 
 void DesktopLrc::parseLyrics(const QString &lyricsText)
 {
-    m_lyricsMap.clear();
+    m_lyrics.clear();
 
     const QStringList lines = lyricsText.split(QLatin1Char('\n'));
     static const QRegularExpression timeRegex(R"(\[(\d+):(\d{1,2})(?:\.(\d{1,5}))?\])");
@@ -498,6 +499,12 @@ void DesktopLrc::parseLyrics(const QString &lyricsText)
         if (lyricText.isEmpty())
             continue;
 
+        const bool isTranslation = lyricText.startsWith(QLatin1Char('='));
+        if (isTranslation)
+            lyricText = lyricText.mid(1).trimmed();
+        if (lyricText.isEmpty())
+            continue;
+
         matches = timeRegex.globalMatch(trimmed);
         while (matches.hasNext()) {
             const QRegularExpressionMatch match = matches.next();
@@ -505,9 +512,37 @@ void DesktopLrc::parseLyrics(const QString &lyricsText)
             const int seconds = match.captured(2).toInt();
             const int ms = subsecondToMs(match.captured(3));
             const qint64 timeMs = static_cast<qint64>(minutes) * 60000 + seconds * 1000 + ms;
-            m_lyricsMap[timeMs] = lyricText;
+
+            if (isTranslation) {
+                for (int i = m_lyrics.size() - 1; i >= 0; --i) {
+                    if (m_lyrics[i].timeMs == timeMs) {
+                        m_lyrics[i].translation = lyricText;
+                        break;
+                    }
+                }
+                continue;
+            }
+
+            bool merged = false;
+            for (ParsedLyricLine &entry : m_lyrics) {
+                if (entry.timeMs == timeMs) {
+                    entry.text = lyricText;
+                    merged = true;
+                    break;
+                }
+            }
+            if (!merged) {
+                ParsedLyricLine entry;
+                entry.timeMs = timeMs;
+                entry.text = lyricText;
+                m_lyrics.append(entry);
+            }
         }
     }
+
+    std::sort(m_lyrics.begin(), m_lyrics.end(), [](const ParsedLyricLine &a, const ParsedLyricLine &b) {
+        return a.timeMs < b.timeMs;
+    });
 }
 
 void DesktopLrc::updatePosition(qint64 position)
@@ -521,25 +556,31 @@ void DesktopLrc::setCurrentSong(const QString &title, const QString &artist)
     m_currentSongTitle = title;
     m_currentSongArtist = artist;
     m_currentPosition = 0;
-    m_lyricsMap.clear();
+    m_lyrics.clear();
     applyFallbackText();
     update();
 }
 
-QString DesktopLrc::getLyricAtTime(qint64 timeMs) const
+DesktopLrc::ParsedLyricLine DesktopLrc::getLyricEntryAtTime(qint64 timeMs) const
 {
-    if (m_lyricsMap.isEmpty())
-        return m_currentLyrics;
+    ParsedLyricLine result;
+    result.text = m_currentLyrics;
+    if (m_lyrics.isEmpty())
+        return result;
 
-    QString lyric;
-    for (auto it = m_lyricsMap.constBegin(); it != m_lyricsMap.constEnd(); ++it) {
-        if (it.key() <= timeMs)
-            lyric = it.value();
+    for (const ParsedLyricLine &line : m_lyrics) {
+        if (line.timeMs <= timeMs)
+            result = line;
         else
             break;
     }
+    return result;
+}
 
-    return lyric.isEmpty() ? m_currentLyrics : lyric;
+QString DesktopLrc::getLyricAtTime(qint64 timeMs) const
+{
+    const ParsedLyricLine line = getLyricEntryAtTime(timeMs);
+    return line.text.isEmpty() ? m_currentLyrics : line.text;
 }
 
 void DesktopLrc::updateLyricDisplay()
@@ -597,68 +638,34 @@ void DesktopLrc::paintEvent(QPaintEvent *event)
     painter.setBrush(m_backgroundColor);
     painter.drawRoundedRect(panel, 16, 16);
 
-    const QString currentLyric = getLyricAtTime(m_currentPosition);
-    QString nextLyric;
-    qint64 nextTime = -1;
+    const ParsedLyricLine current = getLyricEntryAtTime(m_currentPosition);
+    const QString mainText = current.text.isEmpty() ? m_currentLyrics : current.text;
+    const QString transText = current.translation.trimmed();
 
-    for (auto it = m_lyricsMap.constBegin(); it != m_lyricsMap.constEnd(); ++it) {
-        if (it.key() > m_currentPosition) {
-            nextLyric = it.value();
-            nextTime = it.key();
-            break;
-        }
-    }
-
-    float progress = 0.0f;
-    if (nextTime > 0 && !m_lyricsMap.isEmpty()) {
-        qint64 currentTime = 0;
-        for (auto it = m_lyricsMap.constBegin(); it != m_lyricsMap.constEnd(); ++it) {
-            if (it.key() <= m_currentPosition)
-                currentTime = it.key();
-            else
-                break;
-        }
-        if (currentTime >= 0 && nextTime > currentTime) {
-            progress = static_cast<float>(m_currentPosition - currentTime)
-                       / static_cast<float>(nextTime - currentTime);
-            progress = qBound(0.0f, progress, 1.0f);
-        }
-    }
-
-    // Let's use single-line or tight dual-line layout. 
-    // Since the window is compact (380x64), a neat single lyric line in the center, or micro dual-line works best.
-    // If nextLyric is empty, center the current lyric vertically.
-    // Let's draw current lyric with bright color (e.g., gold/yellow or white) and next lyric slightly faded.
     painter.setFont(m_font);
 
-    // Padding inside the capsule
-    int sidePadding = 20;
-    QRect textRect = panel.adjusted(sidePadding, 4, -sidePadding, -4);
+    const int sidePadding = 20;
+    const QRect textRect = panel.adjusted(sidePadding, 6, -sidePadding, -6);
 
-    if (nextLyric.isEmpty()) {
+    if (transText.isEmpty()) {
         painter.setPen(QColor(255, 200, 0));
-        painter.drawText(textRect, Qt::AlignCenter, currentLyric);
+        painter.drawText(textRect, Qt::AlignCenter | Qt::TextWordWrap, mainText);
     } else {
+        const int splitY = panel.top() + panel.height() * 5 / 12;
+        const QRect mainRect(panel.left() + sidePadding, panel.top() + 6,
+                             panel.width() - 2 * sidePadding, splitY - panel.top() - 6);
+        const QRect transRect(panel.left() + sidePadding, splitY,
+                              panel.width() - 2 * sidePadding, panel.bottom() - splitY - 6);
+
         painter.setPen(QColor(255, 200, 0));
-        QRect lyricRect(panel.left() + sidePadding, panel.top() + 4,
-                        panel.width() - 2 * sidePadding, panel.height() / 2 - 2);
-        painter.drawText(lyricRect, Qt::AlignCenter, currentLyric);
+        painter.drawText(mainRect, Qt::AlignCenter | Qt::TextWordWrap, mainText);
 
-        painter.setPen(QColor(255, 255, 255, 150));
-        painter.setFont(QFont(m_font.family(), m_font.pointSize() - 2, QFont::Medium));
-        QRect nextRect(panel.left() + sidePadding, panel.top() + panel.height() / 2 - 2,
-                       panel.width() - 2 * sidePadding, panel.height() / 2 - 2);
-        painter.drawText(nextRect, Qt::AlignCenter, nextLyric);
+        painter.setPen(QColor(255, 255, 255, 175));
+        painter.setFont(QFont(m_font.family(), qMax(9, m_font.pointSize() - 2), QFont::Normal));
+        painter.drawText(transRect, Qt::AlignCenter | Qt::TextWordWrap, transText);
     }
 
-    if (progress > 0.0f) {
-        int barH = 3;
-        int barW = static_cast<int>((panel.width() - 32) * progress);
-        painter.setBrush(QColor(255, 200, 0, 220));
-        painter.drawRoundedRect(panel.left() + 16, panel.bottom() - 6, barW, barH, 1.5, 1.5);
-    }
-
-    if (m_lyricsMap.isEmpty() && !m_currentSongTitle.isEmpty()) {
+    if (m_lyrics.isEmpty() && !m_currentSongTitle.isEmpty()) {
         painter.setPen(m_textColor);
         painter.setFont(QFont(QStringLiteral("Microsoft YaHei"), 10, QFont::Normal));
         const QString songInfo =

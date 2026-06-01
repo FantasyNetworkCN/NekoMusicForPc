@@ -77,7 +77,9 @@
             "binaryDir": "${sourceDir}/build/macos-release",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "BUILD_TESTING": "OFF"
+                "BUILD_TESTING": "OFF",
+                "CMAKE_OSX_ARCHITECTURES": "x86_64;arm64",
+                "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
             },
             "condition": {
                 "type": "equals",

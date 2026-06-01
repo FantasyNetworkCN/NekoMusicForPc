@@ -1,4 +1,5 @@
 #include "globalshortcutcontroller.h"
+#include "globalshortcutcontroller_p.h"
 #include "appshortcuts.h"
 
 #include "core/i18n.h"
@@ -10,10 +11,18 @@
 #include <functional>
 
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
-#include "globalshortcutportal_linux.h"
+struct GlobalShortcutControllerBackendImpl;
+class GlobalShortcutController;
+void nekoGlobalShortcutLinuxInitPortal(GlobalShortcutControllerBackendImpl *impl,
+                                       GlobalShortcutController *controller);
+void nekoGlobalShortcutLinuxSetPortalHost(GlobalShortcutControllerBackendImpl *impl, QWindow *window);
+bool nekoGlobalShortcutLinuxStartPortal(GlobalShortcutControllerBackendImpl *impl,
+                                        GlobalShortcutController *controller,
+                                        bool requestConfigureUi);
+void nekoGlobalShortcutLinuxStopPortal(GlobalShortcutControllerBackendImpl *impl);
+void nekoGlobalShortcutLinuxOpenPortalConfigure(GlobalShortcutControllerBackendImpl *impl,
+                                                GlobalShortcutController *controller);
 #endif
-
-namespace {
 
 class InAppFallbackBackend final : public QObject
 {
@@ -56,14 +65,19 @@ private:
     QList<QShortcut *> m_shortcuts;
 };
 
+namespace {
+
+bool isWaylandSession()
+{
+    const QByteArray platform = qgetenv("QT_QPA_PLATFORM");
+    if (platform.contains("wayland"))
+        return true;
+    return !qgetenv("WAYLAND_DISPLAY").isEmpty();
+}
+
 } // namespace
 
-struct GlobalShortcutController::BackendImpl
-{
-#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
-    GlobalShortcutPortalLinux *portal = nullptr;
-#endif
-    InAppFallbackBackend *fallback = nullptr;
+struct GlobalShortcutController::BackendImpl : GlobalShortcutControllerBackendImpl {
 };
 
 GlobalShortcutController &GlobalShortcutController::instance()
@@ -76,15 +90,14 @@ GlobalShortcutController::GlobalShortcutController(QObject *parent)
     : QObject(parent), m_impl(new BackendImpl)
 {
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
-    m_impl->portal = new GlobalShortcutPortalLinux(this);
-    connect(m_impl->portal, &GlobalShortcutPortalLinux::shortcutActivated, this,
-            &GlobalShortcutController::dispatchAction);
-    connect(m_impl->portal, &GlobalShortcutPortalLinux::bindSucceeded, this, [this]() {
-        activateBackend(Backend::Portal, true);
-    });
-    connect(m_impl->portal, &GlobalShortcutPortalLinux::bindFailed, this,
-            &GlobalShortcutController::tryFallbackAfterPortalFailure);
+    nekoGlobalShortcutLinuxInitPortal(m_impl, this);
 #endif
+
+    m_settingsRebindTimer = new QTimer(this);
+    m_settingsRebindTimer->setSingleShot(true);
+    m_settingsRebindTimer->setInterval(400);
+    connect(m_settingsRebindTimer, &QTimer::timeout, this,
+            &GlobalShortcutController::performSettingsRebind);
 }
 
 void GlobalShortcutController::installFallback(QWidget *parentWidget)
@@ -98,9 +111,18 @@ void GlobalShortcutController::setHostWindow(QWindow *window)
 {
     m_hostWindow = window;
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
-    if (m_impl->portal)
-        m_impl->portal->setHostWindow(window);
+    nekoGlobalShortcutLinuxSetPortalHost(m_impl, window);
 #endif
+}
+
+void GlobalShortcutController::prepareHostWindowForPortal()
+{
+    if (!m_hostWindow)
+        return;
+
+    m_hostWindow->winId();
+    m_hostWindow->raise();
+    m_hostWindow->requestActivate();
 }
 
 void GlobalShortcutController::activateBackend(Backend backend, bool active)
@@ -141,31 +163,48 @@ void GlobalShortcutController::tryFallbackAfterPortalFailure(const QString &reas
     emit bindingFailed(reason);
 }
 
-void GlobalShortcutController::start()
+void GlobalShortcutController::start(bool requestConfigureUi)
 {
-    stop();
-
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
-    if (m_impl->portal && GlobalShortcutPortalLinux::isAvailable()) {
-        m_impl->portal->bind();
+    if (nekoGlobalShortcutLinuxStartPortal(m_impl, this, requestConfigureUi))
         return;
-    }
 #endif
 
     tryFallbackAfterPortalFailure(I18n::instance().tr(QStringLiteral("shortcutGlobalUnavailable")));
 }
 
-void GlobalShortcutController::rebind()
+void GlobalShortcutController::rebind(bool requestSystemPermission)
 {
     stop();
-    QTimer::singleShot(0, this, &GlobalShortcutController::start);
+    QTimer::singleShot(0, this, [this, requestSystemPermission]() {
+        start(requestSystemPermission && isWaylandSession());
+    });
+}
+
+void GlobalShortcutController::scheduleRebindAfterSettingsChange()
+{
+#if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
+    if (!isWaylandSession()) {
+        rebind(false);
+        return;
+    }
+    m_settingsRebindTimer->start();
+#else
+    rebind(false);
+#endif
+}
+
+void GlobalShortcutController::performSettingsRebind()
+{
+    stop();
+    prepareHostWindowForPortal();
+    start(true);
 }
 
 void GlobalShortcutController::stop()
 {
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
-    if (m_impl->portal)
-        m_impl->portal->unbind();
+    nekoGlobalShortcutLinuxStopPortal(m_impl);
 #endif
     if (m_impl->fallback)
         m_impl->fallback->stop();
@@ -177,8 +216,7 @@ void GlobalShortcutController::stop()
 void GlobalShortcutController::openSystemConfigureUi()
 {
 #if defined(Q_OS_LINUX) && !defined(Q_OS_ANDROID)
-    if (m_impl->portal)
-        m_impl->portal->openConfigureUi();
+    nekoGlobalShortcutLinuxOpenPortalConfigure(m_impl, this);
 #endif
 }
 
@@ -209,4 +247,9 @@ void GlobalShortcutController::dispatchAction(const QString &portalId)
     default:
         break;
     }
+}
+
+void GlobalShortcutController::reportPortalConfigureFailed(const QString &reason)
+{
+    emit bindingFailed(I18n::instance().tr(QStringLiteral("shortcutGlobalConfigureFailed")).arg(reason));
 }

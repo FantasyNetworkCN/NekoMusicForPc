@@ -5,8 +5,7 @@
  * @brief 封面图片磁盘缓存
  *
  * 单例类，负责封面图片的磁盘缓存与网络回源。
- * 缓存路径：<Temp>/nekomusic-cache/covers/
- * 缓存文件名：<music_id>.jpg
+ * Linux：封面仅保留在进程内存（不写 tmpfs/硬盘）；其他平台仍用磁盘缓存。
  */
 
 #include <QObject>
@@ -48,6 +47,18 @@ private:
     explicit CoverCache(QObject *parent = nullptr);
     QString cacheDir() const;
     void ensureCacheDir() const;
+
+#ifdef Q_OS_LINUX
+    QPixmap getLinuxMem(const QString &musicId) const;
+    void setLinuxMem(const QString &musicId, const QPixmap &pixmap);
+    void trimLinuxMemCache();
+    static qint64 pixmapBytes(const QPixmap &pixmap);
+
+    mutable QHash<QString, QPixmap> m_linuxMemCache;
+    mutable QStringList m_linuxMemLru;
+    mutable qint64 m_linuxMemBytes = 0;
+    static constexpr qint64 kLinuxCoverMemLimitBytes = 32LL * 1024 * 1024;
+#endif
 
     mutable QString m_cacheDir;
     mutable bool m_cacheDirInitialized = false;

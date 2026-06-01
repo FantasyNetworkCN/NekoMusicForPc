@@ -10,6 +10,7 @@
 #include <QGuiApplication>
 #include <QMetaType>
 #include <QRandomGenerator>
+#include <QTimer>
 #include <QWindow>
 
 using PortalShortcutEntry = QPair<QString, QVariantMap>;
@@ -128,13 +129,22 @@ QString GlobalShortcutPortalLinux::parentWindowHandle() const
     if (!m_hostWindow)
         return {};
 
+    m_hostWindow->winId();
+
     const WId wid = m_hostWindow->winId();
     if (wid == 0)
         return {};
 
-    const QByteArray platform = qgetenv("WAYLAND_DISPLAY").isEmpty() ? QByteArray("x11")
-                                                                       : QByteArray("wayland");
-    return QString::fromLatin1("%1:0x%2").arg(QString::fromLatin1(platform)).arg(wid, 0, 16);
+    const QString platform = QGuiApplication::platformName();
+    if (platform.contains(QStringLiteral("wayland"), Qt::CaseInsensitive))
+        return QStringLiteral("wayland:0x%1").arg(static_cast<quintptr>(wid), 0, 16);
+    if (platform.contains(QStringLiteral("xcb"), Qt::CaseInsensitive)
+        || platform.contains(QStringLiteral("x11"), Qt::CaseInsensitive))
+        return QStringLiteral("x11:0x%1").arg(static_cast<quintptr>(wid), 0, 16);
+
+    if (!qgetenv("WAYLAND_DISPLAY").isEmpty())
+        return QStringLiteral("wayland:0x%1").arg(static_cast<quintptr>(wid), 0, 16);
+    return QStringLiteral("x11:0x%1").arg(static_cast<quintptr>(wid), 0, 16);
 }
 
 void GlobalShortcutPortalLinux::connectActivatedSignal()
@@ -224,12 +234,26 @@ void GlobalShortcutPortalLinux::onPortalRequestResponse(uint response, const QVa
         }
 
         m_bound = true;
+        m_activationToken = results.value(QStringLiteral("activation_token")).toString();
         connectActivatedSignal();
         emit bindSucceeded();
+
+        if (m_openConfigureAfterBind) {
+            m_openConfigureAfterBind = false;
+            QTimer::singleShot(150, this, &GlobalShortcutPortalLinux::beginConfigureShortcuts);
+        }
+        return;
+    }
+
+    if (kind == PendingRequest::ConfigureShortcuts) {
+        if (response != 0) {
+            emit configureUiFailed(
+                QStringLiteral("ConfigureShortcuts rejected (code %1)").arg(response));
+        }
     }
 }
 
-void GlobalShortcutPortalLinux::bind()
+void GlobalShortcutPortalLinux::bind(bool requestConfigureUi)
 {
     if (m_bindingInProgress)
         return;
@@ -240,7 +264,10 @@ void GlobalShortcutPortalLinux::bind()
         return;
     }
 
+    m_openConfigureAfterBind = requestConfigureUi;
+    m_activationToken.clear();
     unbind();
+    m_openConfigureAfterBind = requestConfigureUi;
     m_bindingInProgress = true;
     beginCreateSession();
 }
@@ -280,11 +307,11 @@ void GlobalShortcutPortalLinux::beginBindShortcuts()
     QVariantMap options;
     options.insert(QStringLiteral("handle_token"), nextToken("bind"));
 
+    const QString parent = parentWindowHandle();
     QDBusMessage msg = QDBusMessage::createMethodCall(kPortalService, kPortalPath,
                                                       kGlobalShortcutsIface,
                                                       QStringLiteral("BindShortcuts"));
-    msg << QDBusObjectPath(m_sessionPath) << QVariant::fromValue(shortcuts)
-        << parentWindowHandle() << options;
+    msg << QDBusObjectPath(m_sessionPath) << QVariant::fromValue(shortcuts) << parent << options;
 
     QString error;
     const QDBusObjectPath requestPath =
@@ -298,18 +325,48 @@ void GlobalShortcutPortalLinux::beginBindShortcuts()
     watchPortalRequest(requestPath, PendingRequest::BindShortcuts);
 }
 
-void GlobalShortcutPortalLinux::openConfigureUi()
+void GlobalShortcutPortalLinux::beginConfigureShortcuts()
 {
     if (m_sessionPath.isEmpty()) {
-        bind();
+        emit configureUiFailed(QStringLiteral("No active portal session"));
         return;
     }
+
+    const QString parent = parentWindowHandle();
+    if (parent.isEmpty()) {
+        emit configureUiFailed(QStringLiteral("Missing parent window for portal dialog"));
+        return;
+    }
+
+    QVariantMap options;
+    options.insert(QStringLiteral("handle_token"), nextToken("cfg"));
+    if (!m_activationToken.isEmpty())
+        options.insert(QStringLiteral("activation_token"), m_activationToken);
 
     QDBusMessage msg = QDBusMessage::createMethodCall(kPortalService, kPortalPath,
                                                       kGlobalShortcutsIface,
                                                       QStringLiteral("ConfigureShortcuts"));
-    msg << QDBusObjectPath(m_sessionPath) << parentWindowHandle() << QVariantMap();
-    QDBusConnection::sessionBus().call(msg);
+    msg << QDBusObjectPath(m_sessionPath) << parent << options;
+
+    QString error;
+    const QDBusObjectPath requestPath =
+        requestHandleFromReply(QDBusConnection::sessionBus().call(msg), &error);
+    if (requestPath.path().isEmpty()) {
+        emit configureUiFailed(error.isEmpty() ? QStringLiteral("ConfigureShortcuts failed") : error);
+        return;
+    }
+
+    watchPortalRequest(requestPath, PendingRequest::ConfigureShortcuts);
+}
+
+void GlobalShortcutPortalLinux::openConfigureUi()
+{
+    if (m_sessionPath.isEmpty()) {
+        bind(true);
+        return;
+    }
+
+    beginConfigureShortcuts();
 }
 
 void GlobalShortcutPortalLinux::onPortalActivated(const QDBusObjectPath &sessionHandle,

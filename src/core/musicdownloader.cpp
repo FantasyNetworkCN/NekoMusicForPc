@@ -1,4 +1,5 @@
 #include "musicdownloader.h"
+#include "linuxtmpfscache.h"
 
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -16,7 +17,6 @@ MusicDownloader& MusicDownloader::instance()
 
 MusicDownloader::MusicDownloader(QObject *parent) : QObject(parent) 
 {
-    // 配置网络管理器，减少连接保持
     m_nam.setRedirectPolicy(QNetworkRequest::NoLessSafeRedirectPolicy);
 }
 
@@ -27,16 +27,24 @@ MusicDownloader::~MusicDownloader()
 
 QString MusicDownloader::cachedAudioFilePath(int musicId)
 {
+#ifdef Q_OS_LINUX
+    return LinuxTmpfsCache::audioCacheDir() + QLatin1Char('/') + QString::number(musicId);
+#else
     const QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
             + QStringLiteral("/nekomusic-cache");
     QDir().mkpath(cacheDir);
     return cacheDir + QLatin1Char('/') + QString::number(musicId);
+#endif
 }
 
 void MusicDownloader::purgeLegacyMd5CacheFiles()
 {
+#ifdef Q_OS_LINUX
+    const QString cacheDir = LinuxTmpfsCache::audioCacheDir();
+#else
     const QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
             + QStringLiteral("/nekomusic-cache");
+#endif
     if (!QDir(cacheDir).exists())
         return;
     static const QRegularExpression md5Name(QStringLiteral("^[0-9a-f]{32}$"));
@@ -71,14 +79,30 @@ void MusicDownloader::cancel()
     m_bufferEmitted = false;
 }
 
+void MusicDownloader::abortOversizeDownload()
+{
+    const QString partPath = m_tempPath + QStringLiteral(".part");
+    cancel();
+    QFile::remove(partPath);
+#ifdef Q_OS_LINUX
+    emit downloadError(QStringLiteral("音频体积超过 500 MiB，已取消缓存"));
+#else
+    emit downloadError(QStringLiteral("下载已取消"));
+#endif
+}
+
 void MusicDownloader::download(const QUrl &url, int musicId)
 {
     cancel();
     m_bufferEmitted = false;
 
+#ifdef Q_OS_LINUX
+    const QString cacheDir = LinuxTmpfsCache::audioCacheDir();
+#else
     const QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
             + QStringLiteral("/nekomusic-cache");
     QDir().mkpath(cacheDir);
+#endif
     if (musicId > 0) {
         m_tempPath = cachedAudioFilePath(musicId);
     } else {
@@ -86,16 +110,17 @@ void MusicDownloader::download(const QUrl &url, int musicId)
         m_tempPath = cacheDir + QLatin1Char('/') + hash;
     }
 
-    // Check if already cached
     if (QFile::exists(m_tempPath)) {
-        // 文件已完全下载，直接播放完整文件
         emit downloadFinished(m_tempPath);
         return;
     }
 
-    // Remove old partial file if exists
-    QString partPath = m_tempPath + ".part";
+    const QString partPath = m_tempPath + QStringLiteral(".part");
     QFile::remove(partPath);
+
+#ifdef Q_OS_LINUX
+    LinuxTmpfsCache::evictAudioCacheExcept({m_tempPath, partPath});
+#endif
 
     m_file = new QFile(partPath, this);
     if (!m_file->open(QIODevice::WriteOnly)) {
@@ -105,11 +130,8 @@ void MusicDownloader::download(const QUrl &url, int musicId)
 
     QNetworkRequest req(url);
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-    // 避免与 QMediaPlayer 并行 HTTP/2 拉流时触发服务端 Internal server error / 断流
     req.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
     m_reply = m_nam.get(req);
-    // 不要设置parent，让reply在完成后自动删除
-    // m_reply->setParent(this);
 
     connect(m_reply, &QNetworkReply::downloadProgress, this, &MusicDownloader::onDownloadProgress);
     connect(m_reply, &QNetworkReply::finished, this, &MusicDownloader::onReplyFinished);
@@ -120,22 +142,37 @@ void MusicDownloader::onReadyRead()
 {
     if (!m_reply || !m_file)
         return;
-    m_file->write(m_reply->readAll());
+
+    const QByteArray chunk = m_reply->readAll();
+#ifdef Q_OS_LINUX
+    if (m_file->size() + chunk.size() > LinuxTmpfsCache::kMaxAudioFileBytes) {
+        abortOversizeDownload();
+        return;
+    }
+#endif
+    m_file->write(chunk);
 }
 
 void MusicDownloader::onDownloadProgress(qint64 bytesReceived, qint64 bytesTotal)
 {
     if (!m_reply || !m_file)
         return;
+
+#ifdef Q_OS_LINUX
+    if (LinuxTmpfsCache::isAudioDownloadOversize(bytesReceived, bytesTotal)) {
+        abortOversizeDownload();
+        return;
+    }
+#endif
+
     m_bytesReceived = bytesReceived;
     m_bytesTotal = bytesTotal;
     emit downloadProgress(bytesReceived, bytesTotal);
     
-    // 检查是否达到缓冲阈值（30%），如果达到且尚未发射bufferReady信号，则发射
     if (bytesTotal > 0 && !m_bufferEmitted) {
         double progress = static_cast<double>(bytesReceived) / bytesTotal;
-        if (progress >= 0.3) {  // 30%缓冲阈值
-            QString partPath = m_tempPath + ".part";
+        if (progress >= 0.3) {
+            QString partPath = m_tempPath + QStringLiteral(".part");
             if (QFile::exists(partPath)) {
                 m_bufferEmitted = true;
                 emit bufferReady(partPath);
@@ -157,16 +194,28 @@ void MusicDownloader::onReplyFinished()
         return;
     }
 
-    // Write remaining data
     if (m_file && m_file->isOpen()) {
-        m_file->write(reply->readAll());
+        const QByteArray tail = reply->readAll();
+#ifdef Q_OS_LINUX
+        if (m_file->size() + tail.size() > LinuxTmpfsCache::kMaxAudioFileBytes) {
+            abortOversizeDownload();
+            reply->deleteLater();
+            return;
+        }
+#endif
+        m_file->write(tail);
         m_file->close();
     }
 
-    // 勿对 .part 直接 rename：QMediaPlayer 可能尚未完成异步打开 .part，rename 后路径消失会 ENOENT。
-    // 先复制到正式缓存路径再删 .part；缓冲播放结束后由 UI 收到 downloadFinished 再切到正式文件。
     const QString partPath = m_tempPath + QStringLiteral(".part");
     if (QFile::exists(partPath)) {
+#ifdef Q_OS_LINUX
+        if (QFileInfo(partPath).size() > LinuxTmpfsCache::kMaxAudioFileBytes) {
+            abortOversizeDownload();
+            reply->deleteLater();
+            return;
+        }
+#endif
         if (QFile::exists(m_tempPath))
             QFile::remove(m_tempPath);
         if (!QFile::copy(partPath, m_tempPath)) {
@@ -180,6 +229,10 @@ void MusicDownloader::onReplyFinished()
         }
         QFile::remove(partPath);
     }
+
+#ifdef Q_OS_LINUX
+    LinuxTmpfsCache::evictAudioCacheExcept({m_tempPath});
+#endif
 
     emit downloadFinished(m_tempPath);
 

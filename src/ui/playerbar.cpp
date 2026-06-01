@@ -450,7 +450,8 @@ int widgetEffectiveWidth(QWidget *w)
     return w->sizeHint().width();
 }
 
-int titleRowWidthBesidesSong(QWidget *titleRow, QWidget *songWidget)
+/** 第一行布局后的实际内容宽（含歌名、按钮与间距） */
+int titleRowContentWidth(QWidget *titleRow)
 {
     if (!titleRow)
         return 0;
@@ -459,28 +460,54 @@ int titleRowWidthBesidesSong(QWidget *titleRow, QWidget *songWidget)
         return 0;
 
     int w = hl->contentsMargins().left() + hl->contentsMargins().right();
-    const int spacing = hl->spacing();
     bool first = true;
     for (int i = 0; i < hl->count(); ++i) {
         QWidget *item = hl->itemAt(i)->widget();
-        if (!item || item == songWidget)
+        if (!item || !item->isVisibleTo(titleRow))
             continue;
         if (!first)
-            w += spacing;
+            w += hl->spacing();
         w += widgetEffectiveWidth(item);
         first = false;
     }
     return w;
 }
 
-/** 第二行限宽：与标题行布局后的实际右缘（末个按钮）对齐 */
-int titleRowActualWidth(QWidget *titleRow)
+int titleRowAsideForSongSlot(QWidget *titleRow, QWidget *songWidget)
 {
     if (!titleRow)
         return 0;
-    if (titleRow->width() > 0)
-        return titleRow->width();
-    return titleRow->sizeHint().width();
+    auto *hl = qobject_cast<QHBoxLayout *>(titleRow->layout());
+    if (!hl)
+        return 0;
+
+    int w = hl->contentsMargins().left() + hl->contentsMargins().right();
+    bool first = true;
+    for (int i = 0; i < hl->count(); ++i) {
+        QWidget *item = hl->itemAt(i)->widget();
+        if (!item || !item->isVisibleTo(titleRow))
+            continue;
+        if (item == songWidget) {
+            if (!first)
+                w += hl->spacing();
+            first = false;
+            continue;
+        }
+        if (!first)
+            w += hl->spacing();
+        w += widgetEffectiveWidth(item);
+        first = false;
+    }
+    return w;
+}
+
+int titleRowWidthBesidesSong(QWidget *titleRow, QWidget *songWidget)
+{
+    if (!titleRow)
+        return 0;
+    if (!songWidget || !songWidget->isVisibleTo(titleRow))
+        return titleRowContentWidth(titleRow);
+    return qMax(0, titleRowContentWidth(titleRow) - widgetEffectiveWidth(songWidget));
 }
 
 QPixmap makeUnknownCover(int size, bool dark)
@@ -1642,19 +1669,17 @@ void PlayerBar::updateTitleMarqueeWidth()
 
     layoutCenterControls();
 
-    const int besideSong = titleRowWidthBesidesSong(m_titleRow, m_songName);
+    const int aside = titleRowAsideForSongSlot(m_titleRow, m_songName);
     const int infoW = qMax(0, sideBudget - kPbCoverSize - 12);
-    const int titleMax = qMax(24, infoW - besideSong);
+    const int titleMax = qMax(24, infoW - aside);
 
     marquee->setMaxDisplayWidth(titleMax);
-    const int titleRowW = besideSong + titleMax;
-    if (m_titleRow) {
-        m_titleRow->setMaximumWidth(titleRowW);
-        m_titleRow->adjustSize();
-    }
 
-    // 第二行不得超过第一行末个按钮的右缘（用布局后实际宽，不用 titleRowW 理论上限）
-    const int secondLineMax = qMax(24, titleRowActualWidth(m_titleRow));
+    // 第二行保持最大可用宽；第一行按钮紧贴歌名，行宽随歌名自然收缩
+    const int secondLineMax = qMax(24, qMin(infoW, aside + titleMax));
+
+    if (m_titleRow)
+        m_titleRow->setMaximumWidth(infoW);
 
     if (m_lyricSlot)
         static_cast<PbLyricArtistSlot *>(m_lyricSlot)->setLineMaxWidth(secondLineMax);

@@ -41,8 +41,10 @@ public:
     PlaybackState playbackState() const;
     /** 与 QMediaPlayer 一致；淡出过程中 m_state 可能已为 Paused 但底层仍在 Playing 时为 true。 */
     bool isActuallyPlaying() const;
+    bool isFadingOut() const { return m_fadingOut; }
     /** 对齐 QMediaPlayer，供 MPRIS / 系统媒体用；淡出过程中底层仍在播时仍视为 Paused。 */
     PlaybackState transportStateForOs() const;
+    QUrl currentMediaUrl() const;
     qint64 duration() const;
     qint64 position() const;
     /** QMediaPlayer 解析出的音频码率（bps），未就绪时为 0 */

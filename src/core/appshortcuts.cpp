@@ -29,9 +29,9 @@ QKeySequence AppShortcuts::defaultSequence(Action action)
     case PlayPause:
         return QKeySequence(QStringLiteral("Ctrl+P"));
     case NextTrack:
-        return QKeySequence(QStringLiteral("Ctrl+Right"));
+        return QKeySequence(QStringLiteral("Ctrl+Alt+Right"));
     case PreviousTrack:
-        return QKeySequence(QStringLiteral("Ctrl+Left"));
+        return QKeySequence(QStringLiteral("Ctrl+Alt+Left"));
     case ActionCount:
         break;
     }

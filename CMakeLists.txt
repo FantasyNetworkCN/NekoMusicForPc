@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(NekoMusic
-        VERSION 2026.530.25
+        VERSION 2026.531.26
         LANGUAGES CXX
 )
 
@@ -9,9 +9,20 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# 交叉编译时勿用 UNIX/WIN32 混判；以目标系统名为准（Linux→Windows 时 UNIX 仍可能为真）
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows"
+   OR (CMAKE_CROSSCOMPILING AND CMAKE_CXX_COMPILER MATCHES "mingw"))
+    set(NEKO_TARGET_WINDOWS TRUE)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(NEKO_TARGET_APPLE TRUE)
+else()
+    set(NEKO_TARGET_UNIX TRUE)
+endif()
+message(STATUS "NEKO target: WINDOWS=${NEKO_TARGET_WINDOWS} APPLE=${NEKO_TARGET_APPLE} UNIX=${NEKO_TARGET_UNIX} SYSTEM=${CMAKE_SYSTEM_NAME}")
+
 # Qt6
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Multimedia Network SvgWidgets Sql Concurrent)
-if(UNIX AND NOT APPLE)
+if(NEKO_TARGET_UNIX)
     find_package(Qt6 REQUIRED COMPONENTS DBus)
 endif()
 if(APPLE)
@@ -52,6 +63,10 @@ if(CMAKE_CROSSCOMPILING)
     # Find all headers with Q_OBJECT macro
     file(GLOB_RECURSE ALL_HEADERS "${CMAKE_SOURCE_DIR}/src/*.h")
     foreach(header ${ALL_HEADERS})
+        # Linux-only Qt headers (DBus/portal) must not be moc'd for Windows targets
+        if(NEKO_TARGET_WINDOWS AND header MATCHES "globalshortcutportal_linux|globalshortcutcontroller_linux")
+            continue()
+        endif()
         file(READ "${header}" header_content)
         if(header_content MATCHES "Q_OBJECT")
             file(RELATIVE_PATH rel_header "${CMAKE_SOURCE_DIR}" "${header}")
@@ -152,6 +167,7 @@ set(SOURCES
         src/core/globalshortcutcontroller.cpp
         src/core/listmetaformat.cpp
         src/core/covercache.cpp
+        src/core/linuxtmpfscache.cpp
         src/core/usermanager.cpp
         src/core/qrcodegen.cpp
         src/core/vipqrcode.cpp
@@ -216,6 +232,7 @@ set(HEADERS
         src/core/appshortcuts.h
         src/core/globalshortcutcontroller.h
         src/core/covercache.h
+        src/core/linuxtmpfscache.h
         src/core/usermanager.h
         src/core/vipqrcode.h
         src/theme/theme.h
@@ -242,17 +259,23 @@ set(HEADERS
         src/core/defaultmusicappchecker.h
 )
 
-if(UNIX AND NOT APPLE)
+if(NEKO_TARGET_WINDOWS)
+    list(APPEND SOURCES src/core/systemmediacontroller_win.cpp)
+    list(APPEND SOURCES src/core/defaultmusicappchecker_win.cpp)
+    set_source_files_properties(
+        src/core/globalshortcutportal_linux.h
+        src/core/globalshortcutportal_linux.cpp
+        src/core/globalshortcutcontroller_linux.h
+        src/core/globalshortcutcontroller_linux.cpp
+        PROPERTIES SKIP_AUTOMOC ON)
+elseif(NEKO_TARGET_APPLE)
+    list(APPEND SOURCES src/core/systemmediacontroller_mac.mm)
+    list(APPEND SOURCES src/core/defaultmusicappchecker_mac.mm)
+elseif(NEKO_TARGET_UNIX)
     list(APPEND SOURCES src/core/systemmediacontroller_linux.cpp)
     list(APPEND SOURCES src/core/defaultmusicappchecker_linux.cpp)
     list(APPEND SOURCES src/core/globalshortcutportal_linux.cpp)
-    list(APPEND HEADERS src/core/globalshortcutportal_linux.h)
-elseif(APPLE)
-    list(APPEND SOURCES src/core/systemmediacontroller_mac.mm)
-    list(APPEND SOURCES src/core/defaultmusicappchecker_mac.mm)
-elseif(WIN32)
-    list(APPEND SOURCES src/core/systemmediacontroller_win.cpp)
-    list(APPEND SOURCES src/core/defaultmusicappchecker_win.cpp)
+    list(APPEND SOURCES src/core/globalshortcutcontroller_linux.cpp)
 else()
     list(APPEND SOURCES src/core/systemmediacontroller_stub.cpp)
     list(APPEND SOURCES src/core/defaultmusicappchecker_stub.cpp)
@@ -274,6 +297,15 @@ else()
     add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${RESOURCES} ${GENERATED_SOURCES})
 endif()
 
+# 交叉编译 Windows 时 moc 在 Linux 主机上运行，须用目标平台宏而非主机 Q_OS_LINUX
+if(CMAKE_CROSSCOMPILING)
+    set_target_properties(${PROJECT_NAME} PROPERTIES AUTOMOC_COMPILER_PREDEFINES OFF)
+    if(NEKO_TARGET_WINDOWS)
+        set_target_properties(${PROJECT_NAME} PROPERTIES
+            AUTOMOC_MOC_OPTIONS "-DWIN32;-DWIN64;-D_WIN32")
+    endif()
+endif()
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
         Qt6::Core
         Qt6::Gui
@@ -284,7 +316,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         Qt6::Sql
         Qt6::Concurrent
 )
-if(UNIX AND NOT APPLE)
+if(NEKO_TARGET_UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::DBus)
     find_package(X11)
     if(X11_FOUND)

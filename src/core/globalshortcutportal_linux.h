@@ -19,7 +19,7 @@ public:
     static bool isAvailable();
 
     void setHostWindow(QWindow *window);
-    void bind();
+    void bind(bool requestConfigureUi = false);
     void unbind();
     void openConfigureUi();
     bool isBound() const { return m_bound; }
@@ -28,6 +28,7 @@ signals:
     void shortcutActivated(const QString &shortcutId);
     void bindSucceeded();
     void bindFailed(const QString &reason);
+    void configureUiFailed(const QString &reason);
 
 private slots:
     void onPortalActivated(const QDBusObjectPath &sessionHandle, const QString &shortcutId,
@@ -35,10 +36,11 @@ private slots:
     void onPortalRequestResponse(uint response, const QVariantMap &results);
 
 private:
-    enum class PendingRequest { None, CreateSession, BindShortcuts };
+    enum class PendingRequest { None, CreateSession, BindShortcuts, ConfigureShortcuts };
 
     void beginCreateSession();
     void beginBindShortcuts();
+    void beginConfigureShortcuts();
     void closeSession();
     void connectActivatedSignal();
     void disconnectActivatedSignal();
@@ -50,7 +52,9 @@ private:
     QWindow *m_hostWindow = nullptr;
     QString m_sessionPath;
     QString m_pendingRequestPath;
+    QString m_activationToken;
     PendingRequest m_pendingRequest = PendingRequest::None;
     bool m_bound = false;
     bool m_bindingInProgress = false;
+    bool m_openConfigureAfterBind = false;
 };

@@ -118,7 +118,6 @@ echo "Configuring with CMake..."
 cmake .. \
     -DCMAKE_TOOLCHAIN_FILE="$SCRIPT_DIR/cmake/mingw-x64-toolchain.cmake" \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DWIN32=ON \
     -DCMAKE_PREFIX_PATH="$QT_WIN_ROOT" \
     -DCMAKE_FIND_ROOT_PATH="$QT_WIN_ROOT"
 

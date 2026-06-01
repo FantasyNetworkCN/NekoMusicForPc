@@ -34,6 +34,7 @@ private:
     void onDownloadProgress(qint64 bytesReceived, qint64 bytesTotal);
     void onReplyFinished();
     void onReadyRead();
+    void abortOversizeDownload();
 
     QNetworkAccessManager m_nam;
     QNetworkReply *m_reply = nullptr;

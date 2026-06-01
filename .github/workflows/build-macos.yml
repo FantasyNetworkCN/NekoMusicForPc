@@ -1,4 +1,4 @@
-name: Build macOS PKG (robust, pkgbuild, safe Qt & version)
+name: Build macOS PKG (universal arm64+x86_64)
 
 'on':
   workflow_dispatch:
@@ -15,7 +15,6 @@ name: Build macOS PKG (robust, pkgbuild, safe Qt & version)
     tags:
       - "v*"
 
-# contents: release 上传；actions: upload-artifact 需要 write（仅设 read 会导致上传步骤无权限）
 permissions:
   contents: write
   actions: write
@@ -33,13 +32,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Print environment (debug)
-        run: |
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          echo "Qt6_DIR=$Qt6_DIR"
-          uname -a
-          sw_vers
-
       - name: Setup Qt 6
         uses: jurplel/install-qt-action@v4
         with:
@@ -49,162 +41,35 @@ jobs:
           arch: 'clang_64'
           modules: 'qtmultimedia'
 
-      - name: Generate AppIcon.icns (with fallback)
+      - name: Build and package (universal .pkg)
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          SRC="$GITHUB_WORKSPACE/packaging/icons/hicolor/512x512/apps/nekomusic.png"
-          echo "Looking for icon at: $SRC"
-          if [ ! -f "$SRC" ]; then
-            echo "WARN: source icon not found: $SRC"
-            FALLBACK_ICNS="/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns"
-            if [ -f "$FALLBACK_ICNS" ]; then
-              echo "Using system fallback icon: $FALLBACK_ICNS"
-              SRC="$FALLBACK_ICNS"
-            else
-              echo "No fallback icon available; will continue without custom icon"
-              SRC=""
-            fi
-          fi
-
-          if [ -n "$SRC" ]; then
-            mkdir -p src/resources/macos
-            ICONSET=$(mktemp -d)/AppIcon.iconset
-            mkdir -p "$ICONSET"
-            for size in 16 32 64 128 256 512; do
-              sips -z $size $size "$SRC" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null 2>&1 || true
-              sips -z $((size*2)) $((size*2)) "$SRC" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null 2>&1 || true
-            done
-            iconutil -c icns "$ICONSET" -o "$GITHUB_WORKSPACE/src/resources/macos/AppIcon.icns" >/dev/null 2>&1 || true
-            echo "Generated icns at src/resources/macos/AppIcon.icns"
-            ls -la src/resources/macos || true
-          else
-            echo "Skipping icon generation (no source)."
-          fi
-
-      - name: Configure CMake
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE"
-          rm -rf build-macos
-          mkdir -p build-macos
-          cd build-macos
-          echo "Running cmake ..."
-
-          # install-qt-action 通常导出 Qt6_DIR 或 CMAKE_PREFIX_PATH
-          CMAKE_PREFIX_PATH="${Qt6_DIR:-${CMAKE_PREFIX_PATH:-}}"
-          if [ -z "$CMAKE_PREFIX_PATH" ]; then
-            if command -v brew >/dev/null 2>&1 && brew --prefix qt >/dev/null 2>&1; then
-              CMAKE_PREFIX_PATH="$(brew --prefix qt)"
-              echo "Using brew Qt prefix: $CMAKE_PREFIX_PATH"
-            else
-              echo "No Qt6_DIR and no brew qt prefix found; continuing without CMAKE_PREFIX_PATH"
-            fi
-          else
-            echo "Using Qt6_DIR from action: $CMAKE_PREFIX_PATH"
-          fi
-
-          # Build cmake command and pass CMAKE_PREFIX_PATH only if non-empty
-          ARGS="-DCMAKE_BUILD_TYPE=Release -DCMAKE_VERBOSE_MAKEFILE=ON -DCMAKE_OSX_ARCHITECTURES=\"x86_64;arm64\""
-          if [ -n "$CMAKE_PREFIX_PATH" ]; then
-            ARGS="$ARGS -DCMAKE_PREFIX_PATH='$CMAKE_PREFIX_PATH'"
-          fi
-          echo "cmake .. $ARGS"
-          eval cmake .. $ARGS
-
-      - name: Build
-        run: |
-          set -euo pipefail
-          cd "$GITHUB_WORKSPACE/build-macos"
-          cmake --build . -j$(sysctl -n hw.ncpu) --verbose
-
-      - name: Install to install-prefix
-        run: |
-          set -euo pipefail
-          BUILD_DIR="$GITHUB_WORKSPACE/build-macos"
-          INSTALL_PREFIX="$BUILD_DIR/install"
-          echo "Installing to $INSTALL_PREFIX"
-          cd "$BUILD_DIR"
-          cmake --install . --prefix "$INSTALL_PREFIX" || { echo "cmake --install failed"; exit 1; }
-          echo "== install dir listing =="
-          ls -la "$INSTALL_PREFIX" || true
-          echo "== find .app =="
-          find "$INSTALL_PREFIX" -maxdepth 4 -type d -name "*.app" -print || true
-
-      - id: package_pkgbuild
-        name: Package with pkgbuild (single .app -> .pkg)
-        run: |
-          set -euo pipefail
-          BUILD_DIR="$GITHUB_WORKSPACE/build-macos"
-          INSTALL_PREFIX="$BUILD_DIR/install"
-          PKG_OUTDIR="$BUILD_DIR/pkg"
-          mkdir -p "$PKG_OUTDIR"
-
-          APP_DIR=$(find "$INSTALL_PREFIX" -type d -name "*.app" -print | head -n1 || true)
-          if [ -z "$APP_DIR" ]; then
-            echo "❌ No .app found in install prefix ($INSTALL_PREFIX). Install listing:"
-            ls -la "$INSTALL_PREFIX" || true
-            exit 1
-          fi
-          echo "Found app to package: $APP_DIR"
-
-          # Detect version robustly
-          VERSION=""
-          cd "$BUILD_DIR"
-          VERSION=$(cmake -LA -N . 2>/dev/null | sed -n 's/^PROJECT_VERSION[^=]*=//p' | head -n1 || true)
-          if [ -z "$VERSION" ] && [ -f CMakeCache.txt ]; then
-            VERSION=$(grep -Eo '^PROJECT_VERSION[^=]*=.*' CMakeCache.txt 2>/dev/null | sed -E 's/.*=//' | head -n1 || true)
-          fi
-          if [ -z "$VERSION" ] && [ -f ../CMakeLists.txt ]; then
-            VERSION=$(sed -n '1,80p' ../CMakeLists.txt | sed -n 's/.*VERSION[[:space:]]\+\([0-9.]\+\).*/\1/p' | head -n1 || true)
-          fi
-          VERSION=${VERSION:-0.0.0}
-          echo "Packaging version detected: $VERSION"
-
-          PKG_PATH="$PKG_OUTDIR/NekoMusic-${VERSION}.pkg"
-          echo "Creating pkg: $PKG_PATH (installing to /Applications)"
-          pkgbuild --component "$APP_DIR" --install-location "/Applications" \
-            --identifier "com.nekomusic.app" --version "$VERSION" "$PKG_PATH"
-
-          echo "== pkg created =="
-          ls -lh "$PKG_PATH" || true
-
-          # Expand to inspect contents for diagnostics
-          TMPDIR=$(mktemp -d)
-          pkgutil --expand "$PKG_PATH" "$TMPDIR/expanded" || echo "pkgutil expand failed"
-          echo "Expanded package tree (top):"
-          ls -la "$TMPDIR/expanded" || true
-
-          # Export path for other steps
-          echo "pkg_path=$PKG_PATH" >> $GITHUB_OUTPUT
-          echo "pkg_name=$(basename "$PKG_PATH")" >> $GITHUB_OUTPUT
-          echo "PKG_PATH=$PKG_PATH" >> $GITHUB_ENV
+          chmod +x build_macos.sh
+          ./build_macos.sh Release
 
       - name: Show pkg info (sanity)
         run: |
           set -euo pipefail
-          echo "Env PKG_PATH: ${PKG_PATH:-<unset>}"
-          PKG="${PKG_PATH:-$(find "$GITHUB_WORKSPACE/build-macos" -name '*.pkg' -type f | head -n1 || true)}"
-          echo "Resolved PKG: $PKG"
-          if [ -z "$PKG" ]; then
-            echo "❌ No pkg found"
-            ls -la "$GITHUB_WORKSPACE/build-macos" || true
+          PKG="$(find "$GITHUB_WORKSPACE/dist" -name 'Neko云音乐-*-macos-universal.pkg' -type f | head -n1 || true)"
+          if [[ -z "$PKG" ]]; then
+            echo "No pkg found in dist/"
+            ls -la "$GITHUB_WORKSPACE/dist" || true
             exit 1
           fi
+          echo "PKG=$PKG" >> "$GITHUB_ENV"
           ls -lh "$PKG"
-          TMPDIR=$(mktemp -d)
-          pkgutil --expand "$PKG" "$TMPDIR/expanded" || true
-          find "$TMPDIR/expanded" -maxdepth 4 -print || true
+          lipo -info "$GITHUB_WORKSPACE/build-macos/install/NekoMusic.app/Contents/MacOS/NekoMusic" || true
 
       - name: Upload PKG artifact
-        if: env.PKG_PATH != ''
+        if: env.PKG != ''
         uses: actions/upload-artifact@v4
         with:
           name: macos-pkg
-          path: ${{ env.PKG_PATH }}
+          path: ${{ env.PKG }}
 
       - name: Upload release asset (on tag)
-        if: startsWith(github.ref, 'refs/tags/') && env.PKG_PATH != ''
+        if: startsWith(github.ref, 'refs/tags/') && env.PKG != ''
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.PKG_PATH }}
+          files: ${{ env.PKG }}

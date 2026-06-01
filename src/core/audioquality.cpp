@@ -48,12 +48,13 @@ bool parseFlac(const QByteArray &data, ProbeResult &out)
     if (data.size() < 42 || !data.startsWith("fLaC"))
         return false;
     const uchar *base = reinterpret_cast<const uchar *>(data.constData());
+    // 元数据块头 4 字节 big-endian：高字节 bit7=最后一块，低 7 位=块类型；低 3 字节=数据长度
     const quint32 blockHeader = readBe32(base + 4);
-    const int blockType = int(blockHeader & 0x7Fu);
-    const int blockSize = int((blockHeader >> 8) & 0xFFFFFFu);
-    if (blockType != 0 || blockSize < 18 || 8 + 4 + blockSize > data.size())
+    const int blockType = int((blockHeader >> 24) & 0x7Fu);
+    const int blockSize = int(blockHeader & 0x00FFFFFFu);
+    if (blockType != 0 || blockSize < 18 || 8 + blockSize > static_cast<int>(data.size()))
         return false;
-    const uchar *si = base + 8 + 4;
+    const uchar *si = base + 8;
     const int sampleRate = int((si[10] << 12) | (si[11] << 4) | (si[12] >> 4));
     const int bits = int((((si[12] & 0x01) << 4) | ((si[13] & 0xF0) >> 4)) + 1);
     if (sampleRate <= 0)

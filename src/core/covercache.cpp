@@ -1,10 +1,9 @@
 /**
  * @file covercache.cpp
- * @brief 封面图片磁盘缓存实现
+ * @brief 封面图片缓存实现
  *
- * 缓存目录跨平台：
- *   Linux/macOS: /tmp/nekomusic-cache/covers
- *   Windows:     %TEMP%/nekomusic-cache/covers
+ * Linux：进程内内存 LRU，避免 tmpfs 持续增长。
+ * 其他平台：<Temp>/nekomusic-cache/covers/
  */
 
 #include "covercache.h"
@@ -67,38 +66,97 @@ QString CoverCache::resolveCoverUrl(const QString &rawUrl)
 
 QString CoverCache::cacheDir() const
 {
+#ifndef Q_OS_LINUX
     if (!m_cacheDirInitialized) {
         QString base = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
         m_cacheDir = base + QStringLiteral("/nekomusic-cache/covers");
         m_cacheDirInitialized = true;
     }
     return m_cacheDir;
+#else
+    return {};
+#endif
 }
+
+#ifdef Q_OS_LINUX
+
+qint64 CoverCache::pixmapBytes(const QPixmap &pixmap)
+{
+    if (pixmap.isNull())
+        return 0;
+    return qint64(pixmap.width()) * pixmap.height() * 4;
+}
+
+QPixmap CoverCache::getLinuxMem(const QString &musicId) const
+{
+    if (musicId.isEmpty() || !m_linuxMemCache.contains(musicId))
+        return {};
+    m_linuxMemLru.removeAll(musicId);
+    m_linuxMemLru.append(musicId);
+    return m_linuxMemCache.value(musicId);
+}
+
+void CoverCache::setLinuxMem(const QString &musicId, const QPixmap &pixmap)
+{
+    if (musicId.isEmpty() || pixmap.isNull())
+        return;
+
+    if (m_linuxMemCache.contains(musicId)) {
+        m_linuxMemBytes -= pixmapBytes(m_linuxMemCache.value(musicId));
+        m_linuxMemLru.removeAll(musicId);
+    }
+
+    m_linuxMemCache.insert(musicId, pixmap);
+    m_linuxMemLru.append(musicId);
+    m_linuxMemBytes += pixmapBytes(pixmap);
+    trimLinuxMemCache();
+}
+
+void CoverCache::trimLinuxMemCache()
+{
+    while (m_linuxMemBytes > kLinuxCoverMemLimitBytes && !m_linuxMemLru.isEmpty()) {
+        const QString oldest = m_linuxMemLru.takeFirst();
+        const QPixmap removed = m_linuxMemCache.take(oldest);
+        m_linuxMemBytes -= pixmapBytes(removed);
+    }
+}
+
+#endif
 
 void CoverCache::ensureCacheDir() const
 {
+#ifndef Q_OS_LINUX
     QDir dir;
     dir.mkpath(cacheDir());
+#endif
 }
 
 QPixmap CoverCache::get(const QString &musicId) const
 {
     if (musicId.isEmpty()) return QPixmap();
+#ifdef Q_OS_LINUX
+    return getLinuxMem(musicId);
+#else
     QString path = cacheDir() + QLatin1Char('/') + musicId + QStringLiteral(".jpg");
     if (QFile::exists(path)) {
         QPixmap pix;
         if (pix.load(path)) return pix;
-        QFile::remove(path); // corrupted
+        QFile::remove(path);
     }
     return QPixmap();
+#endif
 }
 
 void CoverCache::set(const QString &musicId, const QPixmap &pixmap)
 {
     if (musicId.isEmpty() || pixmap.isNull()) return;
+#ifdef Q_OS_LINUX
+    setLinuxMem(musicId, pixmap);
+#else
     ensureCacheDir();
     QString path = cacheDir() + QLatin1Char('/') + musicId + QStringLiteral(".jpg");
     pixmap.save(path, "JPEG", 85);
+#endif
 }
 
 void CoverCache::fetchCover(const QString &musicId, const QString &coverUrl)
@@ -157,10 +215,16 @@ void CoverCache::clear()
         }
     }
 
+#ifdef Q_OS_LINUX
+    m_linuxMemCache.clear();
+    m_linuxMemLru.clear();
+    m_linuxMemBytes = 0;
+#else
     ensureCacheDir();
     QDir dir(cacheDir());
     const auto entries = dir.entryInfoList({QStringLiteral("*.jpg")}, QDir::Files);
     for (const auto &entry : entries) {
         QFile::remove(entry.absoluteFilePath());
     }
+#endif
 }
