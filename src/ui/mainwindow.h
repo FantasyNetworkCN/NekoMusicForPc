@@ -14,6 +14,10 @@
 #include <QList>
 #include <QStackedWidget>
 #include <QSystemTrayIcon>
+#include <QPixmap>
+#include <QSize>
+#include <QPainter>
+#include <QRect>
 #include "core/musicinfo.h"
 #include "theme/thememanager.h"
 
@@ -55,11 +59,15 @@ public:
     /** 资源管理器「打开方式」或命令行传入的本地音频路径（mp3/flac/wav 等） */
     void openAudioFileFromPath(const QString &path);
 
+    void paintShellBackdrop(QPainter &p, const QRect &r) const;
+    /** 供播放页模糊底图复用，避免再次 render 整窗。 */
+    QPixmap shellBackdropPixmapForSize(const QSize &size);
+
 protected:
-    void paintEvent(QPaintEvent *) override;
     void resizeEvent(QResizeEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
     bool event(QEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private slots:
     void onTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
@@ -73,6 +81,9 @@ private:
     void setupUi();
     void loadStyleSheet();
     void applyTheme();
+    void scheduleShellBackdropRebuild(int delayMs = 120);
+    void rebuildShellBackdropCache();
+    void updateChromeForShellBackdrop();
     void switchPage(QWidget *target);
     void showMusicListPage(bool isHot);
     void showDailyRecommendationsPage();
@@ -182,4 +193,11 @@ private:
     int m_remoteStreamFailureCount = 0;
     /** 同一轮远程起播内只处理一次失败（避免 timeout 与 mediaError 双计）。 */
     bool m_streamFailHandledThisRound = false;
+    /** 播放中途断流恢复进行中，避免 Demux 错误连发时叠多个 stop/重试。 */
+    bool m_midPlaybackRecoveryInFlight = false;
+
+    QWidget *m_shellBackdrop = nullptr;
+    QTimer *m_shellBackdropRebuildTimer = nullptr;
+    QPixmap m_shellBackdropCache;
+    QSize m_shellBackdropCacheSize;
 };

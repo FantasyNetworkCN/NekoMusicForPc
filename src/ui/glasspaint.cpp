@@ -150,9 +150,33 @@ void paintMainWindowDeepBackdrop(QPainter &p, const QRect &r, bool darkMode)
     p.fillRect(r, bg);
 }
 
-void paintBarGlass(QPainter &p, const QRect &r, BarKind kind, bool darkMode)
+void paintMainWindowPagesImageBackdrop(QPainter &p, const QRect &r, const QPixmap &image, bool darkMode)
 {
-    const QColor surface = darkMode ? QColor(30, 30, 30) : QColor(255, 255, 255);
+    if (!image.isNull()) {
+        if (image.size() == r.size())
+            p.drawPixmap(r.topLeft(), image);
+        else
+            p.drawPixmap(r, image);
+    } else {
+        paintMainWindowDeepBackdrop(p, r, darkMode);
+        return;
+    }
+    if (darkMode)
+        p.fillRect(r, QColor(0, 0, 0, 96));
+    else
+        p.fillRect(r, QColor(255, 255, 255, 72));
+}
+
+void paintMainWindowSolidBackdrop(QPainter &p, const QRect &r, const QColor &color)
+{
+    p.fillRect(r, color.isValid() ? color : QColor(24, 24, 24));
+}
+
+void paintBarGlass(QPainter &p, const QRect &r, BarKind kind, bool darkMode, bool photoShellBackdrop)
+{
+    const QColor surface = photoShellBackdrop
+        ? (darkMode ? QColor(22, 22, 28, 168) : QColor(255, 255, 255, 188))
+        : (darkMode ? QColor(30, 30, 30) : QColor(255, 255, 255));
     const QColor border = darkMode ? QColor(255, 255, 255, 18) : QColor(0, 0, 0, 22);
     p.fillRect(r, surface);
 

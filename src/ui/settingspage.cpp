@@ -7,6 +7,7 @@
 #include "core/i18n.h"
 #include "core/appshortcuts.h"
 #include "core/globalshortcutcontroller.h"
+#include "core/shellbackdropsettings.h"
 #include "ui/shortcutcapturebutton.h"
 #include "ui/toast.h"
 #include "theme/theme.h"
@@ -26,6 +27,11 @@
 #include <QSettings>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QFileDialog>
+#include <QColorDialog>
+#include <QFileInfo>
+#include <QPixmap>
+#include <QColor>
 
 namespace {
 
@@ -134,6 +140,13 @@ void SettingsPage::setupUi()
     });
     themeRow->addWidget(m_themeCombo);
     cardLay->addLayout(themeRow);
+
+    auto *linePersonalize = new QFrame(cardBody);
+    linePersonalize->setFrameShape(QFrame::HLine);
+    linePersonalize->setObjectName("settingsDivider");
+    cardLay->addWidget(linePersonalize);
+
+    setupPersonalizationSection(cardLay, cardBody);
 
     auto *lineShortcuts = new QFrame(cardBody);
     lineShortcuts->setFrameShape(QFrame::HLine);
@@ -261,6 +274,179 @@ void SettingsPage::setupUi()
     outer->addWidget(scroll);
 }
 
+void SettingsPage::setupPersonalizationSection(QVBoxLayout *cardLay, QWidget *cardBody)
+{
+    m_personalizeSectionLabel = new QLabel(I18n::instance().tr("personalization"), cardBody);
+    m_personalizeSectionLabel->setObjectName("settingsLabel");
+    cardLay->addWidget(m_personalizeSectionLabel);
+
+    auto *kindRow = new QHBoxLayout();
+    m_backdropKindLabel = new QLabel(I18n::instance().tr("shellBackdrop"), cardBody);
+    m_backdropKindLabel->setObjectName("settingsLabel");
+    kindRow->addWidget(m_backdropKindLabel);
+    kindRow->addStretch();
+
+    m_backdropKindCombo = new QComboBox(cardBody);
+    m_backdropKindCombo->setObjectName("settingsCombo");
+    m_backdropKindCombo->addItem(I18n::instance().tr("shellBackdropDefaultImage"),
+        static_cast<int>(ShellBackdropSettings::Kind::DefaultImage));
+    m_backdropKindCombo->addItem(I18n::instance().tr("shellBackdropCustomImage"),
+        static_cast<int>(ShellBackdropSettings::Kind::CustomImage));
+    m_backdropKindCombo->addItem(I18n::instance().tr("shellBackdropSolidColor"),
+        static_cast<int>(ShellBackdropSettings::Kind::SolidColor));
+
+    auto &backdrop = ShellBackdropSettings::instance();
+    for (int i = 0; i < m_backdropKindCombo->count(); ++i) {
+        if (m_backdropKindCombo->itemData(i).toInt() == static_cast<int>(backdrop.kind())) {
+            m_backdropKindCombo->setCurrentIndex(i);
+            break;
+        }
+    }
+
+    connect(m_backdropKindCombo, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
+        const auto kind = static_cast<ShellBackdropSettings::Kind>(
+            m_backdropKindCombo->itemData(index).toInt());
+        ShellBackdropSettings::instance().setKind(kind);
+        updateBackdropOptionRows();
+    });
+    kindRow->addWidget(m_backdropKindCombo);
+    cardLay->addLayout(kindRow);
+
+    m_backdropImageRow = new QWidget(cardBody);
+    auto *imageLay = new QHBoxLayout(m_backdropImageRow);
+    imageLay->setContentsMargins(0, 0, 0, 0);
+    imageLay->setSpacing(12);
+
+    m_backdropPickImageBtn = new QPushButton(I18n::instance().tr("shellBackdropPickImage"), m_backdropImageRow);
+    m_backdropPickImageBtn->setObjectName("settingsLinkBtn");
+    m_backdropPickImageBtn->setCursor(Qt::PointingHandCursor);
+    m_backdropPickImageBtn->setFlat(true);
+    connect(m_backdropPickImageBtn, &QPushButton::clicked, this, [this]() {
+        const QString path = QFileDialog::getOpenFileName(
+            window(), I18n::instance().tr("shellBackdropPickImage"), QString(),
+            tr("Images (*.png *.jpg *.jpeg *.bmp *.webp)"));
+        if (path.isEmpty())
+            return;
+        QPixmap probe;
+        if (!probe.load(path)) {
+            Toast::show(window(), I18n::instance().tr("shellBackdropImageInvalid"), Toast::Error);
+            return;
+        }
+        auto &bd = ShellBackdropSettings::instance();
+        bd.setCustomImagePath(path);
+        bd.setKind(ShellBackdropSettings::Kind::CustomImage);
+        for (int i = 0; i < m_backdropKindCombo->count(); ++i) {
+            if (m_backdropKindCombo->itemData(i).toInt()
+                == static_cast<int>(ShellBackdropSettings::Kind::CustomImage)) {
+                m_backdropKindCombo->setCurrentIndex(i);
+                break;
+            }
+        }
+        refreshBackdropPathLabel();
+        updateBackdropOptionRows();
+    });
+    imageLay->addWidget(m_backdropPickImageBtn);
+
+    m_backdropResetImageBtn = new QPushButton(I18n::instance().tr("shellBackdropResetImage"), m_backdropImageRow);
+    m_backdropResetImageBtn->setObjectName("settingsLinkBtn");
+    m_backdropResetImageBtn->setCursor(Qt::PointingHandCursor);
+    m_backdropResetImageBtn->setFlat(true);
+    connect(m_backdropResetImageBtn, &QPushButton::clicked, this, [this]() {
+        ShellBackdropSettings::instance().resetToDefaultImage();
+        for (int i = 0; i < m_backdropKindCombo->count(); ++i) {
+            if (m_backdropKindCombo->itemData(i).toInt()
+                == static_cast<int>(ShellBackdropSettings::Kind::DefaultImage)) {
+                m_backdropKindCombo->setCurrentIndex(i);
+                break;
+            }
+        }
+        refreshBackdropPathLabel();
+        updateBackdropOptionRows();
+    });
+    imageLay->addWidget(m_backdropResetImageBtn);
+    imageLay->addStretch();
+    cardLay->addWidget(m_backdropImageRow);
+
+    m_backdropPathLabel = new QLabel(cardBody);
+    m_backdropPathLabel->setObjectName("settingsInfo");
+    m_backdropPathLabel->setWordWrap(true);
+    cardLay->addWidget(m_backdropPathLabel);
+
+    m_backdropSolidRow = new QWidget(cardBody);
+    auto *solidLay = new QHBoxLayout(m_backdropSolidRow);
+    solidLay->setContentsMargins(0, 0, 0, 0);
+    solidLay->setSpacing(12);
+
+    m_backdropPickColorBtn = new QPushButton(I18n::instance().tr("shellBackdropPickColor"), m_backdropSolidRow);
+    m_backdropPickColorBtn->setObjectName("settingsLinkBtn");
+    m_backdropPickColorBtn->setCursor(Qt::PointingHandCursor);
+    m_backdropPickColorBtn->setFlat(true);
+    connect(m_backdropPickColorBtn, &QPushButton::clicked, this, [this]() {
+        const QColor picked = QColorDialog::getColor(
+            ShellBackdropSettings::instance().solidColor(), window(),
+            I18n::instance().tr("shellBackdropPickColor"));
+        if (!picked.isValid())
+            return;
+        ShellBackdropSettings::instance().setSolidColor(picked);
+        refreshBackdropColorSwatch();
+    });
+    solidLay->addWidget(m_backdropPickColorBtn);
+
+    m_backdropColorSwatch = new QLabel(m_backdropSolidRow);
+    m_backdropColorSwatch->setFixedSize(28, 28);
+    m_backdropColorSwatch->setObjectName("settingsColorSwatch");
+    solidLay->addWidget(m_backdropColorSwatch);
+    solidLay->addStretch();
+    cardLay->addWidget(m_backdropSolidRow);
+
+    refreshBackdropPathLabel();
+    refreshBackdropColorSwatch();
+    updateBackdropOptionRows();
+}
+
+void SettingsPage::updateBackdropOptionRows()
+{
+    const auto kind = ShellBackdropSettings::instance().kind();
+    const bool imageMode = kind != ShellBackdropSettings::Kind::SolidColor;
+    if (m_backdropImageRow)
+        m_backdropImageRow->setVisible(imageMode);
+    if (m_backdropPathLabel)
+        m_backdropPathLabel->setVisible(imageMode);
+    if (m_backdropSolidRow)
+        m_backdropSolidRow->setVisible(!imageMode);
+    if (m_backdropResetImageBtn)
+        m_backdropResetImageBtn->setEnabled(kind == ShellBackdropSettings::Kind::CustomImage);
+}
+
+void SettingsPage::refreshBackdropPathLabel()
+{
+    if (!m_backdropPathLabel)
+        return;
+    auto &backdrop = ShellBackdropSettings::instance();
+    if (backdrop.kind() == ShellBackdropSettings::Kind::DefaultImage) {
+        m_backdropPathLabel->setText(I18n::instance().tr("shellBackdropUsingDefault"));
+        return;
+    }
+    if (backdrop.customImagePath().isEmpty()) {
+        m_backdropPathLabel->setText(I18n::instance().tr("shellBackdropNoCustomImage"));
+        return;
+    }
+    m_backdropPathLabel->setText(
+        QStringLiteral("%1: %2").arg(I18n::instance().tr("shellBackdropCurrentFile"),
+                                       backdrop.customImagePath()));
+}
+
+void SettingsPage::refreshBackdropColorSwatch()
+{
+    if (!m_backdropColorSwatch)
+        return;
+    const QColor c = ShellBackdropSettings::instance().solidColor();
+    m_backdropColorSwatch->setStyleSheet(
+        QStringLiteral("#settingsColorSwatch { background: %1; border: 1px solid rgba(255,255,255,0.2);"
+                       " border-radius: 6px; }")
+            .arg(c.name(QColor::HexRgb)));
+}
+
 void SettingsPage::setupShortcutRow(QVBoxLayout *parentLayout, QWidget *cardBody, AppShortcuts::Action action,
                                     QLabel **labelOut, ShortcutCaptureButton **captureOut,
                                     QPushButton **resetOut)
@@ -347,6 +533,23 @@ void SettingsPage::retranslate()
         m_themeCombo->setItemText(1, I18n::instance().tr("themeDark"));
         m_themeCombo->setItemText(2, I18n::instance().tr("themeLight"));
     }
+    if (m_personalizeSectionLabel)
+        m_personalizeSectionLabel->setText(I18n::instance().tr("personalization"));
+    if (m_backdropKindLabel)
+        m_backdropKindLabel->setText(I18n::instance().tr("shellBackdrop"));
+    if (m_backdropKindCombo) {
+        m_backdropKindCombo->setItemText(0, I18n::instance().tr("shellBackdropDefaultImage"));
+        m_backdropKindCombo->setItemText(1, I18n::instance().tr("shellBackdropCustomImage"));
+        m_backdropKindCombo->setItemText(2, I18n::instance().tr("shellBackdropSolidColor"));
+    }
+    if (m_backdropPickImageBtn)
+        m_backdropPickImageBtn->setText(I18n::instance().tr("shellBackdropPickImage"));
+    if (m_backdropResetImageBtn)
+        m_backdropResetImageBtn->setText(I18n::instance().tr("shellBackdropResetImage"));
+    if (m_backdropPickColorBtn)
+        m_backdropPickColorBtn->setText(I18n::instance().tr("shellBackdropPickColor"));
+    refreshBackdropPathLabel();
+    refreshBackdropColorSwatch();
     if (m_aboutLabel)
         m_aboutLabel->setText(I18n::instance().tr("about"));
     m_versionLabel->setText(QString("%1: %2").arg(I18n::instance().version(), QString::fromUtf8(APP_VERSION)));

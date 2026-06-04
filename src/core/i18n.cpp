@@ -88,6 +88,18 @@ static QMap<QString, QString> zhCN()
     m["themeSystem"] = QStringLiteral("跟随系统");
     m["themeDark"] = QStringLiteral("暗色模式");
     m["themeLight"] = QStringLiteral("亮色模式");
+    m["personalization"] = QStringLiteral("个性化");
+    m["shellBackdrop"] = QStringLiteral("窗口背景");
+    m["shellBackdropDefaultImage"] = QStringLiteral("默认图片");
+    m["shellBackdropCustomImage"] = QStringLiteral("自定义图片");
+    m["shellBackdropSolidColor"] = QStringLiteral("纯色");
+    m["shellBackdropPickImage"] = QStringLiteral("选择图片");
+    m["shellBackdropPickColor"] = QStringLiteral("选择颜色");
+    m["shellBackdropResetImage"] = QStringLiteral("恢复默认图片");
+    m["shellBackdropUsingDefault"] = QStringLiteral("当前使用内置默认背景图");
+    m["shellBackdropNoCustomImage"] = QStringLiteral("尚未选择自定义图片");
+    m["shellBackdropCurrentFile"] = QStringLiteral("当前文件");
+    m["shellBackdropImageInvalid"] = QStringLiteral("无法加载该图片，请选择其它文件");
     m["shortcuts"] = QStringLiteral("快捷键");
     m["shortcutPlayPause"] = QStringLiteral("播放/暂停");
     m["shortcutPreviousTrack"] = QStringLiteral("上一曲");
@@ -517,6 +529,14 @@ static QMap<QString, QString> zhCN()
     m["addToPlaylistFailed"] = QStringLiteral("添加到歌单失败");
     m["importSuccess"] = QStringLiteral("导入成功！成功添加 %1 首，共 %2 首，%3 首未匹配");
 
+    // --- QQ 音乐歌单导入 ---
+    m["importQqPlaylist"] = QStringLiteral("导入QQ音乐歌单");
+    m["importQqDesc"] = QStringLiteral("输入 QQ 音乐歌单分享链接或 ID，将歌曲导入到本地歌单");
+    m["inputQqLink"] = QStringLiteral("输入 QQ 音乐歌单链接或 ID...");
+    m["invalidQqLink"] = QStringLiteral("无效的歌单链接或 ID");
+    m["emptyQqPlaylist"] = QStringLiteral("歌单为空");
+    m["qqPlaylistInfo"] = QStringLiteral("歌单：%1（共 %2 首歌曲）");
+
     // --- 异常与调试 ---
     m["emptyMusic"] = QStringLiteral("音乐数据为空");
     m["musicInPlaylist"] = QStringLiteral("音乐已在播放列表中");
@@ -817,6 +837,14 @@ static QMap<QString, QString> nyaCN()
     m["addingToPlaylist"] = QStringLiteral("正在添加 %1 首歌曲到歌单喵...");
     m["addToPlaylistFailed"] = QStringLiteral("添加到歌单失败了喵...");
     m["importSuccess"] = QStringLiteral("导入成功喵！添加了 %1 首，共 %2 首，%3 首没找到喵~");
+
+    // --- QQ 音乐歌单导入喵~ ---
+    m["importQqPlaylist"] = QStringLiteral("导入QQ音乐歌单喵~");
+    m["importQqDesc"] = QStringLiteral("把 QQ 音乐歌单链接或 ID 告诉人家，人家帮你搬过来喵~");
+    m["inputQqLink"] = QStringLiteral("输入 QQ 音乐歌单链接或 ID 喵...");
+    m["invalidQqLink"] = QStringLiteral("这个链接看不懂喵...给个正确的嘛~");
+    m["emptyQqPlaylist"] = QStringLiteral("歌单空空的没有歌喵...");
+    m["qqPlaylistInfo"] = QStringLiteral("歌单：%1（共 %2 首歌曲喵）");
     
     return m;
 }
@@ -892,6 +920,18 @@ static QMap<QString, QString> enUS()
     m["themeSystem"] = "Follow System";
     m["themeDark"] = "Dark Mode";
     m["themeLight"] = "Light Mode";
+    m["personalization"] = "Personalization";
+    m["shellBackdrop"] = "Window Background";
+    m["shellBackdropDefaultImage"] = "Default Image";
+    m["shellBackdropCustomImage"] = "Custom Image";
+    m["shellBackdropSolidColor"] = "Solid Color";
+    m["shellBackdropPickImage"] = "Choose Image";
+    m["shellBackdropPickColor"] = "Choose Color";
+    m["shellBackdropResetImage"] = "Reset to Default Image";
+    m["shellBackdropUsingDefault"] = "Using built-in default background";
+    m["shellBackdropNoCustomImage"] = "No custom image selected";
+    m["shellBackdropCurrentFile"] = "Current file";
+    m["shellBackdropImageInvalid"] = "Could not load image. Please choose another file.";
     m["shortcuts"] = "Keyboard Shortcuts";
     m["shortcutPlayPause"] = "Play / Pause";
     m["shortcutPreviousTrack"] = "Previous Track";
@@ -1337,6 +1377,14 @@ static QMap<QString, QString> enUS()
     m["addingToPlaylist"] = "Adding %1 tracks to playlist...";
     m["addToPlaylistFailed"] = "Failed to add to playlist";
     m["importSuccess"] = "Import successful! Added %1 of %2 tracks, %3 not matched";
+
+    // --- QQ Music Playlist Import ---
+    m["importQqPlaylist"] = "Import QQ Music Playlist";
+    m["importQqDesc"] = "Enter QQ Music playlist link or ID to import songs to local playlist";
+    m["inputQqLink"] = "Enter QQ Music playlist link or ID...";
+    m["invalidQqLink"] = "Invalid playlist link or ID";
+    m["emptyQqPlaylist"] = "Playlist is empty";
+    m["qqPlaylistInfo"] = "Playlist: %1 (%2 songs)";
 
     return m;
 }

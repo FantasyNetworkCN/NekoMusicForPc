@@ -51,7 +51,7 @@ constexpr int kControlHideMs = 3000;
 constexpr qreal kBackdropBlurRadius = 80.0;
 /** SPlayer PlayerBackground.blur .bg-img transform: scale(1.5) */
 constexpr qreal kCoverBgBlurScale = 1.5;
-constexpr int kBackdropBlurMaxSide = 900;
+constexpr int kBackdropBlurMaxSide = 720;
 /** 遮罩：SPlayer .full-player #00000060；PlayerBackground ::after rgba(0,0,0,0.5) 取较轻一层 */
 constexpr int kBackdropOverlayAlpha = 0x60;
 constexpr int kPpMenuBtn = 40;
@@ -374,20 +374,20 @@ static QPixmap makeBlurredBackdrop(const QPixmap &src, const QSize &target,
         return {};
 
     const QSize work = backdropWorkSize(target);
-    QPixmap cover = src.scaled(work, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+    QPixmap cover = src.scaled(work, Qt::KeepAspectRatioByExpanding, Qt::FastTransformation);
     if (cover.width() > work.width() || cover.height() > work.height()) {
         const int x = (cover.width() - work.width()) / 2;
         const int y = (cover.height() - work.height()) / 2;
         cover = cover.copy(x, y, work.width(), work.height());
     } else if (cover.size() != work) {
-        cover = cover.scaled(work, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        cover = cover.scaled(work, Qt::IgnoreAspectRatio, Qt::FastTransformation);
     }
 
     QGraphicsScene scene;
     QGraphicsPixmapItem item(cover);
     QGraphicsBlurEffect effect;
     effect.setBlurRadius(blurRadius);
-    effect.setBlurHints(QGraphicsBlurEffect::QualityHint);
+    effect.setBlurHints(QGraphicsBlurEffect::PerformanceHint);
     item.setGraphicsEffect(&effect);
     scene.addItem(&item);
     const QRectF bounds = item.boundingRect();
@@ -408,7 +408,7 @@ static QPixmap makeBlurredBackdrop(const QPixmap &src, const QSize &target,
     const QSize out(target.width() > 0 ? target.width() : work.width(),
                     target.height() > 0 ? target.height() : work.height());
     if (cropped.size() != out)
-        cropped = cropped.scaled(out, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        cropped = cropped.scaled(out, Qt::IgnoreAspectRatio, Qt::FastTransformation);
 
     // SPlayer .bg-img: blur(80px) contrast(1.2)
     // 注意：这里不能用 Premultiplied 格式直接做 RGB 对比度拉伸，
@@ -721,6 +721,29 @@ PlayerPage::~PlayerPage()
     }
 }
 
+void PlayerPage::setUnderlaySnapshot(const QPixmap &snapshot, const QSize &targetSize)
+{
+    if (snapshot.isNull())
+        return;
+
+    m_underlaySnapshot = snapshot;
+    QSize target = targetSize;
+    if (target.width() < 1)
+        target = size();
+    if (target.width() < 1)
+        target = snapshot.size();
+    m_underlayBlurTarget = target;
+    scheduleUnderlayBlur(target);
+}
+
+void PlayerPage::setOpenTransitionActive(bool active)
+{
+    if (m_openTransitionActive == active)
+        return;
+    m_openTransitionActive = active;
+    update();
+}
+
 void PlayerPage::refreshUnderlayBackdrop(QWidget *source, const QSize &targetSize)
 {
     if (!source)
@@ -729,16 +752,7 @@ void PlayerPage::refreshUnderlayBackdrop(QWidget *source, const QSize &targetSiz
     const QPixmap shot = grabBackdropSource(source, targetSize);
     if (shot.isNull())
         return;
-
-    m_underlaySnapshot = shot;
-    QSize target = targetSize;
-    if (target.width() < 1)
-        target = size();
-    if (target.width() < 1)
-        target = shot.size();
-    m_underlayBlurTarget = target;
-    // 保留上一帧模糊图直至新图就绪，避免打开瞬间闪纯色底
-    scheduleUnderlayBlur(target);
+    setUnderlaySnapshot(shot, targetSize);
 }
 
 void PlayerPage::scheduleUnderlayBlur(const QSize &target)
@@ -795,17 +809,18 @@ void PlayerPage::paintEvent(QPaintEvent *event)
         opaqueBase = QColor(241, 243, 246);
     p.fillRect(rect(), opaqueBase);
 
-    // SPlayer .full-player：backdrop-filter 模糊背后主界面
-    if (!m_underlayBlurPixmap.isNull()) {
+    // 滑入动画期间跳过重型模糊底图，避免与位移动画争抢主线程
+    const bool lightBackdrop = m_openTransitionActive && m_underlayBlurPixmap.isNull();
+
+    if (!lightBackdrop && !m_underlayBlurPixmap.isNull()) {
         if (m_underlayBlurPixmap.size() == rect().size())
             p.drawPixmap(rect(), m_underlayBlurPixmap);
         else
             p.drawPixmap(rect(), m_underlayBlurPixmap.scaled(rect().size(), Qt::IgnoreAspectRatio,
-                                                             Qt::SmoothTransformation));
+                                                             Qt::FastTransformation));
     }
 
-    // SPlayer PlayerBackground.blur：封面模糊居中 scale(1.5)，避免整页拉伸成中心色块
-    if (!m_bgBlurPixmap.isNull())
+    if (!lightBackdrop && !m_bgBlurPixmap.isNull())
         drawCoverBlurBackground(p, m_bgBlurPixmap, rect());
     else if (m_coverMainColor.isValid()) {
         QColor fill = m_coverMainColor;
@@ -2636,8 +2651,8 @@ void PlayerPage::showEvent(QShowEvent *event)
     bumpControlShowTimer();
     QTimer::singleShot(0, this, &PlayerPage::refreshCoverLayout);
 
-    // 仅内容区淡入，背景保持不透明，避免透出主界面
-    if (!m_contentHost)
+    // 与主窗口滑入动画同时进行内容淡入会叠加掉帧，仅保留滑入
+    if (m_openTransitionActive || !m_contentHost)
         return;
     auto *opacity = new QGraphicsOpacityEffect(m_contentHost);
     opacity->setOpacity(0.0);

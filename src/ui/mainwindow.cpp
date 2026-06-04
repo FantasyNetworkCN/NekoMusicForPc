@@ -22,6 +22,7 @@
 #include "ui/vippage.h"
 #include "ui/addtoplaylistdialog.h"
 #include "ui/neteaseimportdialog.h"
+#include "ui/qqimportdialog.h"
 #include "ui/playlistpanel.h"
 #include "ui/toast.h"
 #include "ui/updatedialog.h"
@@ -49,11 +50,13 @@
 #include "core/defaultmusicappchecker.h"
 #include "core/appshortcuts.h"
 #include "core/globalshortcutcontroller.h"
+#include "core/shellbackdropsettings.h"
 
 #include <QApplication>
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QMouseEvent>
+#include <QWindow>
 #include <QPainter>
 #include <QList>
 #include <QGraphicsOpacityEffect>
@@ -171,6 +174,67 @@ private:
     QPropertyAnimation *m_fadeAnim = nullptr;
 };
 
+/** 铺满 centralWidget 的整窗底图（含首页） */
+class AppShellBackdrop final : public QWidget {
+public:
+    explicit AppShellBackdrop(MainWindow *main, QWidget *parent)
+        : QWidget(parent)
+        , m_main(main)
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        setAutoFillBackground(false);
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        if (!m_main)
+            return;
+        QPainter p(this);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        m_main->paintShellBackdrop(p, rect());
+    }
+
+private:
+    MainWindow *m_main = nullptr;
+};
+
+constexpr int kFramelessResizeMargin = 8;
+
+Qt::Edges framelessResizeEdgesAt(const QWidget *win, const QPoint &globalPos)
+{
+    if (!win || win->isMaximized())
+        return {};
+    const QRect g = win->frameGeometry();
+    Qt::Edges edges;
+    if (globalPos.x() - g.left() < kFramelessResizeMargin)
+        edges |= Qt::LeftEdge;
+    if (g.right() - globalPos.x() < kFramelessResizeMargin)
+        edges |= Qt::RightEdge;
+    if (globalPos.y() - g.top() < kFramelessResizeMargin)
+        edges |= Qt::TopEdge;
+    if (g.bottom() - globalPos.y() < kFramelessResizeMargin)
+        edges |= Qt::BottomEdge;
+    return edges;
+}
+
+Qt::CursorShape cursorForResizeEdges(Qt::Edges edges)
+{
+    const bool left = edges.testFlag(Qt::LeftEdge);
+    const bool right = edges.testFlag(Qt::RightEdge);
+    const bool top = edges.testFlag(Qt::TopEdge);
+    const bool bottom = edges.testFlag(Qt::BottomEdge);
+    if ((left && top) || (right && bottom))
+        return Qt::SizeFDiagCursor;
+    if ((right && top) || (left && bottom))
+        return Qt::SizeBDiagCursor;
+    if (left || right)
+        return Qt::SizeHorCursor;
+    if (top || bottom)
+        return Qt::SizeVerCursor;
+    return Qt::ArrowCursor;
+}
+
 } // namespace
 #include <QPointer>
 #include <QDebug>
@@ -207,6 +271,16 @@ constexpr int kStreamRetryDelayMs = 350;
 constexpr int kBgCacheDelayMs = 2500;
 /** 断流后若 .part 已达此大小则改播本地部分文件 */
 constexpr qint64 kMinPartResumeBytes = 512 * 1024;
+
+bool isRecoverablePlaybackError(const QString &err)
+{
+    const QString e = err.toLower();
+    return e.contains(QStringLiteral("demux"))
+        || e.contains(QStringLiteral("failed"))
+        || e.contains(QStringLiteral("input/output"))
+        || e.contains(QStringLiteral("resource error"))
+        || e.contains(QStringLiteral("network"));
+}
 
 QString buildShareClipboardText(const MusicInfo &m)
 {
@@ -251,6 +325,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground, false);
+    setAutoFillBackground(false);
 
     setWindowIcon(QIcon(QStringLiteral(":/icons/app.png")));
     m_engine = new PlayerEngine(this);
@@ -344,10 +419,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // 连接主题变化信号
     connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged,
             this, &MainWindow::applyTheme);
+    m_shellBackdropRebuildTimer = new QTimer(this);
+    m_shellBackdropRebuildTimer->setSingleShot(true);
+    connect(m_shellBackdropRebuildTimer, &QTimer::timeout, this, &MainWindow::rebuildShellBackdropCache);
+    connect(&ShellBackdropSettings::instance(), &ShellBackdropSettings::changed, this, [this]() {
+        m_shellBackdropCache = QPixmap();
+        m_shellBackdropCacheSize = QSize();
+        scheduleShellBackdropRebuild(0);
+        updateChromeForShellBackdrop();
+    });
 
     setWindowTitle(QStringLiteral("NekoMusic"));
     resize(1200, 800);
     setMinimumSize(960, 640);
+    scheduleShellBackdropRebuild(0);
+
+    qApp->installEventFilter(this);
 
     // 延迟检查版本更新
     QTimer::singleShot(2000, this, [this]() { checkForUpdates(false); });
@@ -356,6 +443,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
 MainWindow::~MainWindow()
 {
+    qApp->removeEventFilter(this);
+    while (QApplication::overrideCursor())
+        QApplication::restoreOverrideCursor();
+
     // 清理下载器连接
     disconnectDownloader();
 
@@ -376,7 +467,12 @@ void MainWindow::setupUi()
 {
     auto *central = new QWidget(this);
     central->setObjectName("centralWidget");
+    central->setAutoFillBackground(false);
     setCentralWidget(central);
+
+    m_shellBackdrop = new AppShellBackdrop(this, central);
+    m_shellBackdrop->setObjectName(QStringLiteral("shellBackdrop"));
+    m_shellBackdrop->lower();
 
     auto *mainV = new QVBoxLayout(central);
     mainV->setContentsMargins(0, 0, 0, 0);
@@ -568,6 +664,27 @@ void MainWindow::setupUi()
         dlg->exec();
         dlg->deleteLater();
     });
+    connect(m_sidebar, &Sidebar::qqImportRequested, this, [this]() {
+        if (!UserManager::instance().isLoggedIn()) {
+            Toast::show(this, I18n::instance().tr("loginRequired"), Toast::Error);
+            return;
+        }
+        auto *dlg = new QqImportDialog(m_apiClient, this);
+        connect(dlg, &QqImportDialog::importCompleted, this,
+                [this](int addedCount, int totalCount, int failCount, bool importedToFavorites) {
+            m_sidebar->refreshPlaylists();
+            if (importedToFavorites && m_favoritesPage)
+                m_favoritesPage->refresh();
+            Toast::show(this,
+                        I18n::instance().tr(QStringLiteral("importSuccess"))
+                            .arg(addedCount)
+                            .arg(totalCount)
+                            .arg(failCount),
+                        Toast::Success);
+        });
+        dlg->exec();
+        dlg->deleteLater();
+    });
     connect(m_titleBar, &TitleBar::settingsClicked, this, [this]() {
         switchPage(m_settingsPage);
     });
@@ -639,12 +756,22 @@ void MainWindow::setupUi()
             m_dailyMusicPage->updatePlayingHighlight();
     });
 
-    // 播放错误处理（远程重试流程由 startRemotePlaybackWithBackgroundCache 专用连接处理，此处不抢 loading）
+    // 起播阶段由 attachStreamPlaybackGuards 处理；起播成功后断流/Demux 失败由此恢复
     connect(m_engine, &PlayerEngine::mediaError, this, [this](const QString &err) {
         qDebug() << "[播放错误]" << err;
         if (m_streamRetryActive)
             return;
-        m_playerBar->setLoading(false);
+        if (!isRecoverablePlaybackError(err)) {
+            m_playerBar->setLoading(false);
+            return;
+        }
+        const int musicId = m_playerBar->currentMusicId();
+        if (musicId <= 0 || m_engine->currentMusic().isLocalFile()) {
+            m_playerBar->setLoading(false);
+            return;
+        }
+        qDebug() << "[Music] 播放中途错误，尝试恢复 id=" << musicId << err;
+        handleRemoteStreamFailure(musicId, m_enginePlaySeq, true);
     });
 
     // 播放完成自动切歌
@@ -932,12 +1059,120 @@ void MainWindow::applyTheme()
         qApp->setStyleSheet(QString());
     else
         qApp->setStyleSheet(style);
+    if (m_shellBackdrop)
+        m_shellBackdrop->update();
+    updateChromeForShellBackdrop();
 }
 
-void MainWindow::paintEvent(QPaintEvent *)
+namespace {
+
+constexpr int kMaxBackdropCacheSide = 1600;
+
+QSize cappedBackdropCacheSize(const QSize &widgetSize)
 {
-    QPainter p(this);
-    GlassPaint::paintMainWindowDeepBackdrop(p, rect(), Theme::ThemeManager::instance().isDarkMode());
+    if (widgetSize.isEmpty())
+        return widgetSize;
+    QSize t = widgetSize;
+    const int side = qMax(t.width(), t.height());
+    if (side <= kMaxBackdropCacheSide)
+        return t;
+    t.scale(kMaxBackdropCacheSide, kMaxBackdropCacheSide, Qt::KeepAspectRatio);
+    return t;
+}
+
+} // namespace
+
+void MainWindow::scheduleShellBackdropRebuild(int delayMs)
+{
+    if (!m_shellBackdropRebuildTimer)
+        return;
+    m_shellBackdropRebuildTimer->start(qMax(0, delayMs));
+}
+
+void MainWindow::rebuildShellBackdropCache()
+{
+    if (!m_shellBackdrop || !ShellBackdropSettings::instance().usesImageBackdrop())
+        return;
+
+    const QSize target = cappedBackdropCacheSize(m_shellBackdrop->size());
+    if (target.isEmpty())
+        return;
+    if (m_shellBackdropCacheSize == target && !m_shellBackdropCache.isNull())
+        return;
+
+    const QPixmap source = ShellBackdropSettings::instance().cachedSourcePixmap();
+    if (source.isNull())
+        return;
+
+    QPixmap cover = source.scaled(target, Qt::KeepAspectRatioByExpanding, Qt::FastTransformation);
+    if (cover.width() > target.width() || cover.height() > target.height()) {
+        const int x = (cover.width() - target.width()) / 2;
+        const int y = (cover.height() - target.height()) / 2;
+        cover = cover.copy(x, y, target.width(), target.height());
+    } else if (cover.size() != target) {
+        cover = cover.scaled(target, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+    }
+
+    m_shellBackdropCache = cover;
+    m_shellBackdropCacheSize = target;
+    m_shellBackdrop->update();
+}
+
+QPixmap MainWindow::shellBackdropPixmapForSize(const QSize &size)
+{
+    if (size.isEmpty())
+        return {};
+
+    auto &backdrop = ShellBackdropSettings::instance();
+    if (backdrop.kind() == ShellBackdropSettings::Kind::SolidColor) {
+        QPixmap pm(size);
+        pm.fill(backdrop.solidColor());
+        return pm;
+    }
+
+    if (!m_shellBackdropCache.isNull()) {
+        if (m_shellBackdropCache.size() == size)
+            return m_shellBackdropCache;
+        return m_shellBackdropCache.scaled(size, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+    }
+
+    const QPixmap src = backdrop.cachedSourcePixmap();
+    if (src.isNull())
+        return {};
+    QPixmap cover = src.scaled(size, Qt::KeepAspectRatioByExpanding, Qt::FastTransformation);
+    if (cover.width() > size.width() || cover.height() > size.height()) {
+        const int x = (cover.width() - size.width()) / 2;
+        const int y = (cover.height() - size.height()) / 2;
+        cover = cover.copy(x, y, size.width(), size.height());
+    } else if (cover.size() != size) {
+        cover = cover.scaled(size, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+    }
+    return cover;
+}
+
+void MainWindow::paintShellBackdrop(QPainter &p, const QRect &r) const
+{
+    auto &backdrop = ShellBackdropSettings::instance();
+    const bool dark = Theme::ThemeManager::instance().isDarkMode();
+    if (backdrop.kind() == ShellBackdropSettings::Kind::SolidColor) {
+        GlassPaint::paintMainWindowSolidBackdrop(p, r, backdrop.solidColor());
+        return;
+    }
+    if (m_shellBackdropCache.isNull()) {
+        GlassPaint::paintMainWindowDeepBackdrop(p, r, dark);
+        return;
+    }
+    GlassPaint::paintMainWindowPagesImageBackdrop(p, r, m_shellBackdropCache, dark);
+}
+
+void MainWindow::updateChromeForShellBackdrop()
+{
+    if (m_sidebar)
+        m_sidebar->update();
+    if (m_titleBar)
+        m_titleBar->update();
+    if (m_playerBar)
+        m_playerBar->applyShellBackdropChrome();
 }
 
 void MainWindow::switchPage(QWidget *target)
@@ -1387,17 +1622,42 @@ void MainWindow::handleRemoteStreamFailure(int musicId, quint64 playSeq, bool mi
 {
     if (playSeq != m_enginePlaySeq)
         return;
+    if (midPlaybackError && m_midPlaybackRecoveryInFlight)
+        return;
     if (!midPlaybackError && m_engine->playbackState() == PlayerEngine::Playing)
         return;
-    if (m_streamFailHandledThisRound)
+    if (!midPlaybackError && m_streamFailHandledThisRound)
         return;
-    m_streamFailHandledThisRound = true;
+    if (!midPlaybackError)
+        m_streamFailHandledThisRound = true;
+    if (midPlaybackError) {
+        m_midPlaybackRecoveryInFlight = true;
+        QTimer::singleShot(900, this, [this]() { m_midPlaybackRecoveryInFlight = false; });
+    }
 
     const qint64 resumePos = midPlaybackError ? m_engine->position() : 0;
     m_engine->stop();
     m_downloader->cancel();
+    if (m_bgCacheFinishedConn) {
+        disconnect(m_bgCacheFinishedConn);
+        m_bgCacheFinishedConn = QMetaObject::Connection();
+    }
+    if (m_bgCacheErrorConn) {
+        disconnect(m_bgCacheErrorConn);
+        m_bgCacheErrorConn = QMetaObject::Connection();
+    }
 
     if (midPlaybackError) {
+        const QString cachedPath = MusicDownloader::cachedAudioFilePath(musicId);
+        if (QFile::exists(cachedPath)) {
+            qDebug() << "[Music] 断流，改播完整缓存 id=" << musicId << "pos=" << resumePos;
+            m_remoteStreamFailureCount = 0;
+            m_streamRetryActive = false;
+            cancelStreamWatch();
+            m_playerBar->setLoading(false);
+            m_engine->playLocalResuming(cachedPath, resumePos);
+            return;
+        }
         const QString partPath = MusicDownloader::cachedAudioFilePath(musicId) + QStringLiteral(".part");
         if (QFileInfo(partPath).size() >= kMinPartResumeBytes) {
             qDebug() << "[Music] 断流，尝试从部分缓存续播 id=" << musicId << "pos=" << resumePos;
@@ -1494,7 +1754,7 @@ void MainWindow::playNext()
     // This ensures MPRIS clients get the correct metadata even during stop() state
     refreshSystemMediaIntegration();
 
-    QTimer::singleShot(50, this, [this, info, playSeq]() {
+    QTimer::singleShot(80, this, [this, info, playSeq]() {
         if (playSeq != m_enginePlaySeq)
             return;
 
@@ -1660,7 +1920,12 @@ void MainWindow::openPlayerPage()
     m_playerPage->setParent(host);
     m_playerPage->setGeometry(area);
     m_playerPage->move(0, area.height());
-    m_playerPage->refreshUnderlayBackdrop(host, area.size());
+    m_playerPage->setOpenTransitionActive(true);
+    const QPixmap snap = shellBackdropPixmapForSize(area.size());
+    if (!snap.isNull())
+        m_playerPage->setUnderlaySnapshot(snap, area.size());
+    else
+        m_playerPage->refreshUnderlayBackdrop(host, area.size());
     m_playerPage->show();
     m_playerPage->raise();
     syncPlayModeUi();
@@ -1671,6 +1936,10 @@ void MainWindow::openPlayerPage()
     anim->setStartValue(QPoint(0, area.height()));
     anim->setEndValue(QPoint(0, 0));
     anim->setEasingCurve(QEasingCurve::OutCubic);
+    connect(anim, &QPropertyAnimation::finished, this, [this]() {
+        if (m_playerPage)
+            m_playerPage->setOpenTransitionActive(false);
+    });
     anim->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
@@ -1680,12 +1949,15 @@ void MainWindow::closePlayerPage()
         return;
 
     const QRect area = playerPageOverlayGeometry();
+    m_playerPage->setOpenTransitionActive(true);
     auto *anim = new QPropertyAnimation(m_playerPage, "pos", this);
     anim->setDuration(Theme::kAnimNormal);
     anim->setStartValue(m_playerPage->pos());
     anim->setEndValue(QPoint(0, area.height()));
     anim->setEasingCurve(QEasingCurve::InCubic);
     connect(anim, &QPropertyAnimation::finished, this, [this]() {
+        if (m_playerPage)
+            m_playerPage->setOpenTransitionActive(false);
         m_playerPageVisible = false;
         if (m_playerPage) {
             m_playerPage->hide();
@@ -1707,6 +1979,10 @@ void MainWindow::closePlayerPage()
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QMainWindow::resizeEvent(event);
+    if (m_shellBackdrop && centralWidget()) {
+        m_shellBackdrop->setGeometry(centralWidget()->rect());
+        scheduleShellBackdropRebuild(150);
+    }
     if (m_playerPage) {
         if (m_playerPageVisible)
             m_playerPage->setGeometry(playerPageOverlayGeometry());
@@ -1747,6 +2023,51 @@ bool MainWindow::event(QEvent *event)
         return true;
     }
     return QMainWindow::event(event);
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (!isMaximized() && windowHandle()) {
+        QWidget *w = qobject_cast<QWidget *>(watched);
+        if (w && w->window() == this) {
+            switch (event->type()) {
+            case QEvent::MouseButtonPress: {
+                auto *e = static_cast<QMouseEvent *>(event);
+                if (e->button() == Qt::LeftButton) {
+                    const Qt::Edges edges =
+                        framelessResizeEdgesAt(this, e->globalPosition().toPoint());
+                    if (edges) {
+                        windowHandle()->startSystemResize(edges);
+                        return true;
+                    }
+                }
+                break;
+            }
+            case QEvent::MouseMove: {
+                auto *e = static_cast<QMouseEvent *>(event);
+                const Qt::Edges edges =
+                    framelessResizeEdgesAt(this, e->globalPosition().toPoint());
+                if (edges) {
+                    const Qt::CursorShape shape = cursorForResizeEdges(edges);
+                    const QCursor *cur = QApplication::overrideCursor();
+                    if (!cur || cur->shape() != shape)
+                        QApplication::setOverrideCursor(shape);
+                } else if (QApplication::overrideCursor()) {
+                    QApplication::restoreOverrideCursor();
+                }
+                break;
+            }
+            case QEvent::Leave: {
+                if (QApplication::overrideCursor())
+                    QApplication::restoreOverrideCursor();
+                break;
+            }
+            default:
+                break;
+            }
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void MainWindow::createTrayIcon()

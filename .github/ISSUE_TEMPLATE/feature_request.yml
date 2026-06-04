@@ -1,0 +1,54 @@
+name: 功能建议（Feature）
+description: 希望增加或改进的桌面端（Qt）能力
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先确认 **Web / Android 是否已有类似能力**；若希望多端一致，请注明希望与哪端对齐。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 背景 / 想解决什么问题？
+      description: 使用场景、当前痛点。
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 期望的方案或效果
+      description: 尽量具体：菜单、快捷键、托盘行为、与现有 UI 风格等。
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 影响范围（主观即可）
+      options:
+        - 仅桌面端（Qt）
+        - 希望与 Android / Web 行为一致
+        - 不确定
+    validations:
+      required: true
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: 贡献意愿
+      options:
+        - 我愿意尝试提交 PR（可在「参考」里写 CMake/Qt 思路）
+        - 仅提建议，由维护者排期
+        - 暂不表态
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考（可选）
+      description: 其他客户端、设计稿、相关 Issue 链接等。
+    validations:
+      required: false

@@ -45,23 +45,62 @@ void PlayerEngine::cancelFade()
 
 void PlayerEngine::play(const QUrl &url)
 {
-    cancelFade();
-    if (m_audioOutput)
-        m_audioOutput->setVolume(m_targetVolume);
-    m_player->setSource(url);
-    m_player->play();
+    openMedia(url);
 }
 
 void PlayerEngine::playLocalResuming(const QString &localPath, qint64 resumeMs)
 {
+    openMedia(QUrl::fromLocalFile(localPath), resumeMs);
+}
+
+void PlayerEngine::openMedia(const QUrl &url, qint64 resumeMs)
+{
     cancelFade();
     if (m_audioOutput)
         m_audioOutput->setVolume(m_targetVolume);
-    const QUrl url = QUrl::fromLocalFile(localPath);
+
+    ++m_openGen;
+    const quint64 gen = m_openGen;
+    m_pendingUrl = url;
+    m_pendingResumeMs = resumeMs;
+
+    if (m_player->playbackState() == QMediaPlayer::StoppedState) {
+        applyPendingOpen(gen);
+        return;
+    }
+
+    if (!m_stopForOpenConn) {
+        m_stopForOpenConn = connect(m_player, &QMediaPlayer::playbackStateChanged, this,
+            [this](QMediaPlayer::PlaybackState state) {
+                if (state != QMediaPlayer::StoppedState)
+                    return;
+                applyPendingOpen(m_openGen);
+            });
+    }
+    m_player->stop();
+}
+
+void PlayerEngine::applyPendingOpen(quint64 gen)
+{
+    if (gen != m_openGen || m_pendingUrl.isEmpty())
+        return;
+
+    const QUrl url = m_pendingUrl;
+    const qint64 resumeMs = m_pendingResumeMs;
+    m_pendingUrl = QUrl();
+    m_pendingResumeMs = -1;
+
+    // 先清空再加载，降低 QFFmpeg demuxer 在快速切源时的崩溃概率
+    m_player->setSource(QUrl());
     m_player->setSource(url);
     m_player->play();
-    if (resumeMs <= 0)
-        return;
+
+    if (resumeMs > 0)
+        scheduleResumeAfterOpen(resumeMs);
+}
+
+void PlayerEngine::scheduleResumeAfterOpen(qint64 resumeMs)
+{
     const qint64 dur = m_player->duration();
     if (dur > 0) {
         m_player->setPosition(qMin(resumeMs, qMax(qint64(0), dur - 1)));
@@ -94,6 +133,9 @@ void PlayerEngine::pause()
 void PlayerEngine::stop()
 {
     cancelFade();
+    ++m_openGen;
+    m_pendingUrl = QUrl();
+    m_pendingResumeMs = -1;
     m_player->stop();
 }
 

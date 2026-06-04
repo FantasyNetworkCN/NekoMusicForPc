@@ -999,6 +999,95 @@ void ApiClient::fetchNeteasePlaylist(qint64 playlistId, NeteasePlaylistCb cb)
     });
 }
 
+void ApiClient::fetchQqPlaylist(const QString &disstid, QqPlaylistCb cb)
+{
+    QUrl url(QString::fromUtf8("%1/loser1/getSongListDetail?disstid=%2").arg(Theme::kApiBase, disstid));
+    QNetworkRequest req(url);
+    req.setTransferTimeout(120000);
+
+    auto *reply = m_nam.get(req);
+    connect(reply, &QNetworkReply::finished, this, [reply, cb, disstid]() {
+        reply->deleteLater();
+        QqPlaylistInfo info;
+        info.disstid = disstid;
+
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "[QQ歌单] 请求失败:" << reply->errorString();
+            if (cb)
+                cb(false, reply->errorString(), info);
+            return;
+        }
+
+        const QByteArray data = reply->readAll();
+        const auto doc = QJsonDocument::fromJson(data);
+        const auto root = doc.object();
+        const auto response = root.value(QStringLiteral("response")).toObject();
+        if (response.isEmpty()) {
+            if (cb)
+                cb(false, QStringLiteral("响应格式错误"), info);
+            return;
+        }
+
+        const int code = response.value(QStringLiteral("code")).toInt(-1);
+        if (code != 0) {
+            const QString msg = QStringLiteral("拉取歌单失败 (code=%1)").arg(code);
+            qDebug() << "[QQ歌单] API 返回错误:" << code;
+            if (cb)
+                cb(false, msg, info);
+            return;
+        }
+
+        const auto cdlist = response.value(QStringLiteral("cdlist")).toArray();
+        if (cdlist.isEmpty()) {
+            if (cb)
+                cb(false, QStringLiteral("歌单不存在"), info);
+            return;
+        }
+
+        QString dissname;
+        int totalBySongNum = 0;
+        for (const auto &cdVal : cdlist) {
+            const auto cd = cdVal.toObject();
+            if (dissname.isEmpty()) {
+                dissname = cd.value(QStringLiteral("dissname")).toString().trimmed();
+            }
+            totalBySongNum += cd.value(QStringLiteral("songnum")).toInt();
+
+            const auto songlist = cd.value(QStringLiteral("songlist")).toArray();
+            for (const auto &trackVal : songlist) {
+                const auto track = trackVal.toObject();
+                NeteaseTrack t;
+                QString title = track.value(QStringLiteral("name")).toString().trimmed();
+                if (title.isEmpty())
+                    title = track.value(QStringLiteral("title")).toString().trimmed();
+                t.name = title;
+
+                const auto singers = track.value(QStringLiteral("singer")).toArray();
+                QStringList artistNames;
+                for (const auto &singerVal : singers) {
+                    const QString name =
+                        singerVal.toObject().value(QStringLiteral("name")).toString().trimmed();
+                    if (!name.isEmpty())
+                        artistNames.append(name);
+                }
+                t.artist = artistNames.join(QStringLiteral(" / "));
+
+                if (!t.name.isEmpty())
+                    info.tracks.append(t);
+            }
+        }
+
+        info.name = dissname;
+        info.trackCount = info.tracks.isEmpty() ? totalBySongNum : info.tracks.size();
+
+        qDebug() << "[QQ歌单] 获取成功, 歌单:" << info.name
+                 << ", 曲目数:" << info.tracks.size()
+                 << ", 标注曲目数:" << info.trackCount;
+        if (cb)
+            cb(true, QString(), info);
+    });
+}
+
 void ApiClient::batchSearchMusic(const QList<BatchSearchItem> &items, BatchSearchCb cb)
 {
     if (items.isEmpty()) {

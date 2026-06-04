@@ -13,6 +13,7 @@ class QComboBox;
 class QLabel;
 class QPushButton;
 class QVBoxLayout;
+class QWidget;
 class ShortcutCaptureButton;
 
 class SettingsPage : public QWidget
@@ -37,9 +38,23 @@ private:
     void applyShortcutChange(AppShortcuts::Action action, const QKeySequence &seq,
                              ShortcutCaptureButton *editor);
     void refreshShortcutEditors();
+    void setupPersonalizationSection(QVBoxLayout *cardLay, QWidget *cardBody);
+    void updateBackdropOptionRows();
+    void refreshBackdropPathLabel();
+    void refreshBackdropColorSwatch();
 
     QComboBox *m_langCombo = nullptr;
     QComboBox *m_themeCombo = nullptr;
+    QLabel *m_personalizeSectionLabel = nullptr;
+    QLabel *m_backdropKindLabel = nullptr;
+    QComboBox *m_backdropKindCombo = nullptr;
+    QWidget *m_backdropImageRow = nullptr;
+    QPushButton *m_backdropPickImageBtn = nullptr;
+    QPushButton *m_backdropResetImageBtn = nullptr;
+    QLabel *m_backdropPathLabel = nullptr;
+    QWidget *m_backdropSolidRow = nullptr;
+    QPushButton *m_backdropPickColorBtn = nullptr;
+    QLabel *m_backdropColorSwatch = nullptr;
     QLabel *m_langLabel = nullptr;
     QLabel *m_shortcutsSectionLabel = nullptr;
     QLabel *m_shortcutPlayPauseLabel = nullptr;

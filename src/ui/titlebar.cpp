@@ -8,7 +8,6 @@
 #include "titlebar.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
-#include "ui/glasspaint.h"
 #include "ui/svgicon.h"
 #include "ui/vippillbutton.h"
 #include "core/i18n.h"
@@ -190,6 +189,7 @@ void TitleBar::mouseDoubleClickEvent(QMouseEvent *e)
 
 void TitleBar::setupUi()
 {
+    setObjectName(QStringLiteral("titleBar"));
     setFixedHeight(Theme::kTitleBarH);
     setAttribute(Qt::WA_StyledBackground, false);
     setAutoFillBackground(false);
@@ -501,7 +501,5 @@ void TitleBar::loadAvatarAsync(const QString &url, int userId)
 
 void TitleBar::paintEvent(QPaintEvent *)
 {
-    QPainter p(this);
-    GlassPaint::paintBarGlass(p, rect(), GlassPaint::BarKind::TitleBar,
-                              Theme::ThemeManager::instance().isDarkMode());
+    /* 不绘制底色，透出整窗底图；搜索框等子控件仍由 QSS 单独样式 */
 }

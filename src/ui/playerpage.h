@@ -56,6 +56,10 @@ public:
     void layoutPlayerPageChrome();
     /** 抓取 host 并模糊，对齐 SPlayer .full-player backdrop-filter，避免透出背后清晰界面 */
     void refreshUnderlayBackdrop(QWidget *source, const QSize &targetSize = QSize());
+    /** 直接提交已抓取的底图（主窗口缓存），避免进入播放页时同步 render 整窗。 */
+    void setUnderlaySnapshot(const QPixmap &snapshot, const QSize &targetSize);
+    /** 滑入/滑出动画期间使用轻量背景绘制，减轻掉帧。 */
+    void setOpenTransitionActive(bool active);
     void emitDesktopLyricsPayload();
 
 protected:
@@ -246,6 +250,7 @@ private:
     int m_underlayBlurGen = 0;
     int m_coverBlurGen = 0;
     QSize m_underlayBlurTarget;
+    bool m_openTransitionActive = false;
 
     QNetworkAccessManager *m_qualityNam = nullptr;
     QNetworkReply *m_qualityReply = nullptr;

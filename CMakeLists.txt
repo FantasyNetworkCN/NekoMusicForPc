@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(NekoMusic
-        VERSION 2026.531.26
+        VERSION 2026.603.29
         LANGUAGES CXX
 )
 
@@ -164,6 +164,7 @@ set(SOURCES
         src/core/apiclient.cpp
         src/core/i18n.cpp
         src/core/appshortcuts.cpp
+        src/core/shellbackdropsettings.cpp
         src/core/globalshortcutcontroller.cpp
         src/core/listmetaformat.cpp
         src/core/covercache.cpp
@@ -188,6 +189,7 @@ set(SOURCES
         src/ui/defaultmusicplayerdialog.cpp
         src/ui/searchpage.cpp
         src/ui/neteaseimportdialog.cpp
+        src/ui/qqimportdialog.cpp
         src/theme/thememanager.cpp
 )
 
@@ -230,6 +232,7 @@ set(HEADERS
         src/core/httpprotocollabel.h
         src/core/i18n.h
         src/core/appshortcuts.h
+        src/core/shellbackdropsettings.h
         src/core/globalshortcutcontroller.h
         src/core/covercache.h
         src/core/linuxtmpfscache.h
@@ -255,6 +258,7 @@ set(HEADERS
         src/ui/searchpage.h
         src/ui/artistdetailpage.h
         src/ui/neteaseimportdialog.h
+        src/ui/qqimportdialog.h
         src/core/systemmediacontroller.h
         src/core/defaultmusicappchecker.h
 )

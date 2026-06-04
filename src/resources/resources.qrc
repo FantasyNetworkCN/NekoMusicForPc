@@ -152,5 +152,6 @@
         <file>icons/Zoom.svg</file>
         <file>style.qss</file>
         <file>style-light.qss</file>
+        <file>background-pages.jpg</file>
     </qresource>
 </RCC>

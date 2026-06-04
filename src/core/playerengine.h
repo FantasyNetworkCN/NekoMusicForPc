@@ -68,6 +68,10 @@ private:
     void cancelFade();
     void onMediaStateChanged(QMediaPlayer::PlaybackState state);
     void onFadeTick();
+    /** 等底层 Stopped 后再 setSource，避免切歌/重试时 FFmpeg demuxer 竞态。 */
+    void openMedia(const QUrl &url, qint64 resumeMs = -1);
+    void applyPendingOpen(quint64 gen);
+    void scheduleResumeAfterOpen(qint64 resumeMs);
 
     QMediaPlayer *m_player;
     QAudioOutput *m_audioOutput;
@@ -78,6 +82,10 @@ private:
     bool m_fadingOut = false;
     MusicInfo m_currentMusic;
     qint64 m_seekLimitMs = -1; // -1 means no limit
+    QUrl m_pendingUrl;
+    qint64 m_pendingResumeMs = -1;
+    quint64 m_openGen = 0;
+    QMetaObject::Connection m_stopForOpenConn;
 
 public:
     void setSeekLimitMs(qint64 limitMs) { m_seekLimitMs = limitMs; }

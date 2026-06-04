@@ -64,6 +64,9 @@ public:
     /** 切页等导致主内容变化时刷新底部栏磨砂采样 */
     void refreshGlassBackdrop();
 
+    /** 整窗底图切换时同步底栏透明度 */
+    void applyShellBackdropChrome();
+
 public slots:
     /** 播放页当前歌词行（SPlayer 底栏 lyric-slide） */
     void setBarLyricLine(const QString &displayText, int lineIndex, bool trackHasLyrics);

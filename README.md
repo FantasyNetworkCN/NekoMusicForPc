@@ -6,6 +6,14 @@
 
 # 官网 https://music.cnmsb.xin
 
+## 关于从外部导入歌单
+网易云歌单导入使用的是三方api和Neko官方api调用。[网易云API仓库](https://github.com/kengwang/NeteaseCloudMusicApi-1)
+QQ云音乐歌单导入相同 [QQ云API仓库](https://github.com/Rain120/qq-music-api)
+
+### 获取外部歌单api
+获取qq歌单列表`https://music.cnmsb.xin/loser1/getSongListDetail?disstid=歌单id`
+获取网易云歌单列表`https://music.cnmsb.xin/loser/playlist/detail?id=歌单id`
+
 > [!NOTE]
 > 本仓库 **默认分支 `main`** 为 **Qt 6 + C++** 客户端。  
 > 旧版 **Electron + Vue** 工程已单独放在 Git 分支 **`old`**（仅存档 / 按需构建），见该分支根目录的 [README](https://github.com/FantasyNetworkCN/NekoMusicForPc/blob/old/README.md)。

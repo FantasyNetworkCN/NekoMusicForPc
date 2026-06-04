@@ -137,6 +137,16 @@ public:
     using NeteasePlaylistCb = std::function<void(bool ok, const QString &message, const NeteasePlaylistInfo &playlist)>;
     void fetchNeteasePlaylist(qint64 playlistId, NeteasePlaylistCb cb);
 
+    // ─── QQ 音乐歌单导入 ────────────────────────────────────
+    struct QqPlaylistInfo {
+        QString disstid;
+        QString name;
+        int trackCount = 0;
+        QList<NeteaseTrack> tracks;
+    };
+    using QqPlaylistCb = std::function<void(bool ok, const QString &message, const QqPlaylistInfo &playlist)>;
+    void fetchQqPlaylist(const QString &disstid, QqPlaylistCb cb);
+
     struct BatchSearchItem {
         QString title;
         QString artist;

@@ -7,6 +7,7 @@
  */
 
 #include "playerbar.h"
+#include "core/shellbackdropsettings.h"
 #include "playerprogressslider.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
@@ -1826,13 +1827,21 @@ void PlayerBar::updatePlayModeBtn(const QString &mode)
     m_playModeBtn->update();
 }
 
+void PlayerBar::applyShellBackdropChrome()
+{
+    applyPlayerBarGlassStyle();
+}
+
 void PlayerBar::applyPlayerBarGlassStyle()
 {
     if (!m_glass)
         return;
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
+    const bool photoShell = ShellBackdropSettings::instance().usesImageBackdrop();
     m_glass->setBackdropCaptureEnabled(false);
-    m_glass->setBaseColor(dark ? QColor(30, 30, 30) : QColor(255, 255, 255));
+    m_glass->setBaseColor(photoShell
+        ? (dark ? QColor(30, 30, 30, 175) : QColor(255, 255, 255, 210))
+        : (dark ? QColor(30, 30, 30) : QColor(255, 255, 255)));
     m_glass->setBorderColor(dark ? QColor(255, 255, 255, 18) : QColor(0, 0, 0, 22));
     m_glass->setOpacity(1.0);
     m_glass->setBorderRadius(0);

@@ -11,7 +11,7 @@ QWidget {
 }
 
 QMainWindow {
-    background: #181818;
+    background: transparent;
 }
 
 QToolTip {
@@ -250,6 +250,11 @@ QTextEdit:focus {
 }
 
 /* ─── 内容顶栏（SPlayer Nav）────────────────────────────── */
+#titleBar {
+    background: transparent;
+    border: none;
+}
+
 #tbSearchWrap {
     background: rgba(255, 255, 255, 8);
     border: 1px solid rgba(255, 255, 255, 12);
