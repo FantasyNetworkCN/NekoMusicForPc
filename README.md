@@ -41,6 +41,8 @@ sudo apt install cmake ninja-build qt6-base-dev libmpv-dev
 
 ### Flutter 版构建
 
+> 📖 **详细编译指南（依赖安装/逐平台步骤/运行时打包/常见问题）见 [docs/BUILD.md](docs/BUILD.md)。**
+
 依赖：Flutter SDK 3.44+（**任意官方版本即可，无需补丁 SDK**）、CMake、Ninja、
 libmpv 开发文件、Qt6（Core/Network/Sql/Gui）。
 
