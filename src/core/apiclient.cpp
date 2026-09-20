@@ -152,12 +152,12 @@ void ApiClient::fetchFavorites(MusicListCb cb) {
     });
 }
 
-void ApiClient::login(const QString &nickname, const QString &password, AuthCb cb) {
+void ApiClient::login(const QString &email, const QString &password, AuthCb cb) {
     QUrl url(QString::fromUtf8("%1/api/user/login").arg(Theme::kApiBase));
     QNetworkRequest req(url);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     QJsonObject body;
-    body["nickname"] = nickname;
+    body["email"] = email;
     body["password"] = password;
     auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {

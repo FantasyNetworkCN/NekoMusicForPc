@@ -88,7 +88,7 @@ public:
     // ─── 用户认证 ────────────────────────────────────
     using AuthCb = std::function<void(bool success, const QString &message,
                                        const QString &token, const QVariantMap &user)>;
-    void login(const QString &nickname, const QString &password, AuthCb cb);
+    void login(const QString &email, const QString &password, AuthCb cb);
     void registerUser(const QString &nickname, const QString &password,
                       const QString &email, const QString &verificationCode, AuthCb cb);
     /** 注册发邮箱验证码前：须先完成滑块并取得 captchaPassToken */

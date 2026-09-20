@@ -442,7 +442,7 @@ static QMap<QString, QString> zhCN()
     m["codeRequired"] = QStringLiteral("请输入验证码");
     m["nameRequired"] = QStringLiteral("请输入昵称");
     m["inputNameRequired"] = QStringLiteral("请输入歌单名称");
-    m["fillNicknameAndPassword"] = QStringLiteral("请填写昵称和密码");
+    m["fillEmailAndPassword"] = QStringLiteral("请填写邮箱和密码");
     m["fillEmail"] = QStringLiteral("请填写邮箱");
     m["fillVerificationCode"] = QStringLiteral("请填写验证码");
     m["fillAllFields"] = QStringLiteral("请填写所有字段");
@@ -1473,7 +1473,7 @@ static QMap<QString, QString> enUS()
     m["codeRequired"] = "Verification code is required";
     m["nameRequired"] = "Nickname is required";
     m["inputNameRequired"] = "Playlist name is required";
-    m["fillNicknameAndPassword"] = "Please fill nickname and password";
+    m["fillEmailAndPassword"] = "Please fill email and password";
     m["fillEmail"] = "Please fill email";
     m["fillVerificationCode"] = "Please fill verification code";
     m["fillAllFields"] = "Please fill all fields";

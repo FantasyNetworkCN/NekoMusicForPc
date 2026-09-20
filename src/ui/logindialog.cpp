@@ -395,11 +395,11 @@ void LoginDialog::stopQrSession()
 
 void LoginDialog::doLogin()
 {
-    QString nickname = m_loginUserEdit->text().trimmed();
+    QString email = m_loginUserEdit->text().trimmed();
     QString password = m_loginPassEdit->text();
 
-    if (nickname.isEmpty() || password.isEmpty()) {
-        setMsg(I18n::instance().tr("fillNicknameAndPassword"), Theme::kSakura);
+    if (email.isEmpty() || password.isEmpty()) {
+        setMsg(I18n::instance().tr("fillEmailAndPassword"), Theme::kSakura);
         return;
     }
     if (password.length() > 128) {
@@ -411,7 +411,7 @@ void LoginDialog::doLogin()
     m_submitBtn->setEnabled(false);
     m_submitBtn->setText(I18n::instance().tr(QStringLiteral("loadingShort")));
 
-    m_api->login(nickname, password, [this](bool success, const QString &message,
+    m_api->login(email, password, [this](bool success, const QString &message,
                                              const QString &token, const QVariantMap &user) {
         QTimer::singleShot(0, this, [this, success, message, token, user]() {
             onLoginResult(success, message, token, user);
