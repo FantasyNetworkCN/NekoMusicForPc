@@ -43,6 +43,8 @@ public:
     // Play Queue Operations
     void clearQueue();
     void addToQueue(const MusicInfo& music);
+    /** 批量追加到播放队列：单事务 + 单次去重查询，避免逐首写入造成 UI 卡死。 */
+    void addAllToQueue(const QList<MusicInfo>& musicList);
     void removeFromQueue(int queueId);
     void setQueueMusic(const QList<MusicInfo>& musicList, int currentIndex);
     QList<MusicInfo> getQueue();

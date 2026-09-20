@@ -38,4 +38,28 @@ inline QString musicKeyOf(const MusicInfo &info) {
     return QStringLiteral("R:") + QString::number(info.id);
 }
 
+/**
+ * 批量去重用的稳定标识。
+ *
+ * 与 musicKeyOf 的区别：只有确实能唯一标识一首曲目的条目才返回 true——
+ * 在线曲目要求 id > 0，本地文件要求路径非空；既没有 id 又不是本地文件的条目
+ * 无法去重（保持旧行为，允许重复入队）。
+ *
+ * 本地文件会做一次 canonicalFilePath()（磁盘 stat），所以调用方应当
+ * 每首曲目只调用一次，然后放进 QSet 里复用，切勿在循环比较里反复调用。
+ */
+inline bool musicDedupeKey(const MusicInfo &info, QString *key) {
+    if (!key)
+        return false;
+    if (info.isLocalFile()) {
+        const QString canonical = QFileInfo(info.localPath).canonicalFilePath();
+        *key = QStringLiteral("L:") + (canonical.isEmpty() ? info.localPath : canonical);
+        return true;
+    }
+    if (info.id <= 0)
+        return false;
+    *key = QStringLiteral("R:") + QString::number(info.id);
+    return true;
+}
+
 #endif // MUSICINFO_H

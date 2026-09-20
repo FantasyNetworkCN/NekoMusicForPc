@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QSqlDatabase>
 #include <QDir>
+#include <QSet>
 #include <QStandardPaths>
 #include <QSqlQuery>
 #include <QSqlError>
@@ -10,6 +11,32 @@
 #include <QDebug>
 
 namespace {
+
+const char *const kQueueInsertSql =
+    "INSERT INTO play_queue (music_id, title, artist, album, duration, cover_url, local_path, queue_order) "
+    "VALUES (:mid, :title, :artist, :album, :duration, :cover, :local, :order)";
+
+/** 绑定 play_queue 插入参数：列上有 NOT NULL 约束，空字段写空串而不是 NULL。 */
+void bindQueueRow(QSqlQuery &query, const MusicInfo &music, int order)
+{
+    query.bindValue(QStringLiteral(":mid"), music.id);
+    query.bindValue(QStringLiteral(":title"), music.title.isEmpty() ? QStringLiteral("") : music.title);
+    query.bindValue(QStringLiteral(":artist"), music.artist.isEmpty() ? QStringLiteral("") : music.artist);
+    query.bindValue(QStringLiteral(":album"), music.album.isEmpty() ? QStringLiteral("") : music.album);
+    query.bindValue(QStringLiteral(":duration"), music.duration);
+    query.bindValue(QStringLiteral(":cover"), music.coverUrl.isEmpty() ? QStringLiteral("") : music.coverUrl);
+    query.bindValue(QStringLiteral(":local"), music.localPath.isEmpty() ? QStringLiteral("") : music.localPath);
+    query.bindValue(QStringLiteral(":order"), order);
+}
+
+/** 当前队列的最大 queue_order，空队列返回 0。 */
+int queueOrderWatermark(QSqlDatabase &db)
+{
+    QSqlQuery query(db);
+    if (query.exec(QStringLiteral("SELECT COALESCE(MAX(queue_order), 0) FROM play_queue")) && query.next())
+        return query.value(0).toInt();
+    return 0;
+}
 
 void ensureColumn(QSqlDatabase &db, const QString &table, const QString &col, const QString &ddlSuffix)
 {
@@ -50,6 +77,13 @@ bool PlaylistDatabase::init() {
         qWarning() << "Failed to open playlist database:" << m_db.lastError().text();
         return false;
     }
+
+    // 队列可能是几千首，逐条 INSERT 各自成事务时每次提交都要 fsync，
+    // 在机械盘 / 加密卷上会卡住 UI 数十秒。开 WAL + NORMAL 同步大幅降低提交成本。
+    QSqlQuery pragma(m_db);
+    pragma.exec(QStringLiteral("PRAGMA journal_mode=WAL"));
+    pragma.exec(QStringLiteral("PRAGMA synchronous=NORMAL"));
+    pragma.exec(QStringLiteral("PRAGMA temp_store=MEMORY"));
 
     return createTables();
 }
@@ -122,6 +156,11 @@ bool PlaylistDatabase::createTables() {
     if (!query.exec(queueSql)) {
         qWarning() << "Failed to create play_queue table:" << query.lastError().text();
         return false;
+    }
+
+    QSqlQuery queueIndexQuery;
+    if (!queueIndexQuery.exec("CREATE INDEX IF NOT EXISTS idx_play_queue_music_id ON play_queue(music_id)")) {
+        qWarning() << "Failed to create play_queue index:" << queueIndexQuery.lastError().text();
     }
 
     // Play Queue state table
@@ -382,51 +421,74 @@ int PlaylistDatabase::getPlaylistMusicCount(int playlistId) {
 void PlaylistDatabase::clearQueue() {
     QMutexLocker locker(&m_mutex);
 
+    const bool inTransaction = m_db.transaction();
     QSqlQuery query;
     query.exec("DELETE FROM play_queue");
     query.exec("DELETE FROM play_queue_state");
+    if (inTransaction)
+        m_db.commit();
 }
 
 void PlaylistDatabase::addToQueue(const MusicInfo& music) {
     QMutexLocker locker(&m_mutex);
 
+    const bool inTransaction = m_db.transaction();
+
     // Check if already exists
     QSqlQuery checkQuery;
-    checkQuery.prepare("SELECT COUNT(*) FROM play_queue WHERE music_id = :mid");
+    checkQuery.prepare("SELECT 1 FROM play_queue WHERE music_id = :mid LIMIT 1");
     checkQuery.bindValue(":mid", music.id);
-    checkQuery.exec();
-    if (checkQuery.next() && checkQuery.value(0).toInt() > 0) {
+    if (checkQuery.exec() && checkQuery.next()) {
+        if (inTransaction)
+            m_db.rollback();
         return; // Already in queue
     }
 
-    // Get max queue_order
-    QSqlQuery orderQuery("SELECT COALESCE(MAX(queue_order), 0) + 1 FROM play_queue");
-    orderQuery.exec();
-    int order = 0;
-    if (orderQuery.next()) {
-        order = orderQuery.value(0).toInt();
-    }
-
-    QString title = music.title.isEmpty() ? "" : music.title;
-    QString artist = music.artist.isEmpty() ? "" : music.artist;
-    QString album = music.album.isEmpty() ? "" : music.album;
-    QString cover = music.coverUrl.isEmpty() ? "" : music.coverUrl;
-    QString localPath = music.localPath.isEmpty() ? "" : music.localPath;
-
     QSqlQuery insertQuery;
-    insertQuery.prepare("INSERT INTO play_queue (music_id, title, artist, album, duration, cover_url, local_path, queue_order) VALUES (:mid, :title, :artist, :album, :duration, :cover, :local, :order)");
-    insertQuery.bindValue(":mid", music.id);
-    insertQuery.bindValue(":title", title);
-    insertQuery.bindValue(":artist", artist);
-    insertQuery.bindValue(":album", album);
-    insertQuery.bindValue(":duration", music.duration);
-    insertQuery.bindValue(":cover", cover);
-    insertQuery.bindValue(":local", localPath);
-    insertQuery.bindValue(":order", order);
+    insertQuery.prepare(kQueueInsertSql);
+    bindQueueRow(insertQuery, music, queueOrderWatermark(m_db) + 1);
 
     if (!insertQuery.exec()) {
         qWarning() << "Failed to add to queue:" << insertQuery.lastError().text();
     }
+
+    if (inTransaction)
+        m_db.commit();
+}
+
+void PlaylistDatabase::addAllToQueue(const QList<MusicInfo>& musicList) {
+    if (musicList.isEmpty())
+        return;
+
+    QMutexLocker locker(&m_mutex);
+
+    // 一次性取出现有 music_id：批量追加时逐首 SELECT 会退化成 O(n²) 全表扫描
+    QSet<int> existingIds;
+    QSqlQuery existingQuery(m_db);
+    if (existingQuery.exec(QStringLiteral("SELECT music_id FROM play_queue"))) {
+        while (existingQuery.next())
+            existingIds.insert(existingQuery.value(0).toInt());
+    }
+
+    int order = queueOrderWatermark(m_db);
+
+    const bool inTransaction = m_db.transaction();
+
+    QSqlQuery insertQuery(m_db);
+    insertQuery.prepare(kQueueInsertSql);
+
+    for (const MusicInfo &music : musicList) {
+        if (existingIds.contains(music.id))
+            continue; // Already in queue
+        existingIds.insert(music.id);
+
+        bindQueueRow(insertQuery, music, ++order);
+        if (!insertQuery.exec())
+            qWarning() << "Failed to add to queue:" << insertQuery.lastError().text();
+    }
+
+    if (inTransaction)
+        m_db.commit();
 }
 
 void PlaylistDatabase::removeFromQueue(int queueId) {
@@ -444,29 +506,19 @@ void PlaylistDatabase::removeFromQueue(int queueId) {
 void PlaylistDatabase::setQueueMusic(const QList<MusicInfo>& musicList, int currentIndex) {
     QMutexLocker locker(&m_mutex);
 
+    // 整段替换放进同一个事务：几千条 INSERT 逐条提交会卡住 UI
+    const bool inTransaction = m_db.transaction();
+
     // Clear existing queue
-    QSqlQuery clearQuery("DELETE FROM play_queue");
-    clearQuery.exec();
+    QSqlQuery clearQuery(m_db);
+    clearQuery.exec("DELETE FROM play_queue");
 
     // Insert all music
     int order = 0;
+    QSqlQuery insertQuery(m_db);
+    insertQuery.prepare(kQueueInsertSql);
     for (const auto& music : musicList) {
-        QString title = music.title.isEmpty() ? "" : music.title;
-        QString artist = music.artist.isEmpty() ? "" : music.artist;
-        QString album = music.album.isEmpty() ? "" : music.album;
-        QString cover = music.coverUrl.isEmpty() ? "" : music.coverUrl;
-        QString localPath = music.localPath.isEmpty() ? "" : music.localPath;
-
-        QSqlQuery insertQuery;
-        insertQuery.prepare("INSERT INTO play_queue (music_id, title, artist, album, duration, cover_url, local_path, queue_order) VALUES (:mid, :title, :artist, :album, :duration, :cover, :local, :order)");
-        insertQuery.bindValue(":mid", music.id);
-        insertQuery.bindValue(":title", title);
-        insertQuery.bindValue(":artist", artist);
-        insertQuery.bindValue(":album", album);
-        insertQuery.bindValue(":duration", music.duration);
-        insertQuery.bindValue(":cover", cover);
-        insertQuery.bindValue(":local", localPath);
-        insertQuery.bindValue(":order", order++);
+        bindQueueRow(insertQuery, music, order++);
 
         if (!insertQuery.exec()) {
             qWarning() << "Failed to set queue music:" << insertQuery.lastError().text();
@@ -474,10 +526,13 @@ void PlaylistDatabase::setQueueMusic(const QList<MusicInfo>& musicList, int curr
     }
 
     // Save current index
-    QSqlQuery indexQuery;
+    QSqlQuery indexQuery(m_db);
     indexQuery.prepare("INSERT OR REPLACE INTO play_queue_state (key, value) VALUES ('currentIndex', :value)");
     indexQuery.bindValue(":value", QString::number(currentIndex));
     indexQuery.exec();
+
+    if (inTransaction)
+        m_db.commit();
 }
 
 QList<MusicInfo> PlaylistDatabase::getQueue() {

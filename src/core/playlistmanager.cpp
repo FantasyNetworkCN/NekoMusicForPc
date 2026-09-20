@@ -51,31 +51,41 @@ void PlaylistManager::addToPlaylist(const MusicInfo& music) {
 }
 
 void PlaylistManager::addAllToPlaylist(const QList<MusicInfo>& musicList) {
-    for (const auto& music : musicList) {
-        bool exists = false;
-        const QString canon = music.isLocalFile()
-            ? QFileInfo(music.localPath).canonicalFilePath()
-            : QString();
-        for (const auto& item : m_playlist) {
-            if (!canon.isEmpty()) {
-                const QString ic = QFileInfo(item.localPath).canonicalFilePath();
-                if (!ic.isEmpty() && ic == canon) {
-                    exists = true;
-                    break;
-                }
-            } else if (music.id > 0 && item.id == music.id) {
-                exists = true;
-                break;
-            }
-        }
-        if (!exists) {
-            m_playlist.append(music);
-            PlaylistDatabase::instance().addToQueue(music);
-        }
+    if (musicList.isEmpty())
+        return;
+
+    // 去重键每首只算一次再放进 QSet：
+    // 旧实现是「每首新歌 × 整条队列」的双重循环，本地文件还会对每个已有条目
+    // 调一次 canonicalFilePath()（磁盘 stat），几千首就是几百万次系统调用，
+    // 点「播放全部」时直接卡死。
+    QSet<QString> seen;
+    seen.reserve(m_playlist.size() + musicList.size());
+    for (const MusicInfo &item : m_playlist) {
+        QString key;
+        if (musicDedupeKey(item, &key))
+            seen.insert(key);
     }
-    if (m_currentIndex == -1 && !m_playlist.isEmpty()) {
+
+    QList<MusicInfo> appended;
+    appended.reserve(musicList.size());
+    for (const MusicInfo &music : musicList) {
+        QString key;
+        if (musicDedupeKey(music, &key)) {
+            if (seen.contains(key))
+                continue;
+            seen.insert(key);
+        }
+        appended.append(music);
+    }
+
+    if (!appended.isEmpty()) {
+        // 队列与数据库各写一次，避免逐首 INSERT（每首一次事务提交）
+        m_playlist += appended;
+        PlaylistDatabase::instance().addAllToQueue(appended);
+    }
+    if (m_currentIndex == -1 && !m_playlist.isEmpty())
         m_currentIndex = 0;
-    }
+
     syncShufflePool();
     emit playlistChanged();
 }
