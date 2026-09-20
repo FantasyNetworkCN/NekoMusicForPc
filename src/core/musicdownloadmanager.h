@@ -28,6 +28,14 @@ public:
     qint64 progressReceived(int musicId) const;
     qint64 progressTotal(int musicId) const;
     bool downloadMusic(const MusicInfo &music);
+    /**
+     * 「下载全部」批量入队：一次去重、一次 downloadsChanged。
+     *
+     * 返回真正新入队的数量；已下载 / 已在队列中的会被跳过。
+     * 逐首调用 downloadMusic() 时每首都会发一次 downloadsChanged，
+     * 几千首就会触发几千次列表重建，是「下载全部」卡死的根因。
+     */
+    int enqueueAll(const QList<MusicInfo> &songs);
     void cancelDownload(int musicId);
     void cancelCurrent();
 

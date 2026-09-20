@@ -346,6 +346,26 @@ void SongListWidget::scrollToTop()
         m_scroll->verticalScrollBar()->setValue(0);
 }
 
+int SongListWidget::scrollOffset() const
+{
+    return m_scroll ? m_scroll->verticalScrollBar()->value() : 0;
+}
+
+void SongListWidget::scrollToOffset(int offset)
+{
+    if (!m_scroll)
+        return;
+    const int target = qMax(0, offset);
+    m_scroll->verticalScrollBar()->setValue(target);
+    scheduleVisibleUpdate();
+    // setSongs 之后容器高度要等一次布局，滚动条范围此刻可能还偏小，
+    // 直接 setValue 会被夹断；延后一帧再对齐一次（setValue 自带夹取，不会越界）。
+    QTimer::singleShot(0, this, [this, target]() {
+        if (m_scroll)
+            m_scroll->verticalScrollBar()->setValue(target);
+    });
+}
+
 void SongListWidget::scrollToPlaying()
 {
     if (m_currentRowInList < 0 || !m_scroll)

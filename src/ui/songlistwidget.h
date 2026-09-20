@@ -37,6 +37,10 @@ public:
     void retranslate();
     void scrollToTop();
     void scrollToPlaying();
+    /** 当前滚动位置（像素），用于「返回歌单时回到原位」。 */
+    int scrollOffset() const;
+    /** 还原滚动位置：列表刚重建时范围还没跟上，会延后一帧再对齐一次。 */
+    void scrollToOffset(int offset);
     bool hasCurrentPlaying() const;
     void setRemoveMode(bool remove);
     void refreshFavoriteDisplay();

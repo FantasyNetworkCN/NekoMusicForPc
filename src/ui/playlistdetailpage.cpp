@@ -26,6 +26,7 @@
 #include <QLineEdit>
 #include <QVariantAnimation>
 #include <QEasingCurve>
+#include <QTimer>
 #include <QShowEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -259,7 +260,14 @@ void PlaylistDetailPage::setupUi()
     m_searchEdit->setPlaceholderText(I18n::instance().tr(QStringLiteral("fuzzySearch")));
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->setFrame(false);
-    connect(m_searchEdit, &QLineEdit::textChanged, this, [this](const QString &) { applyFilter(); });
+    // 输入停顿 180ms 再过滤：大歌单下每个按键都重建整张列表会卡手
+    m_searchDebounce = new QTimer(this);
+    m_searchDebounce->setSingleShot(true);
+    m_searchDebounce->setInterval(180);
+    connect(m_searchDebounce, &QTimer::timeout, this, &PlaylistDetailPage::applyFilter);
+    connect(m_searchEdit, &QLineEdit::textChanged, this, [this](const QString &) {
+        m_searchDebounce->start();
+    });
     searchLay->addWidget(m_searchEdit, 1);
     menuLay->addWidget(m_searchWrap);
 
@@ -279,7 +287,10 @@ void PlaylistDetailPage::setupUi()
     m_songList->isFavorited = [this](int id) { return m_favoritedIds.contains(id); };
     m_songList->isDownloaded = [](int id) { return MusicDownloadManager::instance().isDownloaded(id); };
     m_songList->onTogglePlayPause = [this]() { emit playPauseRequested(); };
-    connect(m_songList, &SongListWidget::scrolled, this, &PlaylistDetailPage::onListScrolled);
+    connect(m_songList, &SongListWidget::scrolled, this, [this](int scrollTop) {
+        m_savedScrollTop = scrollTop;
+        onListScrolled(scrollTop);
+    });
     root->addWidget(m_songList, 1);
 
     m_emptyWrap = new QWidget(this);
@@ -839,6 +850,13 @@ void PlaylistDetailPage::editPlaylistDescription()
 
 void PlaylistDetailPage::loadPlaylist(int playlistId)
 {
+    if (m_searchDebounce)
+        m_searchDebounce->stop();
+
+    // 同一个歌单重新进入时回到原来的位置，换歌单则回到顶部
+    m_pendingScrollTop = (playlistId == m_savedScrollPlaylistId) ? m_savedScrollTop : 0;
+    m_savedScrollPlaylistId = playlistId;
+
     m_playlistId = playlistId;
     m_allSongs.clear();
     m_displaySongs.clear();
@@ -846,6 +864,8 @@ void PlaylistDetailPage::loadPlaylist(int playlistId)
         m_songList->setSongs({});
     if (m_searchEdit)
         m_searchEdit->clear();
+    if (m_searchDebounce)
+        m_searchDebounce->stop();
     setHeaderCompact(false);
 
     if (!m_apiClient) {
@@ -912,8 +932,11 @@ void PlaylistDetailPage::loadPlaylist(int playlistId)
                                             hidePageStatus();
                                             updateCoverImage();
                                             applyFilter();
-                                            if (m_songList)
+                                            if (m_songList) {
                                                 m_songList->show();
+                                                if (m_pendingScrollTop > 0)
+                                                    m_songList->scrollToOffset(m_pendingScrollTop);
+                                            }
                                         });
     });
 }

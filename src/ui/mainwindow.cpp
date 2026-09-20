@@ -2330,16 +2330,21 @@ void MainWindow::downloadMusic(const MusicInfo &info)
 void MainWindow::downloadAllMusic(const QList<MusicInfo> &songs)
 {
     auto &mgr = MusicDownloadManager::instance();
-    int queued = 0;
-    for (const MusicInfo &info : songs) {
-        if (info.id <= 0 || info.isLocalFile() || mgr.isDownloaded(info.id))
-            continue;
-        if (mgr.downloadMusic(info))
-            ++queued;
-    }
+    const int queued = mgr.enqueueAll(songs);
 
     if (queued <= 0) {
-        Toast::show(this, I18n::instance().tr(QStringLiteral("allSongsDownloaded")), Toast::Info);
+        // 区分「这批歌还在下载中」和「这批歌都已经下载好了」，别误导用户
+        bool alreadyQueued = false;
+        for (const MusicInfo &info : songs) {
+            if (mgr.isPending(info.id)) {
+                alreadyQueued = true;
+                break;
+            }
+        }
+        Toast::show(this,
+                    I18n::instance().tr(alreadyQueued ? QStringLiteral("downloadingStatus")
+                                                      : QStringLiteral("allSongsDownloaded")),
+                    Toast::Info);
         return;
     }
 

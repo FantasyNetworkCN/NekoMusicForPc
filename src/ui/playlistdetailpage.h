@@ -16,6 +16,7 @@ class QPushButton;
 class QLineEdit;
 class RoundCoverLabel;
 class QVariantAnimation;
+class QTimer;
 class SongListWidget;
 class ApiClient;
 
@@ -106,6 +107,14 @@ private:
 
     QVariantAnimation *m_headerAnim = nullptr;
     bool m_headerCompact = false;
+
+    /** 搜索框防抖：几万首的歌单下每敲一个字都重建列表会明显卡顿。 */
+    QTimer *m_searchDebounce = nullptr;
+    /** 当前歌单的滚动位置，切走再回来时还原。 */
+    int m_savedScrollTop = 0;
+    int m_savedScrollPlaylistId = -1;
+    /** 本次加载要还原的滚动位置（0 表示回到顶部）。 */
+    int m_pendingScrollTop = 0;
 
     QList<MusicInfo> m_allSongs;
     QList<MusicInfo> m_displaySongs;

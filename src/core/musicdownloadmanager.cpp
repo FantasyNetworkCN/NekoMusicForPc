@@ -11,6 +11,7 @@
 #include <QNetworkRequest>
 #include <QRegularExpression>
 #include <QSaveFile>
+#include <QSet>
 #include <QStandardPaths>
 
 namespace {
@@ -192,6 +193,46 @@ bool MusicDownloadManager::downloadMusic(const MusicInfo &music)
     if (!m_busy)
         startNext();
     return true;
+}
+
+int MusicDownloadManager::enqueueAll(const QList<MusicInfo> &songs)
+{
+    if (songs.isEmpty())
+        return 0;
+
+    // 队列内去重
+    QSet<int> known;
+    known.reserve(m_queue.size() + songs.size() + 1);
+    if (m_busy && m_current.id > 0)
+        known.insert(m_current.id);
+    for (const MusicInfo &queued : m_queue)
+        known.insert(queued.id);
+
+    // 已下载的一次性读出来，避免逐首 isDownloaded() 查库 + stat
+    QSet<int> downloadedIds;
+    for (const MusicInfo &row : PlaylistDatabase::instance().getDownloads()) {
+        if (!row.localPath.isEmpty() && QFile::exists(row.localPath))
+            downloadedIds.insert(row.id);
+    }
+
+    int queuedCount = 0;
+    for (const MusicInfo &music : songs) {
+        if (music.id <= 0 || music.isLocalFile())
+            continue;
+        if (downloadedIds.contains(music.id) || known.contains(music.id))
+            continue;
+        known.insert(music.id);
+        m_queue.append(music);
+        ++queuedCount;
+    }
+
+    if (queuedCount <= 0)
+        return 0;
+
+    emit downloadsChanged();
+    if (!m_busy)
+        startNext();
+    return queuedCount;
 }
 
 void MusicDownloadManager::abortCurrentTransfer()
