@@ -152,12 +152,12 @@ void ApiClient::fetchFavorites(MusicListCb cb) {
     });
 }
 
-void ApiClient::login(const QString &username, const QString &password, AuthCb cb) {
+void ApiClient::login(const QString &nickname, const QString &password, AuthCb cb) {
     QUrl url(QString::fromUtf8("%1/api/user/login").arg(Theme::kApiBase));
     QNetworkRequest req(url);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     QJsonObject body;
-    body["username"] = username;
+    body["nickname"] = nickname;
     body["password"] = password;
     auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
@@ -180,13 +180,13 @@ void ApiClient::login(const QString &username, const QString &password, AuthCb c
     });
 }
 
-void ApiClient::registerUser(const QString &username, const QString &password,
+void ApiClient::registerUser(const QString &nickname, const QString &password,
                               const QString &email, const QString &verificationCode, AuthCb cb) {
     QUrl url(QString::fromUtf8("%1/api/user/register").arg(Theme::kApiBase));
     QNetworkRequest req(url);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     QJsonObject body;
-    body["username"] = username;
+    body["nickname"] = nickname;
     body["password"] = password;
     body["email"] = email;
     body["verificationCode"] = verificationCode;
@@ -211,7 +211,7 @@ void ApiClient::registerUser(const QString &username, const QString &password,
     });
 }
 
-void ApiClient::sendVerificationCode(const QString &email, const QString &username,
+void ApiClient::sendVerificationCode(const QString &email, const QString &nickname,
                                      const QString &captchaPassToken,
                                      std::function<void(bool, const QString &)> cb) {
     QUrl url(QString::fromUtf8("%1/api/user/send-verification").arg(Theme::kApiBase));
@@ -219,7 +219,7 @@ void ApiClient::sendVerificationCode(const QString &email, const QString &userna
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     QJsonObject body;
     body["email"] = email;
-    body["username"] = username;
+    body["nickname"] = nickname;
     body["captchaPassToken"] = captchaPassToken;
     auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {

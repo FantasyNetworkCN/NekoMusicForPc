@@ -43,7 +43,7 @@ private:
     void setupUi();
     void updateAvatar();
     void updateVipPill();
-    void elideUsername();
+    void elideNickname();
     void updateChevronPixmap();
     void refreshSearchGlyph();
     void loadAvatarAsync(const QString &url, int userId);
@@ -57,7 +57,7 @@ private:
     QLabel *m_name = nullptr;
     QWidget *m_avatarWidget = nullptr;
     QLabel *m_avatarIcon = nullptr;
-    QLabel *m_usernameLabel = nullptr;
+    QLabel *m_nicknameLabel = nullptr;
     QLabel *m_dropdownIcon = nullptr;
     VipPillButton *m_vipPill = nullptr;
 };

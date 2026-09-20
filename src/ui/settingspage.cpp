@@ -982,7 +982,7 @@ void SettingsPage::refreshAccountSection()
 
     const QVariantMap info = UserManager::instance().userInfo();
     if (m_accountNicknameValue)
-        m_accountNicknameValue->setText(info.value(QStringLiteral("username")).toString());
+        m_accountNicknameValue->setText(info.value(QStringLiteral("nickname")).toString());
     if (m_accountEmailValue)
         m_accountEmailValue->setText(info.value(QStringLiteral("email")).toString());
     if (m_accountCreatedValue)
@@ -1016,7 +1016,7 @@ void SettingsPage::startEditNickname()
         m_accountNicknameValue->hide();
     if (m_accountNicknameEdit) {
         m_accountNicknameEdit->setText(
-            UserManager::instance().userInfo().value(QStringLiteral("username")).toString());
+            UserManager::instance().userInfo().value(QStringLiteral("nickname")).toString());
         m_accountNicknameEdit->show();
         m_accountNicknameEdit->setFocus();
         m_accountNicknameEdit->selectAll();
@@ -1056,7 +1056,7 @@ void SettingsPage::submitNickname()
 
     const QString nickname = m_accountNicknameEdit->text().trimmed();
     const QString current =
-        UserManager::instance().userInfo().value(QStringLiteral("username")).toString();
+        UserManager::instance().userInfo().value(QStringLiteral("nickname")).toString();
 
     if (nickname.isEmpty()) {
         if (m_accountNicknameError) {
@@ -1083,7 +1083,7 @@ void SettingsPage::submitNickname()
                 m_accountSaveBtn->setEnabled(true);
 
             if (ok) {
-                UserManager::instance().setUsername(savedNickname.isEmpty() ? nickname : savedNickname);
+                UserManager::instance().setNickname(savedNickname.isEmpty() ? nickname : savedNickname);
                 cancelEditNickname();
                 Toast::show(window(), I18n::instance().tr(QStringLiteral("nicknameUpdated")),
                             Toast::Success);

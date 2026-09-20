@@ -257,7 +257,7 @@ static QMap<QString, QString> zhCN()
     m["register"] = QStringLiteral("注册");
     m["email"] = QStringLiteral("邮箱");
     m["password"] = QStringLiteral("密码");
-    m["username"] = QStringLiteral("昵称");
+    m["nickname"] = QStringLiteral("昵称");
     m["nickname"] = QStringLiteral("昵称");
     m["nicknamePlaceholder"] = QStringLiteral("请输入新昵称（1-20字）");
     m["nicknameUpdated"] = QStringLiteral("昵称修改成功");
@@ -268,7 +268,7 @@ static QMap<QString, QString> zhCN()
     m["getCode"] = QStringLiteral("获取验证码");
     m["sendCode"] = QStringLiteral("发送验证码");
     m["resendCode"] = QStringLiteral("重新发送");
-    m["registerNeedUsernameForCode"] = QStringLiteral("发送验证码前请先填写昵称");
+    m["registerNeedNicknameForCode"] = QStringLiteral("发送验证码前请先填写昵称");
     m["captchaSecurityTitle"] = QStringLiteral("安全验证");
     m["captchaSecurityDesc"] =
         QStringLiteral("拖动下方滑块对齐拼图，松开后自动校验；验证通过后将向你的邮箱发送验证码。");
@@ -442,7 +442,7 @@ static QMap<QString, QString> zhCN()
     m["codeRequired"] = QStringLiteral("请输入验证码");
     m["nameRequired"] = QStringLiteral("请输入昵称");
     m["inputNameRequired"] = QStringLiteral("请输入歌单名称");
-    m["fillUsernameAndPassword"] = QStringLiteral("请填写昵称和密码");
+    m["fillNicknameAndPassword"] = QStringLiteral("请填写昵称和密码");
     m["fillEmail"] = QStringLiteral("请填写邮箱");
     m["fillVerificationCode"] = QStringLiteral("请填写验证码");
     m["fillAllFields"] = QStringLiteral("请填写所有字段");
@@ -704,7 +704,7 @@ static QMap<QString, QString> nyaCN()
     m["myPlaylistsTitle"] = QStringLiteral("指挥官的秘密歌单喵~");
     m["favorites"] = QStringLiteral("最最最喜欢的喵！");
     m["myFavorites"] = QStringLiteral("我最喜欢的音乐喵~");
-    m["username"] = QStringLiteral("昵称");
+    m["nickname"] = QStringLiteral("昵称");
     m["nickname"] = QStringLiteral("昵称");
     m["nicknamePlaceholder"] = QStringLiteral("输入新昵称喵（1-20字）");
     m["nicknameUpdated"] = QStringLiteral("昵称换好啦喵~");
@@ -836,7 +836,7 @@ static QMap<QString, QString> nyaCN()
     m["countdownSeconds"] = QStringLiteral("%1秒喵");
     m["fillAllFields"] = QStringLiteral("指挥官笨蛋！要把空位填满才行喵~");
     m["pleaseEnterEmail"] = QStringLiteral("不告诉人家邮箱的话，没法继续了喵~");
-    m["registerNeedUsernameForCode"] = QStringLiteral("发验证码前先把昵称填好喵，不然邮件里不知道喊你什么喵~");
+    m["registerNeedNicknameForCode"] = QStringLiteral("发验证码前先把昵称填好喵，不然邮件里不知道喊你什么喵~");
     m["captchaSecurityTitle"] = QStringLiteral("安全小考验喵~");
     m["captchaSecurityDesc"] =
         QStringLiteral("把滑块拖到拼图刚好对上，松手就会自动检查喵~ 过了就给邮箱发验证码喵~");
@@ -1288,7 +1288,7 @@ static QMap<QString, QString> enUS()
     m["register"] = "Register";
     m["email"] = "Email";
     m["password"] = "Password";
-    m["username"] = "Username";
+    m["nickname"] = "Nickname";
     m["nickname"] = "Nickname";
     m["nicknamePlaceholder"] = "Enter a new nickname (1-20 chars)";
     m["nicknameUpdated"] = "Nickname updated";
@@ -1299,7 +1299,7 @@ static QMap<QString, QString> enUS()
     m["getCode"] = "Get Code";
     m["sendCode"] = "Send Code";
     m["resendCode"] = "Resend";
-    m["registerNeedUsernameForCode"] = "Please enter a username before requesting the verification code";
+    m["registerNeedNicknameForCode"] = "Please enter a nickname before requesting the verification code";
     m["captchaSecurityTitle"] = "Security check";
     m["captchaSecurityDesc"] =
         "Drag the slider to align the puzzle piece, then release to verify. After success, a code will be sent to "
@@ -1473,7 +1473,7 @@ static QMap<QString, QString> enUS()
     m["codeRequired"] = "Verification code is required";
     m["nameRequired"] = "Nickname is required";
     m["inputNameRequired"] = "Playlist name is required";
-    m["fillUsernameAndPassword"] = "Please fill username and password";
+    m["fillNicknameAndPassword"] = "Please fill nickname and password";
     m["fillEmail"] = "Please fill email";
     m["fillVerificationCode"] = "Please fill verification code";
     m["fillAllFields"] = "Please fill all fields";

@@ -80,7 +80,7 @@ private:
     bool m_isPlaylistCollected = false;
     QString m_playlistName;
     QString m_playlistDesc;
-    QString m_creatorUsername;
+    QString m_creatorNickname;
 
     QWidget *m_detailHeader = nullptr;
     QWidget *m_coverWrap = nullptr;

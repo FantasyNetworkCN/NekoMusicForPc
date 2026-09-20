@@ -40,7 +40,7 @@ public:
     void setLoginInfo(const QString &token, const QVariantMap &userInfo);
 
     /// 更新本地缓存的昵称（服务端已修改成功后调用）
-    void setUsername(const QString &username);
+    void setNickname(const QString &nickname);
 
     /// 登出
     void logout();

@@ -465,7 +465,7 @@ void FavoritesPage::updateHeaderMeta()
         const auto info = UserManager::instance().userInfo();
         name = info.value(QStringLiteral("nickname")).toString();
         if (name.isEmpty())
-            name = info.value(QStringLiteral("username")).toString();
+            name = info.value(QStringLiteral("nickname")).toString();
     }
     if (m_creatorLbl)
         m_creatorLbl->setText(name.isEmpty() ? QStringLiteral("—") : name);

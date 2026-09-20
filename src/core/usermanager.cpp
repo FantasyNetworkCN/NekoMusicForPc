@@ -30,13 +30,13 @@ void UserManager::setLoginInfo(const QString &token, const QVariantMap &userInfo
     emit vipStatusChanged();
 }
 
-void UserManager::setUsername(const QString &username)
+void UserManager::setNickname(const QString &nickname)
 {
-    if (username.isEmpty())
+    if (nickname.isEmpty())
         return;
-    if (m_userInfo.value(QStringLiteral("username")).toString() == username)
+    if (m_userInfo.value(QStringLiteral("nickname")).toString() == nickname)
         return;
-    m_userInfo[QStringLiteral("username")] = username;
+    m_userInfo[QStringLiteral("nickname")] = nickname;
     saveToSettings();
     emit loginStateChanged();
 }

@@ -503,7 +503,7 @@ void PlaylistDetailPage::updateHeaderMeta()
     if (m_titleLbl)
         m_titleLbl->setText(m_playlistName.isEmpty() ? QStringLiteral("—") : m_playlistName);
     if (m_creatorLbl) {
-        const QString creator = m_creatorUsername.isEmpty() ? QStringLiteral("—") : m_creatorUsername;
+        const QString creator = m_creatorNickname.isEmpty() ? QStringLiteral("—") : m_creatorNickname;
         m_creatorLbl->setText(creator);
     }
     if (m_playCountLbl)
@@ -886,7 +886,7 @@ void PlaylistDetailPage::loadPlaylist(int playlistId)
             m_firstMusicId = detail.value(QStringLiteral("firstMusicId")).toInt();
             const auto creatorObj = detail.value(QStringLiteral("creator")).toMap();
             m_creatorId = creatorObj.value(QStringLiteral("id")).toInt();
-            m_creatorUsername = creatorObj.value(QStringLiteral("username")).toString();
+            m_creatorNickname = creatorObj.value(QStringLiteral("nickname")).toString();
             const int uid = currentUserId();
             m_isUserPlaylist = m_creatorId > 0 && uid > 0 && m_creatorId == uid;
         } else {
@@ -894,7 +894,7 @@ void PlaylistDetailPage::loadPlaylist(int playlistId)
             m_playlistDesc.clear();
             m_firstMusicId = 0;
             m_creatorId = 0;
-            m_creatorUsername.clear();
+            m_creatorNickname.clear();
             m_isUserPlaylist = false;
         }
 

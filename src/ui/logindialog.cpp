@@ -180,7 +180,7 @@ void LoginDialog::setupUi()
     regLayout->setContentsMargins(0, 8, 0, 0);
     regLayout->setSpacing(8);
     m_regUserEdit = new QLineEdit(regWidget);
-    m_regUserEdit->setPlaceholderText(I18n::instance().tr("username"));
+    m_regUserEdit->setPlaceholderText(I18n::instance().tr("nickname"));
     m_regUserEdit->setObjectName("dialogEdit");
     m_regUserEdit->setFixedHeight(AuthDialogChrome::kFieldHeight);
     regLayout->addWidget(m_regUserEdit);
@@ -395,11 +395,11 @@ void LoginDialog::stopQrSession()
 
 void LoginDialog::doLogin()
 {
-    QString username = m_loginUserEdit->text().trimmed();
+    QString nickname = m_loginUserEdit->text().trimmed();
     QString password = m_loginPassEdit->text();
 
-    if (username.isEmpty() || password.isEmpty()) {
-        setMsg(I18n::instance().tr("fillUsernameAndPassword"), Theme::kSakura);
+    if (nickname.isEmpty() || password.isEmpty()) {
+        setMsg(I18n::instance().tr("fillNicknameAndPassword"), Theme::kSakura);
         return;
     }
     if (password.length() > 128) {
@@ -411,7 +411,7 @@ void LoginDialog::doLogin()
     m_submitBtn->setEnabled(false);
     m_submitBtn->setText(I18n::instance().tr(QStringLiteral("loadingShort")));
 
-    m_api->login(username, password, [this](bool success, const QString &message,
+    m_api->login(nickname, password, [this](bool success, const QString &message,
                                              const QString &token, const QVariantMap &user) {
         QTimer::singleShot(0, this, [this, success, message, token, user]() {
             onLoginResult(success, message, token, user);
@@ -421,16 +421,16 @@ void LoginDialog::doLogin()
 
 void LoginDialog::doRegister()
 {
-    QString username = m_regUserEdit->text().trimmed();
+    QString nickname = m_regUserEdit->text().trimmed();
     QString password = m_regPassEdit->text();
     QString email = m_regEmailEdit->text().trimmed();
     QString code = m_regCodeEdit->text().trimmed();
 
-    if (username.isEmpty() || password.isEmpty() || email.isEmpty() || code.isEmpty()) {
+    if (nickname.isEmpty() || password.isEmpty() || email.isEmpty() || code.isEmpty()) {
         setMsg(I18n::instance().tr("fillAllFields"), Theme::kSakura);
         return;
     }
-    if (username.length() > 64 || password.length() > 128 || email.length() > 254) {
+    if (nickname.length() > 64 || password.length() > 128 || email.length() > 254) {
         setMsg(I18n::instance().tr(QStringLiteral("inputTooLong")), Theme::kSakura);
         return;
     }
@@ -439,7 +439,7 @@ void LoginDialog::doRegister()
     m_submitBtn->setEnabled(false);
     m_submitBtn->setText(I18n::instance().tr(QStringLiteral("loadingShort")));
 
-    m_api->registerUser(username, password, email, code,
+    m_api->registerUser(nickname, password, email, code,
                         [this](bool success, const QString &message,
                                const QString &token, const QVariantMap &user) {
         QTimer::singleShot(0, this, [this, success, message, token, user]() {
@@ -455,9 +455,9 @@ void LoginDialog::doSendVerificationCode()
         setMsg(I18n::instance().tr("pleaseEnterEmail"), Theme::kSakura);
         return;
     }
-    const QString username = m_regUserEdit->text().trimmed();
-    if (username.isEmpty()) {
-        setMsg(I18n::instance().tr(QStringLiteral("registerNeedUsernameForCode")), Theme::kSakura);
+    const QString nickname = m_regUserEdit->text().trimmed();
+    if (nickname.isEmpty()) {
+        setMsg(I18n::instance().tr(QStringLiteral("registerNeedNicknameForCode")), Theme::kSakura);
         return;
     }
 
@@ -475,7 +475,7 @@ void LoginDialog::doSendVerificationCode()
         return;
     }
 
-    m_api->sendVerificationCode(email, username, passToken, [this](bool success, const QString &message) {
+    m_api->sendVerificationCode(email, nickname, passToken, [this](bool success, const QString &message) {
         QTimer::singleShot(0, this, [this, success, message]() {
             if (success) {
                 setMsg(message, Theme::kMint);

@@ -144,7 +144,7 @@ bool TitleBar::eventFilter(QObject *watched, QEvent *event)
             // 头像点击 - 扩大判定范围到整个头像区域及其子控件
             if (w == m_avatarWidget || 
                 w == m_avatarIcon || 
-                w == m_usernameLabel || 
+                w == m_nicknameLabel || 
                 w == m_dropdownIcon ||
                 (m_avatarWidget && m_avatarWidget->isAncestorOf(w))) {
                 emit avatarClicked();
@@ -169,7 +169,7 @@ bool TitleBar::eventFilter(QObject *watched, QEvent *event)
     case QEvent::Enter: {
         if (w == m_avatarWidget) {
             QString tip = UserManager::instance().isLoggedIn()
-                ? UserManager::instance().userInfo().value("username").toString()
+                ? UserManager::instance().userInfo().value("nickname").toString()
                 : I18n::instance().tr("goToLogin");
             QToolTip::showText(QCursor::pos(), tip);
         }
@@ -265,15 +265,15 @@ void TitleBar::setupUi()
                                .scaled(kTbAvatarPx, kTbAvatarPx, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     avatarLay->addWidget(m_avatarIcon, 0, Qt::AlignVCenter);
 
-    m_usernameLabel = new QLabel(m_avatarWidget);
-    m_usernameLabel->setObjectName("tbUsername");
-    m_usernameLabel->setCursor(Qt::PointingHandCursor);
-    m_usernameLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
-    m_usernameLabel->setMinimumWidth(48);
-    m_usernameLabel->setMaximumWidth(200);
-    m_usernameLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    m_usernameLabel->setMinimumHeight(kTbAvatarPx);
-    avatarLay->addWidget(m_usernameLabel, 0, Qt::AlignVCenter);
+    m_nicknameLabel = new QLabel(m_avatarWidget);
+    m_nicknameLabel->setObjectName("tbNickname");
+    m_nicknameLabel->setCursor(Qt::PointingHandCursor);
+    m_nicknameLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+    m_nicknameLabel->setMinimumWidth(48);
+    m_nicknameLabel->setMaximumWidth(200);
+    m_nicknameLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    m_nicknameLabel->setMinimumHeight(kTbAvatarPx);
+    avatarLay->addWidget(m_nicknameLabel, 0, Qt::AlignVCenter);
 
     m_dropdownIcon = new QLabel(m_avatarWidget);
     m_dropdownIcon->setObjectName("tbAccountChevron");
@@ -349,7 +349,7 @@ void TitleBar::retranslate()
 void TitleBar::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    elideUsername();
+    elideNickname();
 }
 
 QPoint TitleBar::avatarPos() const
@@ -360,27 +360,27 @@ QPoint TitleBar::avatarPos() const
     return mapToGlobal(QPoint(width() - 40, height()));
 }
 
-void TitleBar::elideUsername()
+void TitleBar::elideNickname()
 {
-    if (!m_usernameLabel)
+    if (!m_nicknameLabel)
         return;
 
     if (!UserManager::instance().isLoggedIn()) {
-        m_usernameLabel->setText(I18n::instance().tr("goToLogin"));
-        m_usernameLabel->setToolTip(I18n::instance().tr("goToLogin"));
+        m_nicknameLabel->setText(I18n::instance().tr("goToLogin"));
+        m_nicknameLabel->setToolTip(I18n::instance().tr("goToLogin"));
         return;
     }
 
-    QString username = UserManager::instance().userInfo().value("username").toString();
-    if (username.isEmpty())
-        username = QStringLiteral("User");
-    m_usernameLabel->setToolTip(username);
+    QString nickname = UserManager::instance().userInfo().value("nickname").toString();
+    if (nickname.isEmpty())
+        nickname = QStringLiteral("User");
+    m_nicknameLabel->setToolTip(nickname);
 
-    int avail = m_usernameLabel->width() - 2;
+    int avail = m_nicknameLabel->width() - 2;
     if (avail < 32)
         avail = 140;
-    QFontMetrics fm(m_usernameLabel->font());
-    m_usernameLabel->setText(fm.elidedText(username, Qt::ElideRight, avail));
+    QFontMetrics fm(m_nicknameLabel->font());
+    m_nicknameLabel->setText(fm.elidedText(nickname, Qt::ElideRight, avail));
 }
 
 void TitleBar::refreshSearchGlyph()
@@ -410,7 +410,7 @@ void TitleBar::updateChevronPixmap()
 
 void TitleBar::updateAvatar()
 {
-    if (!m_avatarIcon || !m_usernameLabel || !m_dropdownIcon) return;
+    if (!m_avatarIcon || !m_nicknameLabel || !m_dropdownIcon) return;
 
     if (UserManager::instance().isLoggedIn()) {
         int userId = UserManager::instance().userInfo().value("id").toInt();
@@ -422,7 +422,7 @@ void TitleBar::updateAvatar()
             m_avatarIcon->setPixmap(QPixmap(QStringLiteral(":/icons/app.png"))
                                .scaled(kTbAvatarPx, kTbAvatarPx, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         }
-        elideUsername();
+        elideNickname();
     } else {
         if (m_avatarReply) {
             m_avatarReply->disconnect();
@@ -432,8 +432,8 @@ void TitleBar::updateAvatar()
         }
         m_avatarIcon->setPixmap(QPixmap(QStringLiteral(":/icons/app.png"))
                                .scaled(kTbAvatarPx, kTbAvatarPx, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-        m_usernameLabel->setText(I18n::instance().tr("goToLogin"));
-        m_usernameLabel->setToolTip(I18n::instance().tr("goToLogin"));
+        m_nicknameLabel->setText(I18n::instance().tr("goToLogin"));
+        m_nicknameLabel->setToolTip(I18n::instance().tr("goToLogin"));
     }
 
     updateChevronPixmap();

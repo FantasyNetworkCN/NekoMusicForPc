@@ -307,7 +307,7 @@ QTextEdit:focus {
     background: rgba(240, 94, 122, 14);
 }
 
-#tbUsername {
+#tbNickname {
     font-size: 13px;
     color: #EEF1F6;
     font-weight: 500;
