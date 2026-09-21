@@ -550,6 +550,11 @@ void MainWindow::setupUi()
     // 播放队列抽屉：贴窗口右缘滑入，层级盖住底栏播放器（对齐 SPlayer n-drawer）
     m_commentPanel = new CommentPanel(m_apiClient, central);
     connect(m_commentPanel, &CommentPanel::hideRequested, this, &MainWindow::hideCommentDrawer);
+    // 切歌时抽屉若开着，自动加载新歌曲的评论（同一首歌暂停/继续不会重复请求）
+    connect(m_engine, &PlayerEngine::musicStarted, this, [this](const MusicInfo &music) {
+        if (m_commentPanel && m_commentPanel->isDrawerOpen())
+            m_commentPanel->showMusicComments(music.id);
+    });
 
     m_playlistPanel = new PlaylistPanel(central);
     m_playlistScrim = new PlaylistDrawerScrim(central);

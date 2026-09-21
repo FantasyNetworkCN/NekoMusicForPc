@@ -4,6 +4,7 @@
 #include "core/i18n.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
+#include "ui/scrollareafix.h"
 #include "ui/svgicon.h"
 
 #include <QScrollArea>
@@ -19,7 +20,9 @@
 #include <QNetworkRequest>
 #include <QPropertyAnimation>
 #include <QEasingCurve>
+#include <QGraphicsDropShadowEffect>
 #include <QResizeEvent>
+#include <QEnterEvent>
 #include <QFrame>
 #include <QSignalBlocker>
 #include <QPixmap>
@@ -31,36 +34,89 @@ namespace {
 
 constexpr int kMaxLength = 500;
 constexpr int kPageSize = 20;
-constexpr int kListPad = 14;
+constexpr int kListPad = 16;
+constexpr int kReplyIndent = 44;
+constexpr int kCardRadius = 8;
+
+/** 与播放队列抽屉同一主色（Theme 未暴露 accent 常量） */
+constexpr QColor kPrimary(230, 57, 80);
+
+bool isDark() {
+    return Theme::ThemeManager::instance().isDarkMode();
+}
 
 QString themeTextMain() {
-    return Theme::ThemeManager::instance().isDarkMode()
-        ? QString::fromUtf8(Theme::kTextMain)
-        : QStringLiteral("#212529");
+    return isDark() ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
 }
 
 QString themeTextSub() {
-    return Theme::ThemeManager::instance().isDarkMode()
-        ? QString::fromUtf8(Theme::kTextSub)
-        : QStringLiteral("rgba(33,37,41,0.62)");
+    return isDark() ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.62)");
 }
 
 QString themeTextFaint() {
-    return Theme::ThemeManager::instance().isDarkMode()
-        ? QStringLiteral("rgba(255,255,255,0.42)")
-        : QStringLiteral("rgba(33,37,41,0.42)");
-}
-
-QString themeCardBg() {
-    return Theme::ThemeManager::instance().isDarkMode()
-        ? QStringLiteral("rgba(255,255,255,0.05)")
-        : QStringLiteral("rgba(0,0,0,0.035)");
+    return isDark() ? QStringLiteral("rgba(255,255,255,0.42)") : QStringLiteral("rgba(33,37,41,0.42)");
 }
 
 QString themeAccent() {
-    // 与播放队列抽屉同一主色（Theme 未暴露 accent 常量）
-    return QStringLiteral("#E63950");
+    return QString::fromUtf8(Theme::kLavenderLt);
 }
+
+/** 抽屉底色：暗色为 kBgSurface，亮色为白（与主界面一致） */
+QColor themePanelBg() {
+    return isDark() ? QColor(QString::fromUtf8(Theme::kBgSurface)) : QColor(255, 255, 255);
+}
+
+QColor themePanelBorder() {
+    return isDark() ? QColor(255, 255, 255, 22) : QColor(0, 0, 0, 30);
+}
+
+/** 半透明浅底：暗色用白、亮色用黑，避免亮色下白底叠白底看不见 */
+QString themeSoftFill(int darkAlpha, int lightAlpha) {
+    return isDark() ? QStringLiteral("rgba(255,255,255,%1)").arg(darkAlpha)
+                    : QStringLiteral("rgba(33,37,41,%1)").arg(lightAlpha);
+}
+
+// ─── 评论卡片：对齐播放队列 .song-node 的圆角底 + hover 描边 ─────────
+class CommentCardFrame : public QWidget {
+public:
+    explicit CommentCardFrame(int alpha, QWidget *parent = nullptr)
+        : QWidget(parent), m_alpha(alpha)
+    {
+        setAttribute(Qt::WA_StyledBackground, false);
+        setAttribute(Qt::WA_TranslucentBackground, true);
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        Q_UNUSED(event);
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        QPainterPath path;
+        path.addRoundedRect(rect(), kCardRadius, kCardRadius);
+        p.fillPath(path, QColor(kPrimary.red(), kPrimary.green(), kPrimary.blue(), m_alpha));
+        if (m_hover)
+            p.strokePath(path, QPen(kPrimary, 1.0));
+    }
+
+    void enterEvent(QEnterEvent *event) override
+    {
+        m_hover = true;
+        update();
+        QWidget::enterEvent(event);
+    }
+
+    void leaveEvent(QEvent *event) override
+    {
+        m_hover = false;
+        update();
+        QWidget::leaveEvent(event);
+    }
+
+private:
+    int m_alpha;
+    bool m_hover = false;
+};
 
 } // namespace
 
@@ -68,47 +124,129 @@ CommentPanel::CommentPanel(ApiClient *api, QWidget *parent)
     : QWidget(parent), m_api(api)
 {
     setObjectName(QStringLiteral("commentPanel"));
-    setAttribute(Qt::WA_TranslucentBackground, true);
+    setAttribute(Qt::WA_StyledBackground, true);
+    setFixedWidth(kDrawerWidth);
+
     m_avatarNam = new QNetworkAccessManager(this);
+
+    m_drawerShadow = new QGraphicsDropShadowEffect(this);
+    m_drawerShadow->setBlurRadius(28);
+    m_drawerShadow->setOffset(-6, 0);
+    m_drawerShadow->setColor(QColor(0, 0, 0, 100));
+    setGraphicsEffect(m_drawerShadow);
+
     setupUi();
     applyPanelChrome();
     syncToHost();
     hide();
+
+    connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged, this,
+            [this](Theme::ThemeMode) {
+                applyPanelChrome();
+                rebuildList();
+            });
 }
 
 void CommentPanel::setupUi()
 {
-    auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(18, 16, 18, 16);
-    root->setSpacing(10);
+    auto *lay = new QVBoxLayout(this);
+    lay->setContentsMargins(0, 0, 0, 0);
+    lay->setSpacing(0);
 
-    // ─── 标题行 ─────────────────────────────
-    auto *head = new QHBoxLayout();
-    head->setSpacing(8);
-    m_titleLabel = new QLabel(this);
-    m_countLabel = new QLabel(this);
-    m_closeBtn = new QPushButton(this);
-    m_closeBtn->setFlat(true);
+    // ─── 标题行（对齐播放队列抽屉）─────────────
+    auto *header = new QWidget(this);
+    header->setObjectName(QStringLiteral("cmtHeader"));
+    auto *headerLay = new QHBoxLayout(header);
+    headerLay->setContentsMargins(16, 16, 12, 8);
+    headerLay->setSpacing(8);
+
+    auto *titleCol = new QVBoxLayout();
+    titleCol->setSpacing(0);
+    m_titleLabel = new QLabel(QStringLiteral("评论"), header);
+    m_countLabel = new QLabel(header);
+    titleCol->addWidget(m_titleLabel);
+    titleCol->addWidget(m_countLabel);
+    headerLay->addLayout(titleCol, 1);
+
+    m_refreshBtn = new QPushButton(header);
+    m_refreshBtn->setFixedSize(32, 32);
+    m_refreshBtn->setCursor(Qt::PointingHandCursor);
+    m_refreshBtn->setFlat(true);
+    m_refreshBtn->setToolTip(QStringLiteral("刷新"));
+    connect(m_refreshBtn, &QPushButton::clicked, this, &CommentPanel::refreshComments);
+    headerLay->addWidget(m_refreshBtn, 0, Qt::AlignTop);
+
+    m_closeBtn = new QPushButton(header);
+    m_closeBtn->setFixedSize(32, 32);
     m_closeBtn->setCursor(Qt::PointingHandCursor);
-    m_closeBtn->setFixedSize(30, 30);
+    m_closeBtn->setFlat(true);
     m_closeBtn->setToolTip(QStringLiteral("关闭"));
     connect(m_closeBtn, &QPushButton::clicked, this, [this]() {
         emit hideRequested();
     });
-    head->addWidget(m_titleLabel);
-    head->addWidget(m_countLabel);
-    head->addStretch(1);
-    head->addWidget(m_closeBtn);
-    root->addLayout(head);
+    headerLay->addWidget(m_closeBtn, 0, Qt::AlignTop);
 
-    // ─── 输入区 ─────────────────────────────
-    auto *composer = new QWidget(this);
-    composer->setObjectName(QStringLiteral("cmtComposer"));
-    auto *composerLay = new QVBoxLayout(composer);
-    composerLay->setContentsMargins(12, 10, 12, 10);
-    composerLay->setSpacing(6);
+    lay->addWidget(header);
 
-    m_replyChip = new QWidget(composer);
+    // ─── 评论列表 ─────────────────────────────
+    m_scroll = new QScrollArea(this);
+    m_scroll->setObjectName(QStringLiteral("cmtScroll"));
+    m_scroll->setWidgetResizable(true);
+    m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_scroll->setFrameShape(QFrame::NoFrame);
+
+    m_listContainer = new QWidget(m_scroll);
+    m_listLayout = new QVBoxLayout(m_listContainer);
+    m_listLayout->setContentsMargins(kListPad, 4, kListPad, 4);
+    m_listLayout->setSpacing(10);
+
+    m_itemsHost = new QWidget(m_listContainer);
+    m_itemsHost->setAttribute(Qt::WA_TranslucentBackground, true);
+    m_itemsLayout = new QVBoxLayout(m_itemsHost);
+    m_itemsLayout->setContentsMargins(0, 0, 0, 0);
+    m_itemsLayout->setSpacing(10);
+    m_listLayout->addWidget(m_itemsHost);
+
+    m_moreBtn = new QPushButton(m_listContainer);
+    m_moreBtn->setCursor(Qt::PointingHandCursor);
+    m_moreBtn->setMinimumHeight(36);
+    connect(m_moreBtn, &QPushButton::clicked, this, &CommentPanel::loadMore);
+    m_listLayout->addWidget(m_moreBtn);
+    m_listLayout->addStretch(1);
+
+    m_statusLabel = new QLabel(m_listContainer);
+    m_statusLabel->setAlignment(Qt::AlignCenter);
+    m_statusLabel->setWordWrap(true);
+    m_statusLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    m_statusLabel->hide();
+
+    m_scroll->setWidget(m_listContainer);
+    nekoPolishScrollAreaViewport(m_scroll);
+    lay->addWidget(m_scroll, 1);
+
+    // ─── 底部发表区 ───────────────────────────
+    auto *footer = new QWidget(this);
+    footer->setObjectName(QStringLiteral("cmtFooter"));
+    auto *footerLay = new QVBoxLayout(footer);
+    footerLay->setContentsMargins(16, 8, 16, 16);
+    footerLay->setSpacing(8);
+
+    m_loginHint = new QWidget(footer);
+    auto *hintLay = new QHBoxLayout(m_loginHint);
+    hintLay->setContentsMargins(0, 0, 0, 0);
+    m_loginHintLabel = new QLabel(m_loginHint);
+    m_loginHintLabel->setAlignment(Qt::AlignCenter);
+    hintLay->addWidget(m_loginHintLabel);
+    m_loginHint->hide();
+    footerLay->addWidget(m_loginHint);
+
+    m_inputBox = new QWidget(footer);
+    m_inputBox->setObjectName(QStringLiteral("cmtInputBox"));
+    auto *inputLay = new QVBoxLayout(m_inputBox);
+    inputLay->setContentsMargins(10, 8, 10, 8);
+    inputLay->setSpacing(6);
+
+    m_replyChip = new QWidget(m_inputBox);
     auto *chipLay = new QHBoxLayout(m_replyChip);
     chipLay->setContentsMargins(0, 0, 0, 0);
     chipLay->setSpacing(6);
@@ -122,148 +260,119 @@ void CommentPanel::setupUi()
     chipLay->addWidget(chipCancel);
     chipLay->addStretch(1);
     m_replyChip->hide();
-    composerLay->addWidget(m_replyChip);
+    inputLay->addWidget(m_replyChip);
 
-    m_input = new QTextEdit(composer);
+    m_input = new QTextEdit(m_inputBox);
     m_input->setObjectName(QStringLiteral("cmtInput"));
-    m_input->setFixedHeight(72);
+    m_input->setFixedHeight(58);
     m_input->setAcceptRichText(false);
     connect(m_input, &QTextEdit::textChanged, this, &CommentPanel::updateComposerState);
-    composerLay->addWidget(m_input);
+    inputLay->addWidget(m_input);
 
     auto *foot = new QHBoxLayout();
     foot->setSpacing(8);
-    m_counterLabel = new QLabel(composer);
-    m_submitBtn = new QPushButton(composer);
+    m_counterLabel = new QLabel(m_inputBox);
+    m_submitBtn = new QPushButton(m_inputBox);
     m_submitBtn->setCursor(Qt::PointingHandCursor);
     m_submitBtn->setFixedHeight(28);
     connect(m_submitBtn, &QPushButton::clicked, this, &CommentPanel::submit);
     foot->addWidget(m_counterLabel);
     foot->addStretch(1);
     foot->addWidget(m_submitBtn);
-    composerLay->addLayout(foot);
-    root->addWidget(composer);
+    inputLay->addLayout(foot);
+    footerLay->addWidget(m_inputBox);
 
-    m_loginHint = new QWidget(this);
-    auto *hintLay = new QHBoxLayout(m_loginHint);
-    hintLay->setContentsMargins(0, 0, 0, 0);
-    m_loginHintLabel = new QLabel(m_loginHint);
-    hintLay->addWidget(m_loginHintLabel);
-    hintLay->addStretch(1);
-    m_loginHint->hide();
-    root->addWidget(m_loginHint);
-
-    // ─── 列表 ─────────────────────────────
-    m_scroll = new QScrollArea(this);
-    m_scroll->setObjectName(QStringLiteral("cmtScroll"));
-    m_scroll->setWidgetResizable(true);
-    m_scroll->setFrameShape(QFrame::NoFrame);
-    m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_scroll->viewport()->setAutoFillBackground(false);
-
-    m_listContainer = new QWidget(m_scroll);
-    m_listContainer->setAutoFillBackground(false);
-    m_listLayout = new QVBoxLayout(m_listContainer);
-    m_listLayout->setContentsMargins(kListPad, 4, kListPad, 4);
-    m_listLayout->setSpacing(14);
-    m_listLayout->addStretch(1);
-    m_scroll->setWidget(m_listContainer);
-    root->addWidget(m_scroll, 1);
-
-    m_statusLabel = new QLabel(this);
-    m_statusLabel->setAlignment(Qt::AlignCenter);
-    m_statusLabel->setWordWrap(true);
-    root->addWidget(m_statusLabel);
-
-    m_moreBtn = new QPushButton(this);
-    m_moreBtn->setCursor(Qt::PointingHandCursor);
-    m_moreBtn->setFixedHeight(30);
-    connect(m_moreBtn, &QPushButton::clicked, this, [this]() {
-        if (m_loading || !m_hasMore) return;
-        m_loading = true;
-        updateComposerState();
-        const int nextPage = m_page + 1;
-        if (!m_api) { m_loading = false; return; }
-        m_api->fetchComments(m_musicId, nextPage, kPageSize,
-                             [this, nextPage](bool ok, const QString &message, const QVariantMap &data) {
-            m_loading = false;
-            if (!ok) {
-                m_statusLabel->setText(message);
-                updateComposerState();
-                return;
-            }
-            m_page = nextPage;
-            m_hasMore = data.value(QStringLiteral("hasMore")).toBool();
-            const QVariantList list = data.value(QStringLiteral("comments")).toList();
-            for (const auto &entry : list)
-                addCommentCard(m_listLayout, entry.toMap(), 0);
-            m_statusLabel->setVisible(!m_hasMore);
-            updateComposerState();
-        });
-    });
-    root->addWidget(m_moreBtn);
-    m_moreBtn->hide();
+    lay->addWidget(footer);
 
     retranslate();
 }
 
 void CommentPanel::applyPanelChrome()
 {
+    const bool dark = isDark();
     const QString main = themeTextMain();
     const QString sub = themeTextSub();
     const QString faint = themeTextFaint();
-    const QString accent = themeAccent();
 
     if (m_titleLabel)
-        m_titleLabel->setStyleSheet(QStringLiteral("QLabel { font-size: 16px; font-weight: 700; color: %1; }").arg(main));
+        m_titleLabel->setStyleSheet(QStringLiteral(
+            "QLabel { font-size: 16px; font-weight: 700; color: %1; }").arg(main));
     if (m_countLabel)
-        m_countLabel->setStyleSheet(QStringLiteral("QLabel { font-size: 12px; color: %1; }").arg(sub));
-    if (m_closeBtn) {
-        m_closeBtn->setIcon(Icons::iconNamed("Close", 16, QColor(sub), QColor(accent)));
-        m_closeBtn->setIconSize(QSize(16, 16));
-    }
+        m_countLabel->setStyleSheet(QStringLiteral(
+            "QLabel { font-size: 12px; color: %1; margin-top: 2px; }").arg(sub));
     if (m_statusLabel)
-        m_statusLabel->setStyleSheet(QStringLiteral("QLabel { font-size: 12px; color: %1; }").arg(faint));
-    if (m_counterLabel)
-        m_counterLabel->setStyleSheet(QStringLiteral("QLabel { font-size: 11px; color: %1; }").arg(faint));
+        m_statusLabel->setStyleSheet(QStringLiteral(
+            "QLabel { color: %1; font-size: 13px; padding: 48px 24px; line-height: 1.5; }").arg(sub));
+
+    const QColor iconIc = dark ? QColor(244, 246, 255, 180) : QColor(33, 37, 41, 180);
+    const QString iconBtnStyle = QStringLiteral(
+        "QPushButton { background: transparent; border: none; border-radius: 8px; "
+        "min-width: 32px; min-height: 32px; }"
+        "QPushButton:hover { background: %1; }").arg(themeSoftFill(12, 10));
+    if (m_refreshBtn) {
+        m_refreshBtn->setIcon(Icons::renderNamed("Refresh", 18, iconIc));
+        m_refreshBtn->setIconSize(QSize(18, 18));
+        m_refreshBtn->setStyleSheet(iconBtnStyle);
+    }
+    if (m_closeBtn) {
+        m_closeBtn->setIcon(Icons::renderNamed("Close", 18, iconIc));
+        m_closeBtn->setIconSize(QSize(18, 18));
+        m_closeBtn->setStyleSheet(iconBtnStyle);
+    }
+
+    if (m_scroll) {
+        m_scroll->setStyleSheet(QStringLiteral(
+            "QScrollArea#cmtScroll { border: none; background: transparent; }"
+            "QScrollBar:vertical { width: 5px; background: transparent; margin: 2px 0 4px 0; }"
+            "QScrollBar::handle:vertical { background: rgba(230,57,80,%1); border-radius: 3px; min-height: 40px; }"
+            "QScrollBar::handle:vertical:hover { background: rgba(230,57,80,%2); }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }")
+                                    .arg(dark ? 70 : 82)
+                                    .arg(dark ? 108 : 125));
+    }
+
+    if (m_inputBox)
+        m_inputBox->setStyleSheet(QStringLiteral(
+            "QWidget#cmtInputBox { background: %1; border-radius: 10px; }").arg(themeSoftFill(8, 5)));
     if (m_input)
         m_input->setStyleSheet(QStringLiteral(
             "QTextEdit { background: transparent; border: none; color: %1; font-size: 13px; }").arg(main));
+    if (m_counterLabel)
+        m_counterLabel->setStyleSheet(QStringLiteral("QLabel { font-size: 11px; color: %1; }").arg(faint));
     if (m_replyChipLabel)
-        m_replyChipLabel->setStyleSheet(QStringLiteral("QLabel { font-size: 12px; color: %1; }").arg(accent));
+        m_replyChipLabel->setStyleSheet(QStringLiteral("QLabel { font-size: 12px; color: %1; }").arg(themeAccent()));
     if (m_loginHintLabel)
         m_loginHintLabel->setStyleSheet(QStringLiteral("QLabel { font-size: 12px; color: %1; }").arg(sub));
 
-    const QString btnStyle = QStringLiteral(
-        "QPushButton { background: %1; color: #ffffff; border: none; border-radius: 8px; padding: 0 14px; font-size: 12px; }"
-        "QPushButton:disabled { background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.45); }").arg(accent);
-    const QString ghostStyle = QStringLiteral(
-        "QPushButton { background: rgba(255,255,255,0.06); color: %1; border: 1px solid %2; "
-        "border-radius: 8px; padding: 0 14px; font-size: 12px; }").arg(main, faint);
-
     if (m_submitBtn)
-        m_submitBtn->setStyleSheet(btnStyle);
+        m_submitBtn->setStyleSheet(QStringLiteral(
+            "QPushButton { background: #E63950; color: #ffffff; border: none; border-radius: 8px; "
+            "padding: 0 16px; font-size: 12px; }"
+            "QPushButton:hover { background: %1; }"
+            "QPushButton:disabled { background: %2; color: rgba(255,255,255,0.45); }")
+                                       .arg(QString::fromUtf8(Theme::kLavender))
+                                       .arg(themeSoftFill(12, 10)));
     if (m_moreBtn)
-        m_moreBtn->setStyleSheet(ghostStyle);
-
-    auto *composer = findChild<QWidget *>(QStringLiteral("cmtComposer"));
-    if (composer)
-        composer->setStyleSheet(QStringLiteral("QWidget#cmtComposer { background: %1; border-radius: 12px; }").arg(themeCardBg()));
+        m_moreBtn->setStyleSheet(QStringLiteral(
+            "QPushButton { background: %1; border: none; border-radius: 8px; color: %2; "
+            "font-size: 13px; font-weight: 500; min-height: 36px; }"
+            "QPushButton:hover { background: %3; }"
+            "QPushButton:disabled { color: %4; }")
+                                     .arg(themeSoftFill(8, 5), main, themeSoftFill(14, 8), faint));
 }
 
 void CommentPanel::retranslate()
 {
     if (m_titleLabel) m_titleLabel->setText(QStringLiteral("评论"));
+    if (m_refreshBtn) m_refreshBtn->setToolTip(QStringLiteral("刷新"));
     if (m_closeBtn) m_closeBtn->setToolTip(QStringLiteral("关闭"));
     if (m_input) m_input->setPlaceholderText(m_replyId > 0
         ? QStringLiteral("回复 @%1").arg(m_replyName)
         : QStringLiteral("说点什么吧…"));
     if (m_loginHintLabel) m_loginHintLabel->setText(QStringLiteral("登录后即可发表评论与回复"));
     if (m_submitBtn) m_submitBtn->setText(m_replyId > 0 ? QStringLiteral("回复") : QStringLiteral("发表"));
-    if (m_moreBtn) m_moreBtn->setText(QStringLiteral("加载更多"));
     if (m_replyChipLabel) m_replyChipLabel->setText(QStringLiteral("回复 @%1").arg(m_replyName));
-    if (m_statusLabel && m_statusLabel->text().isEmpty())
-        m_statusLabel->setText(QStringLiteral("评论加载中…"));
     applyPanelChrome();
     updateComposerState();
 }
@@ -281,10 +390,9 @@ void CommentPanel::updateComposerState()
 
     const bool loggedIn = UserManager::instance().isLoggedIn();
     if (m_loginHint) m_loginHint->setVisible(!loggedIn);
-    if (m_input) m_input->setVisible(loggedIn);
+    if (m_inputBox) m_inputBox->setVisible(loggedIn);
     if (m_replyChip) m_replyChip->setVisible(loggedIn && m_replyId > 0);
     if (m_submitBtn) {
-        m_submitBtn->setVisible(loggedIn);
         m_submitBtn->setEnabled(loggedIn && !text.isEmpty() && !m_submitting);
         m_submitBtn->setText(m_submitting
             ? QStringLiteral("提交中…")
@@ -292,7 +400,7 @@ void CommentPanel::updateComposerState()
     }
     if (m_counterLabel) m_counterLabel->setVisible(loggedIn);
     if (m_moreBtn) {
-        m_moreBtn->setVisible(m_hasMore);
+        m_moreBtn->setVisible(m_hasMore && !m_topComments.isEmpty());
         m_moreBtn->setEnabled(!m_loading);
         m_moreBtn->setText(m_loading ? QStringLiteral("加载中…") : QStringLiteral("加载更多"));
     }
@@ -300,13 +408,14 @@ void CommentPanel::updateComposerState()
 
 void CommentPanel::clearList()
 {
-    if (!m_listLayout) return;
-    while (QLayoutItem *item = m_listLayout->takeAt(0)) {
-        if (QWidget *w = item->widget())
+    if (!m_itemsLayout) return;
+    while (QLayoutItem *item = m_itemsLayout->takeAt(0)) {
+        if (QWidget *w = item->widget()) {
+            w->hide();
             w->deleteLater();
+        }
         delete item;
     }
-    m_listLayout->addStretch(1);
 }
 
 void CommentPanel::setStatusText(const QString &text)
@@ -314,37 +423,71 @@ void CommentPanel::setStatusText(const QString &text)
     if (!m_statusLabel) return;
     m_statusLabel->setText(text);
     m_statusLabel->setVisible(!text.isEmpty());
+    layoutOverlay();
+}
+
+void CommentPanel::layoutOverlay()
+{
+    if (!m_statusLabel || !m_listContainer) return;
+    m_statusLabel->setGeometry(m_listContainer->rect());
+    if (m_statusLabel->isVisible()) m_statusLabel->raise();
 }
 
 void CommentPanel::openFor(int musicId)
 {
-    if (m_musicId != musicId) {
-        m_musicId = musicId;
-        m_page = 1;
-        m_hasMore = false;
-        m_replyId = 0;
-        m_replyName.clear();
-        clearList();
-        setStatusText(QStringLiteral("评论加载中…"));
-        reload();
-    }
+    showMusicComments(musicId);
     openDrawer();
+}
+
+void CommentPanel::showMusicComments(int musicId)
+{
+    if (m_musicId == musicId) return;
+
+    m_musicId = musicId;
+    m_page = 1;
+    m_hasMore = false;
+    m_floorTotal = 0;
+    m_commentTotal = 0;
+    m_topComments.clear();
+    m_replyId = 0;
+    m_replyName.clear();
+    m_loading = false;
+    ++m_scrollGeneration; // 丢弃在途请求的回调
+
+    if (m_input) {
+        m_input->clear();
+        m_input->setPlaceholderText(QStringLiteral("说点什么吧…"));
+    }
+    if (m_countLabel) m_countLabel->setText(QString());
+    clearList();
+    if (m_scroll) m_scroll->verticalScrollBar()->setValue(0);
+    reload();
+}
+
+void CommentPanel::refreshComments()
+{
+    m_loading = false; // 允许打断进行中的请求
+    reload();
 }
 
 void CommentPanel::reload()
 {
-    if (m_loading || !m_api || m_musicId <= 0) {
+    if (!m_api || m_musicId <= 0) {
         if (m_musicId == 0)
             setStatusText(QStringLiteral("暂无歌曲信息"));
-        else if (m_musicId < 0)
+        else
             setStatusText(QStringLiteral("本地歌曲暂不支持评论"));
+        updateComposerState();
         return;
     }
+
     m_loading = true;
     m_page = 1;
+    m_hasMore = false;
     clearList();
     setStatusText(QStringLiteral("评论加载中…"));
     updateComposerState();
+
     const int generation = ++m_scrollGeneration;
     m_api->fetchComments(m_musicId, 1, kPageSize,
                          [this, generation](bool ok, const QString &message, const QVariantMap &data) {
@@ -359,44 +502,86 @@ void CommentPanel::reload()
         m_hasMore = data.value(QStringLiteral("hasMore")).toBool();
         m_floorTotal = data.value(QStringLiteral("total")).toInt();
         m_commentTotal = data.value(QStringLiteral("totalComments")).toInt();
-        const QVariantList list = data.value(QStringLiteral("comments")).toList();
-        if (list.isEmpty())
-            setStatusText(QStringLiteral("还没有评论，来抢沙发吧"));
-        else
-            setStatusText(QString());
-        for (const auto &entry : list)
-            addCommentCard(m_listLayout, entry.toMap(), 0);
+        m_topComments = data.value(QStringLiteral("comments")).toList();
+        setStatusText(m_topComments.isEmpty() ? QStringLiteral("还没有评论，来抢沙发吧") : QString());
+        rebuildList();
         if (m_countLabel)
-            m_countLabel->setText(QStringLiteral("%1").arg(m_commentTotal));
+            m_countLabel->setText(QStringLiteral("共 %1 条评论").arg(m_commentTotal));
         emit commentCountChanged(m_commentTotal);
         updateComposerState();
     });
 }
 
+void CommentPanel::loadMore()
+{
+    if (m_loading || !m_hasMore || !m_api || m_musicId <= 0) return;
+
+    m_loading = true;
+    updateComposerState();
+    const int nextPage = m_page + 1;
+    const int generation = m_scrollGeneration;
+    m_api->fetchComments(m_musicId, nextPage, kPageSize,
+                         [this, nextPage, generation](bool ok, const QString &message, const QVariantMap &data) {
+        if (generation != m_scrollGeneration)
+            return; // 期间已换曲 / 刷新
+        m_loading = false;
+        if (!ok) {
+            setStatusText(message.isEmpty() ? QStringLiteral("加载失败") : message);
+            updateComposerState();
+            return;
+        }
+        m_page = nextPage;
+        m_hasMore = data.value(QStringLiteral("hasMore")).toBool();
+        m_topComments += data.value(QStringLiteral("comments")).toList();
+        rebuildList();
+        updateComposerState();
+    });
+}
+
+void CommentPanel::rebuildList()
+{
+    if (!m_itemsLayout) return;
+    clearList();
+    for (const QVariant &entry : m_topComments)
+        addCommentCard(m_itemsLayout, entry.toMap(), 0);
+    updateComposerState();
+    layoutOverlay();
+}
+
 void CommentPanel::addCommentCard(QVBoxLayout *layout, const QVariantMap &comment, int depth)
 {
     if (!layout) return;
+    QWidget *owner = layout->parentWidget() ? layout->parentWidget() : m_listContainer;
 
     const int id = comment.value(QStringLiteral("id")).toInt();
     const QVariantMap user = comment.value(QStringLiteral("user")).toMap();
+    const bool isReply = depth > 0;
 
-    auto *card = new QWidget(m_listContainer);
+    auto *host = new QWidget(owner);
+    host->setAttribute(Qt::WA_TranslucentBackground, true);
+    auto *hostLay = new QHBoxLayout(host);
+    hostLay->setContentsMargins(isReply ? kReplyIndent : 0, 0, 0, 0);
+    hostLay->setSpacing(0);
+
+    auto *card = new CommentCardFrame(isReply ? 12 : 20, host);
     auto *cardLay = new QVBoxLayout(card);
-    cardLay->setContentsMargins(depth > 0 ? 26 : 0, 0, 0, 0);
-    cardLay->setSpacing(4);
+    cardLay->setContentsMargins(10, 8, 10, 8);
+    cardLay->setSpacing(6);
 
     auto *row = new QHBoxLayout();
     row->setSpacing(10);
 
-    const int px = depth > 0 ? 26 : 34;
+    const int px = isReply ? 28 : 34;
     auto *avatar = new QLabel(card);
     avatar->setFixedSize(px, px);
-    avatar->setPixmap(QPixmap(QStringLiteral(":/icons/app.png")).scaled(px, px, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    const QPixmap fallback(QStringLiteral(":/icons/app.png"));
+    if (!fallback.isNull())
+        avatar->setPixmap(fallback.scaled(px, px, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     loadAvatar(avatar, user.value(QStringLiteral("id")).toInt(), px);
     row->addWidget(avatar, 0, Qt::AlignTop);
 
     auto *body = new QVBoxLayout();
-    body->setSpacing(3);
+    body->setSpacing(4);
 
     auto *meta = new QHBoxLayout();
     meta->setSpacing(8);
@@ -431,13 +616,17 @@ void CommentPanel::addCommentCard(QVBoxLayout *layout, const QVariantMap &commen
     text->setStyleSheet(QStringLiteral("QLabel { font-size: 13px; color: %1; }").arg(themeTextMain()));
     body->addWidget(text);
 
+    const QString actionStyle = QStringLiteral(
+        "QPushButton { border: none; background: transparent; border-radius: 6px; font-size: 11px; "
+        "color: %1; padding: 2px 8px; }"
+        "QPushButton:hover { background: rgba(230,57,80,0.18); color: %2; }")
+        .arg(themeTextSub(), themeAccent());
+
     auto *actions = new QHBoxLayout();
-    actions->setSpacing(12);
+    actions->setSpacing(2);
     auto *replyBtn = new QPushButton(QStringLiteral("回复"), card);
-    replyBtn->setFlat(true);
     replyBtn->setCursor(Qt::PointingHandCursor);
-    replyBtn->setStyleSheet(QStringLiteral(
-        "QPushButton { border: none; background: transparent; font-size: 11px; color: %1; padding: 0; }").arg(themeTextSub()));
+    replyBtn->setStyleSheet(actionStyle);
     connect(replyBtn, &QPushButton::clicked, this, [this, id, nick]() {
         startReply(id, nick->text());
     });
@@ -445,10 +634,8 @@ void CommentPanel::addCommentCard(QVBoxLayout *layout, const QVariantMap &commen
 
     if (comment.value(QStringLiteral("canDelete")).toBool()) {
         auto *delBtn = new QPushButton(QStringLiteral("删除"), card);
-        delBtn->setFlat(true);
         delBtn->setCursor(Qt::PointingHandCursor);
-        delBtn->setStyleSheet(QStringLiteral(
-            "QPushButton { border: none; background: transparent; font-size: 11px; color: %1; padding: 0; }").arg(themeTextSub()));
+        delBtn->setStyleSheet(actionStyle);
         connect(delBtn, &QPushButton::clicked, this, [this, id]() { removeComment(id); });
         actions->addWidget(delBtn);
     }
@@ -457,14 +644,14 @@ void CommentPanel::addCommentCard(QVBoxLayout *layout, const QVariantMap &commen
 
     row->addLayout(body, 1);
     cardLay->addLayout(row);
-
-    layout->insertWidget(qMax(0, layout->count() - 1), card);
+    hostLay->addWidget(card, 1);
+    layout->addWidget(host);
 
     // 楼层内回复（深度 1，不再继续嵌套）
-    if (depth == 0) {
+    if (!isReply) {
         const QVariantList replies = comment.value(QStringLiteral("replies")).toList();
-        for (const auto &entry : replies)
-            addCommentCard(layout, entry.toMap(), 1);
+        for (const QVariant &entry : replies)
+            addCommentCard(cardLay, entry.toMap(), 1);
     }
 }
 
@@ -539,19 +726,22 @@ void CommentPanel::submit()
     m_submitting = true;
     updateComposerState();
     const int parentId = m_replyId;
+    const int musicId = m_musicId;
     m_api->postComment(m_musicId, text, parentId,
-                       [this, parentId](bool ok, const QString &message, const QVariantMap &) {
+                       [this, parentId, musicId](bool ok, const QString &message, const QVariantMap &) {
         m_submitting = false;
         if (!ok) {
             setStatusText(message.isEmpty() ? QStringLiteral("发表失败") : message);
             updateComposerState();
             return;
         }
+        if (musicId != m_musicId)
+            return; // 提交期间已换曲，结果留给新歌
         if (m_input) m_input->clear();
         m_replyId = 0;
         m_replyName.clear();
-        if (parentId > 0)
-            setStatusText(QString());
+        setStatusText(QString());
+        if (m_input) m_input->setPlaceholderText(QStringLiteral("说点什么吧…"));
         reload();
     });
 }
@@ -559,11 +749,14 @@ void CommentPanel::submit()
 void CommentPanel::removeComment(int commentId)
 {
     if (!m_api) return;
-    m_api->deleteComment(commentId, [this](bool ok, const QString &message, const QVariantMap &) {
+    const int musicId = m_musicId;
+    m_api->deleteComment(commentId, [this, musicId](bool ok, const QString &message, const QVariantMap &) {
         if (!ok) {
             setStatusText(message.isEmpty() ? QStringLiteral("删除失败") : message);
             return;
         }
+        if (musicId != m_musicId)
+            return;
         reload();
     });
 }
@@ -572,14 +765,22 @@ void CommentPanel::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
     QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing, true);
-    const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
-    QPainterPath path;
-    path.addRoundedRect(r, 16, 16);
-    p.setPen(QPen(dark ? QColor(255, 255, 255, 26) : QColor(0, 0, 0, 20), 1));
-    p.setBrush(dark ? QColor(28, 28, 34, 246) : QColor(252, 252, 254, 250));
-    p.drawPath(path);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QRect r = rect();
+    const int rad = 12;
+
+    QPainterPath clip;
+    clip.moveTo(r.right(), r.top());
+    clip.lineTo(r.left() + rad, r.top());
+    clip.arcTo(r.left(), r.top(), rad * 2, rad * 2, 90, 90);
+    clip.lineTo(r.left(), r.bottom() - rad);
+    clip.arcTo(r.left(), r.bottom() - rad * 2, rad * 2, rad * 2, 180, 90);
+    clip.lineTo(r.right(), r.bottom());
+    clip.closeSubpath();
+
+    p.fillPath(clip, themePanelBg());
+    p.setPen(QPen(themePanelBorder(), 1.0));
+    p.drawPath(clip);
 }
 
 void CommentPanel::resizeEvent(QResizeEvent *event)
@@ -587,6 +788,7 @@ void CommentPanel::resizeEvent(QResizeEvent *event)
     QWidget::resizeEvent(event);
     if (m_listContainer && m_scroll)
         m_listContainer->setFixedWidth(qMax(80, m_scroll->viewport()->width()));
+    layoutOverlay();
 }
 
 void CommentPanel::syncToHost()
