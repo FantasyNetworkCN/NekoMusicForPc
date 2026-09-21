@@ -377,7 +377,6 @@ void CommentPanel::addCommentCard(QVBoxLayout *layout, const QVariantMap &commen
 {
     if (!layout) return;
 
-    const bool deleted = comment.value(QStringLiteral("deleted")).toBool();
     const int id = comment.value(QStringLiteral("id")).toInt();
     const QVariantMap user = comment.value(QStringLiteral("user")).toMap();
 
@@ -385,14 +384,6 @@ void CommentPanel::addCommentCard(QVBoxLayout *layout, const QVariantMap &commen
     auto *cardLay = new QVBoxLayout(card);
     cardLay->setContentsMargins(depth > 0 ? 26 : 0, 0, 0, 0);
     cardLay->setSpacing(4);
-
-    if (deleted) {
-        auto *gone = new QLabel(QStringLiteral("该评论已删除"), card);
-        gone->setStyleSheet(QStringLiteral("QLabel { font-size: 12px; color: %1; }").arg(themeTextFaint()));
-        cardLay->addWidget(gone);
-        layout->insertWidget(qMax(0, layout->count() - 1), card);
-        return;
-    }
 
     auto *row = new QHBoxLayout();
     row->setSpacing(10);
