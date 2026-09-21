@@ -1761,3 +1761,74 @@ void ApiClient::batchAddFavorites(const QList<int> &musicIds, BatchAddMusicCb cb
         if (cb) cb(ok, result);
     });
 }
+
+void ApiClient::fetchComments(int musicId, int page, int pageSize, CommentsCb cb)
+{
+    QUrl url(QString::fromUtf8("%1/api/comments").arg(QString::fromUtf8(Theme::kApiBase)));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("musicId"), QString::number(musicId));
+    query.addQueryItem(QStringLiteral("page"), QString::number(qMax(1, page)));
+    query.addQueryItem(QStringLiteral("pageSize"), QString::number(qMax(1, pageSize)));
+    url.setQuery(query);
+
+    QNetworkRequest req(url);
+    if (UserManager::instance().isLoggedIn())
+        req.setRawHeader("Authorization", QString("Bearer %1").arg(UserManager::instance().token()).toUtf8());
+
+    auto *reply = m_nam.get(req);
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = reply->error() == QNetworkReply::NoError && root.value("success").toBool();
+        const QString message = root.value("message").toString();
+        const QVariantMap data = root.value("data").toObject().toVariantMap();
+        if (cb) cb(ok, message, data);
+    });
+}
+
+void ApiClient::postComment(int musicId, const QString &content, int parentId, CommentsCb cb)
+{
+    QUrl url(QString::fromUtf8("%1/api/comments").arg(QString::fromUtf8(Theme::kApiBase)));
+    QNetworkRequest req(url);
+    if (UserManager::instance().isLoggedIn())
+        req.setRawHeader("Authorization", QString("Bearer %1").arg(UserManager::instance().token()).toUtf8());
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject body;
+    body["musicId"] = musicId;
+    body["content"] = content;
+    if (parentId > 0)
+        body["parentId"] = parentId;
+
+    auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = reply->error() == QNetworkReply::NoError && root.value("success").toBool();
+        const QString message = root.value("message").toString();
+        const QVariantMap data = root.value("data").toObject().toVariantMap();
+        if (cb) cb(ok, message, data);
+    });
+}
+
+void ApiClient::deleteComment(int commentId, CommentsCb cb)
+{
+    QUrl url(QString::fromUtf8("%1/api/comments").arg(QString::fromUtf8(Theme::kApiBase)));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("id"), QString::number(commentId));
+    url.setQuery(query);
+
+    QNetworkRequest req(url);
+    if (UserManager::instance().isLoggedIn())
+        req.setRawHeader("Authorization", QString("Bearer %1").arg(UserManager::instance().token()).toUtf8());
+
+    auto *reply = m_nam.deleteResource(req);
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = reply->error() == QNetworkReply::NoError && root.value("success").toBool();
+        const QString message = root.value("message").toString();
+        const QVariantMap data = root.value("data").toObject().toVariantMap();
+        if (cb) cb(ok, message, data);
+    });
+}

@@ -484,6 +484,7 @@ enum class PpInk : int {
     Download,
     PlayMode,
     Playlist,
+    Comment,
     Volume,
     DesktopLyric,
 };
@@ -567,6 +568,9 @@ protected:
             break;
         case PpInk::Playlist:
             pm = Icons::renderNamed("PlayList", px, hi ? cA : cN);
+            break;
+        case PpInk::Comment:
+            pm = Icons::renderNamed("Chat", px, hi ? cA : cN);
             break;
         case PpInk::Volume: {
             const int band = property("ppVol").toInt();
@@ -1681,6 +1685,17 @@ void PlayerPage::setupPlayerControl()
         m_ppDesktopLrcBtn->update();
     });
 
+    m_ppCommentBtn = new PlayerPageInkButton(m_ppRightTools);
+    m_ppCommentBtn->setFixedSize(kPpCtrlBtn, kPpCtrlBtn);
+    m_ppCommentBtn->setIconSize(QSize(kPpSideIcon, kPpSideIcon));
+    m_ppCommentBtn->setProperty("ppInk", int(PpInk::Comment));
+    m_ppCommentBtn->setCursor(Qt::PointingHandCursor);
+    m_ppCommentBtn->setToolTip(I18n::instance().tr("comments"));
+    connect(m_ppCommentBtn, &QPushButton::clicked, this, [this]() {
+        emit commentsClicked(m_musicId);
+    });
+
+    rightLay->addWidget(m_ppCommentBtn);
     rightLay->addWidget(m_ppDesktopLrcBtn);
     rightLay->addWidget(volWrapper);
     rightLay->addWidget(m_ppPlaylistBtn);
@@ -2563,6 +2578,8 @@ void PlayerPage::retranslate()
         m_ppAddToPlaylistBtn->setToolTip(I18n::instance().tr("addToPlaylist"));
     if (m_ppDownloadBtn)
         m_ppDownloadBtn->setToolTip(I18n::instance().tr("downloadMusic"));
+    if (m_ppCommentBtn)
+        m_ppCommentBtn->setToolTip(I18n::instance().tr("comments"));
     updateVideoRenderUi();
 }
 

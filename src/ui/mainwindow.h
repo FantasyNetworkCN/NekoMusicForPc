@@ -39,6 +39,7 @@ class QTimer;
 class PlaylistDetailPage;
 class AddToPlaylistDialog;
 class PlaylistPanel;
+class CommentPanel;
 class SearchPage;
 class ArtistDetailPage;
 class VipPage;
@@ -100,10 +101,14 @@ private:
     void addToPlaylistFromPlayer(int musicId);
     MusicInfo musicInfoForPlayerAction(int musicId) const;
     void togglePlaylistPanel();
+    void toggleCommentDrawer(int musicId);
+    void hideCommentDrawer();
     void showPlaylistDrawer();
     void hidePlaylistDrawer();
     QWidget *playlistDrawerHost() const;
     void syncPlaylistDrawerGeometry();
+    /** 评论抽屉：与播放队列抽屉互斥，跟随播放页宿主 */
+    void syncCommentDrawerGeometry();
     void raisePlaylistDrawerStack();
     void playMusicFromPlaylist(int musicId);
     void playNext();
@@ -163,6 +168,7 @@ private:
     ArtistDetailPage *m_artistDetailPage = nullptr;
     VipPage *m_vipPage = nullptr;
     PlaylistPanel *m_playlistPanel = nullptr;
+    CommentPanel *m_commentPanel = nullptr;
     QWidget *m_playlistScrim = nullptr;
     PlayerBar *m_playerBar = nullptr;
     QWidget *m_midWidget = nullptr;

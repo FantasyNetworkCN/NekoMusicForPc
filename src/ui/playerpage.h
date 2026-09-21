@@ -78,6 +78,8 @@ signals:
     void addToPlaylistClicked(int musicId);
     void downloadClicked(int musicId);
     void playlistClicked();
+    /** 打开评论抽屉（携带当前曲目 id） */
+    void commentsClicked(int musicId);
     void desktopLyricsToggled(bool enabled);
     void volumePercentChanged(int percent);
     /** 播放页歌词更新后同步桌面歌词（LRC 文本，空表示无歌词） */
@@ -189,6 +191,7 @@ private:
     QPushButton *m_ppAddToPlaylistBtn = nullptr;
     QPushButton *m_ppPlayModeBtn = nullptr;
     QPushButton *m_ppPlaylistBtn = nullptr;
+    QPushButton *m_ppCommentBtn = nullptr;
     QPushButton *m_ppVolumeBtn = nullptr;
     QWidget *m_ppVolumePanel = nullptr;
     QSlider *m_ppVolumeSlider = nullptr;

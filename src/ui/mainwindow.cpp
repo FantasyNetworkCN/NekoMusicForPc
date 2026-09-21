@@ -26,6 +26,7 @@
 #include "ui/qqimportdialog.h"
 #include "ui/kugouimportdialog.h"
 #include "ui/playlistpanel.h"
+#include "ui/commentpanel.h"
 #include "ui/toast.h"
 #include "ui/updatedialog.h"
 #include "ui/defaultmusicplayerdialog.h"
@@ -547,6 +548,9 @@ void MainWindow::setupUi()
     m_playerPage->hide();
 
     // 播放队列抽屉：贴窗口右缘滑入，层级盖住底栏播放器（对齐 SPlayer n-drawer）
+    m_commentPanel = new CommentPanel(m_apiClient, central);
+    connect(m_commentPanel, &CommentPanel::hideRequested, this, &MainWindow::hideCommentDrawer);
+
     m_playlistPanel = new PlaylistPanel(central);
     m_playlistScrim = new PlaylistDrawerScrim(central);
     static_cast<PlaylistDrawerScrim *>(m_playlistScrim)->onClicked = [this]() { hidePlaylistDrawer(); };
@@ -1065,6 +1069,7 @@ void MainWindow::setupUi()
     connect(m_playerPage, &PlayerPage::previousClicked, this, &MainWindow::playPrevious);
     connect(m_playerPage, &PlayerPage::nextClicked, this, &MainWindow::playNext);
     connect(m_playerPage, &PlayerPage::playlistClicked, this, &MainWindow::togglePlaylistPanel);
+    connect(m_playerPage, &PlayerPage::commentsClicked, this, &MainWindow::toggleCommentDrawer);
     connect(m_playerPage, &PlayerPage::desktopLyricsToggled, this, [this](bool enabled) {
         applyDesktopLyricsEnabled(enabled, true);
     });
@@ -1593,6 +1598,8 @@ void MainWindow::showPlaylistDrawer()
 {
     if (!m_playlistPanel)
         return;
+    if (m_commentPanel && m_commentPanel->isDrawerOpen())
+        hideCommentDrawer();
     const bool fullPlayer = m_playerPageVisible && m_playerPage && playlistDrawerHost() == m_playerPage;
     if (m_playerBar)
         m_playerBar->setFloatingProgressSuppressed(true);
@@ -1615,6 +1622,44 @@ void MainWindow::hidePlaylistDrawer()
     if (m_playlistScrim)
         static_cast<PlaylistDrawerScrim *>(m_playlistScrim)->fadeOut();
     m_playlistPanel->closeDrawer();
+}
+
+void MainWindow::syncCommentDrawerGeometry()
+{
+    if (!m_commentPanel)
+        return;
+    QWidget *host = playlistDrawerHost();
+    if (!host)
+        return;
+    if (m_commentPanel->parentWidget() != host)
+        m_commentPanel->setParent(host);
+    m_commentPanel->syncToHost();
+    if (m_commentPanel->isDrawerOpen()) {
+        m_commentPanel->show();
+        m_commentPanel->raise();
+    }
+}
+
+void MainWindow::hideCommentDrawer()
+{
+    if (m_commentPanel && m_commentPanel->isDrawerOpen())
+        m_commentPanel->closeDrawer();
+}
+
+void MainWindow::toggleCommentDrawer(int musicId)
+{
+    if (!m_commentPanel)
+        return;
+    if (m_commentPanel->isDrawerOpen()) {
+        hideCommentDrawer();
+        return;
+    }
+    if (m_playlistPanel && m_playlistPanel->isDrawerOpen())
+        hidePlaylistDrawer();
+    syncCommentDrawerGeometry();
+    m_commentPanel->openFor(musicId);
+    m_commentPanel->show();
+    m_commentPanel->raise();
 }
 
 void MainWindow::togglePlaylistPanel()
@@ -2055,6 +2100,8 @@ void MainWindow::openPlayerPage()
 
     if (m_playlistPanel && m_playlistPanel->isDrawerOpen())
         hidePlaylistDrawer();
+    if (m_commentPanel && m_commentPanel->isDrawerOpen())
+        hideCommentDrawer();
 
     m_playerPageVisible = true;
     if (m_playerBar) {
@@ -2098,6 +2145,11 @@ void MainWindow::closePlayerPage()
 {
     if (!m_playerPage || !m_playerPageVisible)
         return;
+
+    if (m_commentPanel && m_commentPanel->isDrawerOpen())
+        hideCommentDrawer();
+    if (m_playlistPanel && m_playlistPanel->isDrawerOpen())
+        hidePlaylistDrawer();
 
     const QRect area = playerPageOverlayGeometry();
     m_playerPage->setOpenTransitionActive(true);
@@ -2150,6 +2202,8 @@ void MainWindow::resizeEvent(QResizeEvent *event)
             scrim->refreshBackdrop(playlistDrawerHost(), m_playlistPanel);
         }
     }
+    if (m_commentPanel && m_commentPanel->isDrawerOpen())
+        syncCommentDrawerGeometry();
     if (m_playerBar && m_playerBar->isVisible())
         m_playerBar->relayoutChrome();
     if (m_playlistPanel && m_playlistPanel->isDrawerOpen())

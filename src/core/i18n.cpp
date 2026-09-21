@@ -70,6 +70,7 @@ static QMap<QString, QString> zhCN()
     m["unfavorite"] = QStringLiteral("取消收藏");
     m["playAll"] = QStringLiteral("播放全部");
     m["playlist"] = QStringLiteral("播放列表");
+    m["comments"] = QStringLiteral("评论");
     m["playQueue"] = QStringLiteral("播放队列");
     m["playlistSongCount"] = QStringLiteral("%1 首音乐");
     m["scrollToCurrentPlay"] = QStringLiteral("当前播放");
@@ -687,6 +688,7 @@ static QMap<QString, QString> nyaCN()
     m["unfavorite"] = QStringLiteral("不喜欢了喵...");
     m["playAll"] = QStringLiteral("全员集合，开始合唱喵！");
     m["playlist"] = QStringLiteral("咱的私藏歌单喵~");
+    m["comments"] = QStringLiteral("评论喵~");
     m["playQueue"] = QStringLiteral("播放队列喵~");
     m["playlistSongCount"] = QStringLiteral("共 %1 首歌喵");
     m["scrollToCurrentPlay"] = QStringLiteral("正在播的");
@@ -1091,6 +1093,7 @@ static QMap<QString, QString> enUS()
     m["unfavorite"] = "Unfavorite";
     m["playAll"] = "Play All";
     m["playlist"] = "Playlist";
+    m["comments"] = "Comments";
     m["playQueue"] = "Play Queue";
     m["playlistSongCount"] = "%1 songs";
     m["scrollToCurrentPlay"] = "Now Playing";

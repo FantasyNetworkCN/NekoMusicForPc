@@ -264,6 +264,14 @@ public:
     void batchAddMusicToPlaylist(int playlistId, const QList<int> &musicIds, BatchAddMusicCb cb);
     void batchAddFavorites(const QList<int> &musicIds, BatchAddMusicCb cb);
 
+    // ─── 歌曲评论（单端点 /api/comments） ────────────────
+    /** data: { total, totalComments, hasMore, comments: QVariantList } */
+    using CommentsCb = std::function<void(bool ok, const QString &message, const QVariantMap &data)>;
+    void fetchComments(int musicId, int page, int pageSize, CommentsCb cb);
+    /** parentId 为 0 表示发表新评论，否则回复该评论（楼层或楼层内回复的 id 均可） */
+    void postComment(int musicId, const QString &content, int parentId, CommentsCb cb);
+    void deleteComment(int commentId, CommentsCb cb);
+
 private:
     QNetworkAccessManager m_nam;
     QString getAuthToken() const;
