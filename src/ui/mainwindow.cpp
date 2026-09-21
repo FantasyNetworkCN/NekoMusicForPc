@@ -678,6 +678,14 @@ void MainWindow::setupUi()
     if (UserManager::instance().isLoggedIn()) {
         loadFavoritesCache();
         m_sidebar->loadPlaylists();
+        // 昵称等资料不再写进本地配置，启动时用 Token 拉一次最新信息
+        m_apiClient->fetchUserInfo([](bool ok, const QString &, const QVariantMap &user) {
+            if (!ok || user.isEmpty())
+                return;
+            UserManager::instance().applyUserInfo(user);
+            // 局域网配对按账号标签过滤，资料到位后标签才正确，重启一次广播
+            LanDeviceManager::instance().start();
+        });
     }
     connect(m_recentPage, &RecentPage::playRequested, this, &MainWindow::playMusicFromInfo);
     connect(m_recentPage, &RecentPage::playAllRequested, this, [this](const QList<MusicInfo> &results) {

@@ -517,6 +517,28 @@ void ApiClient::changeNickname(const QString &nickname, NicknameChangeCb cb) {
     });
 }
 
+void ApiClient::fetchUserInfo(UserInfoCb cb) {
+    QUrl url(QString::fromUtf8("%1/api/user/info").arg(Theme::kApiBase));
+    QNetworkRequest req(url);
+    if (UserManager::instance().isLoggedIn()) {
+        req.setRawHeader("Authorization", QString("Bearer %1").arg(UserManager::instance().token()).toUtf8());
+    }
+    auto *reply = m_nam.get(req);
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            if (cb) cb(false, reply->errorString(), QVariantMap());
+            return;
+        }
+        const QJsonObject obj = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = obj.value("success").toBool();
+        const QString message = obj.value("message").toString();
+        const QVariantMap user =
+            obj.value("data").toObject().value("user").toObject().toVariantMap();
+        if (cb) cb(ok, message, user);
+    });
+}
+
 void ApiClient::fetchPlaylists(const QString &query, PlaylistsCb cb) {
     QUrl url(QString::fromUtf8("%1/api/playlists/search").arg(Theme::kApiBase));
     QNetworkRequest req(url);

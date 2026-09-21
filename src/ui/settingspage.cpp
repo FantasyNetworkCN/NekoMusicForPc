@@ -85,6 +85,8 @@ SettingsPage::SettingsPage(ApiClient *apiClient, QWidget *parent)
             });
     connect(&UserManager::instance(), &UserManager::loginStateChanged, this,
             &SettingsPage::refreshAccountSection);
+    connect(&UserManager::instance(), &UserManager::userInfoChanged, this,
+            &SettingsPage::refreshAccountSection);
     refreshAccountSection();
 }
 

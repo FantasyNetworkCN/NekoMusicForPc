@@ -54,6 +54,10 @@ public:
     using NicknameChangeCb = std::function<void(bool ok, const QString &message, const QString &nickname)>;
     void changeNickname(const QString &nickname, NicknameChangeCb cb);
 
+    // 获取当前登录用户信息（昵称等资料不落地，启动时用它刷新）
+    using UserInfoCb = std::function<void(bool ok, const QString &message, const QVariantMap &user)>;
+    void fetchUserInfo(UserInfoCb cb);
+
     // ─── 歌单相关 ────────────────────────────────────
     using PlaylistDetailCb = std::function<void(bool, const QVariantMap&)>;
     void fetchPlaylistDetail(int playlistId, PlaylistDetailCb cb);

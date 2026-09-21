@@ -84,6 +84,8 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent)
     // 监听用户状态变化
     connect(&UserManager::instance(), &UserManager::loginStateChanged,
             this, &TitleBar::updateAvatar);
+    connect(&UserManager::instance(), &UserManager::userInfoChanged,
+            this, &TitleBar::updateAvatar);
     connect(&UserManager::instance(), &UserManager::vipStatusChanged,
             this, &TitleBar::updateVipPill);
     connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged,

@@ -41,6 +41,25 @@ void UserManager::setNickname(const QString &nickname)
     emit loginStateChanged();
 }
 
+void UserManager::applyUserInfo(const QVariantMap &userInfo)
+{
+    if (userInfo.isEmpty())
+        return;
+
+    const QVariantMap before = m_userInfo;
+    const bool vipBefore = m_isVip;
+    const QString vipExpiresBefore = m_vipExpiresAt;
+
+    m_userInfo = userInfo;
+    m_isVip = userInfo.value(QStringLiteral("isVip")).toBool();
+    m_vipExpiresAt = userInfo.value(QStringLiteral("vipExpiresAt")).toString();
+
+    if (before != m_userInfo)
+        emit userInfoChanged();
+    if (vipBefore != m_isVip || vipExpiresBefore != m_vipExpiresAt)
+        emit vipStatusChanged();
+}
+
 void UserManager::setVipStatus(bool isVip)
 {
     updateVipStatus(isVip, m_vipExpiresAt);
@@ -75,17 +94,19 @@ void UserManager::logout()
 
 void UserManager::saveToSettings()
 {
+    // 只持久化 Token；昵称等资料不落地（启动时用 /api/user/info 拉最新值），
+    // 顺便清掉旧版本残留的 userInfo 缓存。
     m_settings->setValue("auth/token", m_token);
-    m_settings->setValue("auth/userInfo", m_userInfo);
+    m_settings->remove("auth/userInfo");
     m_settings->sync();
 }
 
 void UserManager::loadFromSettings()
 {
     m_token = m_settings->value("auth/token").toString();
-    m_userInfo = m_settings->value("auth/userInfo").toMap();
-    m_isVip = m_userInfo.value(QStringLiteral("isVip")).toBool();
-    m_vipExpiresAt = m_userInfo.value(QStringLiteral("vipExpiresAt")).toString();
+    m_userInfo.clear();
+    m_isVip = false;
+    m_vipExpiresAt.clear();
     if (!m_token.isEmpty()) {
         emit loginStateChanged();
     }
