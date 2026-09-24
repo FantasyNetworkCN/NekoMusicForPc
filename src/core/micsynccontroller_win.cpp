@@ -49,7 +49,7 @@ QString bundledInstallerPath()
         QDir(appDir).filePath(QStringLiteral("nekomic-install.exe")),
     };
     for (const QString &path : candidates) {
-        if (QFileInfo::isFile(path))
+        if (QFileInfo(path).isFile())
             return path;
     }
     return {};
