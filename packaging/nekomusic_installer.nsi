@@ -20,6 +20,12 @@
   !define BUILD_DIR "${__FILEDIR__}\..\build"
 !endif
 
+; Repository-root third-party payload. Override with -DVB_CABLE_SETUP=<path>
+; in CI if the binary is staged elsewhere.
+!ifndef VB_CABLE_SETUP
+  !define VB_CABLE_SETUP "${__FILEDIR__}\..\src\resources\drivers\vb-cable\VBCABLE_Setup_x64.exe"
+!endif
+
 !macro RegisterMediaAssociation EXT MIME
     WriteRegStr HKLM "${APP_CAPABILITIES}\FileAssociations" "${EXT}" "${APP_PROGID}"
     WriteRegStr HKLM "${APP_CAPABILITIES}\MIMEAssociations" "${MIME}" "${APP_PROGID}"
@@ -107,6 +113,11 @@ Section "Neko歌姬计划" SecMain
     ; Optional: OpenSSL DLLs
     File /nonfatal "${BUILD_DIR}\libssl*.dll"
     File /nonfatal "${BUILD_DIR}\libcrypto*.dll"
+
+    ; Bundled VB-CABLE installer (redistribution authorized by the copyright
+    ; holder). Installed separately and launched on first microphone-sync use.
+    SetOutPath "$INSTDIR\drivers\nekomic"
+    File "${VB_CABLE_SETUP}"
 
     ; Create Start Menu Shortcut
     CreateDirectory "$SMPROGRAMS\Neko歌姬计划"

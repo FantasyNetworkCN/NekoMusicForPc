@@ -13,7 +13,6 @@ CMakeLists.txt.user
 # Compiled
 *.o
 *.obj
-*.exe
 *.out
 *.app
 *.so

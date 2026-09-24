@@ -5,6 +5,10 @@
 
 #include <QAudioDevice>
 #include <QMediaDevices>
+#include <QProcess>
+#include <QCoreApplication>
+#include <QFileInfo>
+#include <QDir>
 #include <QStringList>
 
 namespace {
@@ -22,6 +26,8 @@ struct VirtualCable
 const QStringList &cableNameHints()
 {
     static const QStringList hints = {
+        QStringLiteral("nekomusic mic"),
+        QStringLiteral("nekomusic virtual"),
         QStringLiteral("cable input"),            // VB-Audio Virtual Cable
         QStringLiteral("voicemeeter input"),      // VoiceMeeter
         QStringLiteral("voicemeeter aux input"),
@@ -30,6 +36,34 @@ const QStringList &cableNameHints()
         QStringLiteral("line 1 (virtual audio cable)"),
     };
     return hints;
+}
+
+QString bundledInstallerPath()
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QStringList candidates = {
+        QDir(appDir).filePath(QStringLiteral("drivers/nekomic/install.bat")),
+        QDir(appDir).filePath(QStringLiteral("drivers/nekomic/install.exe")),
+        QDir(appDir).filePath(QStringLiteral("drivers/nekomic/VBCABLE_Setup_x64.exe")),
+        QDir(appDir).filePath(QStringLiteral("VBCABLE_Setup_x64.exe")),
+        QDir(appDir).filePath(QStringLiteral("nekomic-install.exe")),
+    };
+    for (const QString &path : candidates) {
+        if (QFileInfo::isFile(path))
+            return path;
+    }
+    return {};
+}
+
+bool installBundledVirtualCable()
+{
+    const QString installer = bundledInstallerPath();
+    if (installer.isEmpty())
+        return false;
+    // The bundled installer must request elevation itself (or be an elevated
+    // helper executable). startDetached keeps the UI responsive while Windows
+    // shows the normal UAC prompt.
+    return QProcess::startDetached(installer, {});
 }
 
 bool looksLikeVirtualCable(const QString &name)
@@ -140,7 +174,12 @@ bool nekoMicSyncBackendStart(QString *error)
     if (!playerEngine())
         return fail(I18n::instance().tr(QStringLiteral("micSyncFailed")).arg(QStringLiteral("player")));
 
-    const VirtualCable cable = findVirtualCable();
+    VirtualCable cable = findVirtualCable();
+    if (cable.render.isNull()) {
+        if (installBundledVirtualCable()) {
+            return fail(I18n::instance().tr(QStringLiteral("micSyncInstallPending")));
+        }
+    }
     if (cable.render.isNull())
         return fail(I18n::instance().tr(QStringLiteral("micSyncWindowsNoCable")));
 

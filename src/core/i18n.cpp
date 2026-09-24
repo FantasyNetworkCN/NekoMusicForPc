@@ -148,6 +148,7 @@ static QMap<QString, QString> zhCN()
     m["micSyncWindowsNoCable"] = QStringLiteral(
         "未检测到虚拟声卡。Windows 需要先安装 VB-Audio Virtual Cable 或 VoiceMeeter，"
         "才能把播放声音合并进麦克风。");
+    m["micSyncInstallPending"] = QStringLiteral("正在安装 NekoMusic 虚拟麦克风。安装完成后请再次开启麦克风同步。");
     m["playModeList"] = QStringLiteral("列表循环");
     m["playModeSingle"] = QStringLiteral("单曲循环");
     m["playModeRandom"] = QStringLiteral("随机播放");
@@ -911,6 +912,7 @@ static QMap<QString, QString> nyaCN()
     m["micSyncWindowsNoCable"] = QStringLiteral(
         "没找到虚拟声卡喵。Windows 上要先装 VB-Audio Virtual Cable 或 VoiceMeeter，"
         "才能把播放声音合并进麦克风喵。");
+    m["micSyncInstallPending"] = QStringLiteral("正在安装 NekoMusic 虚拟麦克风喵，安装完成后请再开一次麦克风同步喵。");
     m["showWindow"] = QStringLiteral("快现身喵~");
     m["exitApp"] = QStringLiteral("残忍离去喵...");
 
@@ -1190,6 +1192,8 @@ static QMap<QString, QString> enUS()
     m["micSyncWindowsNoCable"] =
         "No virtual audio cable detected. Windows needs VB-Audio Virtual Cable or VoiceMeeter to merge "
         "playback into the microphone.";
+    m["micSyncInstallPending"] =
+        "Installing the bundled NekoMusic virtual microphone. Enable microphone sync again after installation.";
     m["playModeList"] = "List Loop";
     m["playModeSingle"] = "Single Loop";
     m["playModeRandom"] = "Random";
