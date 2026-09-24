@@ -2323,7 +2323,8 @@ void MainWindow::createTrayIcon()
         QAction *micSyncAction = new QAction(I18n::instance().tr(QStringLiteral("micSyncSection")), this);
         micSyncAction->setCheckable(true);
         micSyncAction->setChecked(MicSyncController::instance().isEnabled());
-        micSyncAction->setEnabled(MicSyncController::isSupported());
+        // Windows may install the bundled VB-CABLE helper when triggered.
+        micSyncAction->setEnabled(true);
         connect(micSyncAction, &QAction::triggered, this, []() {
             MicSyncController::instance().toggle();
         });

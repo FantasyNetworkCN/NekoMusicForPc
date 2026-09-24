@@ -82,9 +82,13 @@ void MicSyncController::setEnabled(bool enabled)
 
 void MicSyncController::toggle()
 {
+    // The Windows backend may install its bundled virtual cable during start;
+    // do not reject the request solely because the device is not present yet.
+#if !defined(Q_OS_WIN)
     if (!m_enabled && !isSupported()) {
         emit failed(I18n::instance().tr(QStringLiteral("micSyncUnsupported")));
         return;
     }
+#endif
     setEnabled(!m_enabled);
 }

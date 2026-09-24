@@ -823,8 +823,9 @@ void SettingsPage::refreshMicSyncRow()
     if (!m_micSyncToggle)
         return;
 
-    const bool supported = MicSyncController::isSupported();
-    m_micSyncToggle->setEnabled(supported);
+    // Windows can install the bundled VB-CABLE helper on first use, so the
+    // toggle must remain clickable even before the virtual device exists.
+    m_micSyncToggle->setEnabled(true);
     m_micSyncToggle->setChecked(MicSyncController::instance().isEnabled());
 
     if (m_micSyncHintLabel) {
