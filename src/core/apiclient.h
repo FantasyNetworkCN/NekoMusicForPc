@@ -167,6 +167,16 @@ public:
     using KugouPlaylistCb = std::function<void(bool ok, const QString &message, const KugouPlaylistInfo &playlist)>;
     void fetchKugouPlaylist(const QString &listId, KugouPlaylistCb cb);
 
+    // ─── 汽水音乐歌单导入 ────────────────────────────────────
+    struct QishuiPlaylistInfo {
+        QString playlistId;
+        QString name;
+        int trackCount = 0;
+        QList<NeteaseTrack> tracks;
+    };
+    using QishuiPlaylistCb = std::function<void(bool ok, const QString &message, const QishuiPlaylistInfo &playlist)>;
+    void fetchQishuiPlaylist(const QString &playlistId, QishuiPlaylistCb cb);
+
     // ─── 外部歌单导入（/loser/{source}/pull，SSE 进度） ────────────
     struct ExternalPullStart {
         QString source;
@@ -207,7 +217,7 @@ public:
     };
     /**
      * 发起 /loser/{source}/pull 导入：后端完成站外匹配、下载入库并加入目标歌单，进度以 SSE 推送。
-     * @param source              "netease" 或 "qq"
+     * @param source              "netease" / "qq" / "kugou" / "qishui"
      * @param externalPlaylistId  外部歌单 ID（网易云 playlistId / QQ disstid）
      * @param targetPlaylistId    站内歌单 ID（targetPlaylistName 为空时使用）
      * @param targetPlaylistName  新建站内歌单名称（非空时由后端新建歌单）

@@ -25,6 +25,7 @@
 #include "ui/neteaseimportdialog.h"
 #include "ui/qqimportdialog.h"
 #include "ui/kugouimportdialog.h"
+#include "ui/qishuiimportdialog.h"
 #include "ui/playlistpanel.h"
 #include "ui/commentpanel.h"
 #include "ui/toast.h"
@@ -766,6 +767,20 @@ void MainWindow::setupUi()
                             .arg(totalCount)
                             .arg(failCount),
                         Toast::Success);
+        });
+        dlg->exec();
+        dlg->deleteLater();
+    });
+    connect(m_sidebar, &Sidebar::qishuiImportRequested, this, [this]() {
+        if (!UserManager::instance().isLoggedIn()) {
+            Toast::show(this, I18n::instance().tr("loginRequired"), Toast::Error);
+            return;
+        }
+        auto *dlg = new QishuiImportDialog(m_apiClient, this);
+        connect(dlg, &QishuiImportDialog::importCompleted, this,
+                [this](int, int, int, bool) {
+            m_sidebar->refreshPlaylists();
+            Toast::show(this, I18n::instance().tr(QStringLiteral("importSuccess")), Toast::Success);
         });
         dlg->exec();
         dlg->deleteLater();

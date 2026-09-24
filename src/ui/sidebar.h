@@ -45,6 +45,7 @@ signals:
     void neteaseImportRequested();
     void qqImportRequested();
     void kugouImportRequested();
+    void qishuiImportRequested();
 
 protected:
     void paintEvent(QPaintEvent *) override;
@@ -78,6 +79,7 @@ private:
     QPushButton *m_importNeteaseBtn = nullptr;
     QPushButton *m_importQqBtn = nullptr;
     QPushButton *m_importKugouBtn = nullptr;
+    QPushButton *m_importQishuiBtn = nullptr;
     QTimer *m_playlistRefreshTimer = nullptr;
     QList<int> m_pendingPlaylistCoverIds;
     int m_activePlaylistCoverRequests = 0;

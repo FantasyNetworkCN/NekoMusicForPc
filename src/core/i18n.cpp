@@ -625,6 +625,12 @@ static QMap<QString, QString> zhCN()
     // --- 酷狗音乐歌单导入 ---
     m["importKugouPlaylist"] = QStringLiteral("导入酷狗音乐歌单");
     m["importKugouDesc"] = QStringLiteral("输入酷狗音乐歌单分享链接或 ID，将歌曲导入到本地歌单");
+    m["importQishuiPlaylist"] = QStringLiteral("导入汽水音乐歌单");
+    m["importQishuiDesc"] = QStringLiteral("输入汽水音乐歌单链接、短链或 ID，将歌曲导入到本地歌单");
+    m["inputQishuiLink"] = QStringLiteral("输入汽水音乐歌单链接、短链或 ID...");
+    m["invalidQishuiLink"] = QStringLiteral("无效的汽水歌单链接或 ID");
+    m["emptyQishuiPlaylist"] = QStringLiteral("汽水歌单为空");
+    m["qishuiPlaylistInfo"] = QStringLiteral("汽水歌单：%1\n歌曲数：%2");
     m["inputKugouLink"] = QStringLiteral("输入酷狗音乐歌单链接或 ID...");
     m["invalidKugouLink"] = QStringLiteral("无效的歌单链接或 ID");
     m["emptyKugouPlaylist"] = QStringLiteral("歌单为空");
@@ -1032,6 +1038,12 @@ static QMap<QString, QString> nyaCN()
     // --- 酷狗音乐歌单导入喵~ ---
     m["importKugouPlaylist"] = QStringLiteral("导入酷狗音乐歌单喵~");
     m["importKugouDesc"] = QStringLiteral("把酷狗音乐歌单链接或 ID 告诉人家，人家帮你搬过来喵~");
+    m["importQishuiPlaylist"] = QStringLiteral("导入汽水音乐歌单喵~");
+    m["importQishuiDesc"] = QStringLiteral("把汽水音乐歌单链接、短链或 ID 告诉人家，人家帮你搬过来喵~");
+    m["inputQishuiLink"] = QStringLiteral("输入汽水音乐歌单链接、短链或 ID 喵...");
+    m["invalidQishuiLink"] = QStringLiteral("这个汽水歌单链接看不懂喵...");
+    m["emptyQishuiPlaylist"] = QStringLiteral("汽水歌单空空的没有歌喵...");
+    m["qishuiPlaylistInfo"] = QStringLiteral("汽水歌单：%1\n歌曲数：%2");
     m["inputKugouLink"] = QStringLiteral("输入酷狗音乐歌单链接或 ID 喵...");
     m["invalidKugouLink"] = QStringLiteral("这个链接看不懂喵...给个正确的嘛~");
     m["emptyKugouPlaylist"] = QStringLiteral("歌单空空的没有歌喵...");
@@ -1673,6 +1685,12 @@ static QMap<QString, QString> enUS()
     // --- Kugou Music Playlist Import ---
     m["importKugouPlaylist"] = "Import Kugou Music Playlist";
     m["importKugouDesc"] = "Enter Kugou Music playlist link or ID to import songs to local playlist";
+    m["importQishuiPlaylist"] = "Import Qishui Music Playlist";
+    m["importQishuiDesc"] = "Enter Qishui playlist link, short link, or ID to import songs to local playlist";
+    m["inputQishuiLink"] = "Enter Qishui playlist link, short link, or ID...";
+    m["invalidQishuiLink"] = "Invalid Qishui playlist link or ID";
+    m["emptyQishuiPlaylist"] = "Qishui playlist is empty";
+    m["qishuiPlaylistInfo"] = "Qishui playlist: %1\nTracks: %2";
     m["inputKugouLink"] = "Enter Kugou Music playlist link or ID...";
     m["invalidKugouLink"] = "Invalid playlist link or ID";
     m["emptyKugouPlaylist"] = "Playlist is empty";

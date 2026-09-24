@@ -198,6 +198,7 @@ set(SOURCES
         src/ui/neteaseimportdialog.cpp
         src/ui/qqimportdialog.cpp
         src/ui/kugouimportdialog.cpp
+        src/ui/qishuiimportdialog.cpp
         src/ui/externalimportdialog.cpp
         src/theme/thememanager.cpp
 )
@@ -275,6 +276,7 @@ set(HEADERS
         src/ui/neteaseimportdialog.h
         src/ui/qqimportdialog.h
         src/ui/kugouimportdialog.h
+        src/ui/qishuiimportdialog.h
         src/ui/externalimportdialog.h
         src/core/systemmediacontroller.h
         src/core/defaultmusicappchecker.h

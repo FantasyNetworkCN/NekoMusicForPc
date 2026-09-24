@@ -1477,6 +1477,57 @@ void ApiClient::batchAddMusicToPlaylist(int playlistId, const QList<int> &musicI
     });
 }
 
+void ApiClient::fetchQishuiPlaylist(const QString &playlistId, QishuiPlaylistCb cb)
+{
+    QUrl url(QString::fromUtf8("%1/loser/qishui/getSongListDetail").arg(Theme::kApiBase));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("playlist_id"), playlistId);
+    url.setQuery(query);
+    QNetworkRequest req(url);
+    req.setTransferTimeout(120000);
+
+    auto *reply = m_nam.get(req);
+    connect(reply, &QNetworkReply::finished, this, [reply, cb, playlistId]() {
+        reply->deleteLater();
+        QishuiPlaylistInfo info;
+        info.playlistId = playlistId;
+
+        if (reply->error() != QNetworkReply::NoError) {
+            if (cb) cb(false, reply->errorString(), info);
+            return;
+        }
+
+        const auto root = QJsonDocument::fromJson(reply->readAll()).object();
+        const auto data = root.value(QStringLiteral("data")).toObject();
+        if (data.isEmpty()) {
+            const QString message = root.value(QStringLiteral("message")).toString();
+            if (cb) cb(false, message.isEmpty() ? QStringLiteral("响应格式错误") : message, info);
+            return;
+        }
+
+        info.playlistId = data.value(QStringLiteral("playlist_id")).toString();
+        if (info.playlistId.isEmpty()) info.playlistId = playlistId;
+        info.name = data.value(QStringLiteral("name")).toString().trimmed();
+        const auto songlist = data.value(QStringLiteral("songlist")).toArray();
+        for (const auto &trackVal : songlist) {
+            const auto track = trackVal.toObject();
+            NeteaseTrack item;
+            item.name = track.value(QStringLiteral("name")).toString().trimmed();
+            const auto singers = track.value(QStringLiteral("singer")).toArray();
+            QStringList artists;
+            for (const auto &singerVal : singers) {
+                const auto singer = singerVal.toObject();
+                const QString name = singer.value(QStringLiteral("name")).toString().trimmed();
+                if (!name.isEmpty()) artists.append(name);
+            }
+            item.artist = artists.join(QStringLiteral(" / "));
+            if (!item.name.isEmpty()) info.tracks.append(item);
+        }
+        info.trackCount = info.tracks.size();
+        if (cb) cb(true, QString(), info);
+    });
+}
+
 // ─── 外部歌单导入（/loser/{source}/pull，SSE 进度） ────────────
 
 QNetworkReply *ApiClient::pullExternalPlaylist(const QString &source,
@@ -1493,6 +1544,8 @@ QNetworkReply *ApiClient::pullExternalPlaylist(const QString &source,
         query.addQueryItem(QStringLiteral("disstid"), externalPlaylistId);
     else if (source == QLatin1String("kugou"))
         query.addQueryItem(QStringLiteral("listid"), externalPlaylistId);
+    else if (source == QLatin1String("qishui"))
+        query.addQueryItem(QStringLiteral("playlist_id"), externalPlaylistId);
     else
         query.addQueryItem(QStringLiteral("playlistId"), externalPlaylistId);
 
