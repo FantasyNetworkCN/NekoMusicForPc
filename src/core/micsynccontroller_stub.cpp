@@ -21,6 +21,11 @@ QString nekoMicSyncBackendHintKey()
     return QStringLiteral("micSyncUnsupportedHint");
 }
 
+bool nekoMicSyncBackendInstallBundled()
+{
+    return false;
+}
+
 bool nekoMicSyncBackendStart(QString *error)
 {
     if (error)

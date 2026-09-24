@@ -10,6 +10,7 @@ bool nekoMicSyncBackendAvailable();
 bool nekoMicSyncBackendStart(QString *error);
 void nekoMicSyncBackendStop();
 void nekoMicSyncBackendSetPlayer(PlayerEngine *engine);
+bool nekoMicSyncBackendInstallBundled();
 QString nekoMicSyncBackendDeviceLabel();
 QString nekoMicSyncBackendHintKey();
 
@@ -57,6 +58,11 @@ QString MicSyncController::deviceName()
 QString MicSyncController::hintKey()
 {
     return nekoMicSyncBackendHintKey();
+}
+
+bool MicSyncController::installBundledDriver()
+{
+    return nekoMicSyncBackendInstallBundled();
 }
 
 void MicSyncController::setEnabled(bool enabled)

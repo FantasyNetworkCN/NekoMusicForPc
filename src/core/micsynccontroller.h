@@ -32,6 +32,7 @@ public:
     static QString deviceName();
     /** 各平台使用说明的文案 key。 */
     static QString hintKey();
+    static bool installBundledDriver();
 
 public slots:
     void setEnabled(bool enabled);

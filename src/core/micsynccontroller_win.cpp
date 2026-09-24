@@ -66,6 +66,11 @@ bool installBundledVirtualCable()
     return QProcess::startDetached(installer, {});
 }
 
+bool nekoMicSyncBackendInstallBundled()
+{
+    return installBundledVirtualCable();
+}
+
 bool looksLikeVirtualCable(const QString &name)
 {
     const QString lower = name.toLower();
@@ -158,8 +163,6 @@ QString nekoMicSyncBackendDeviceLabel()
 
 QString nekoMicSyncBackendHintKey()
 {
-    if (!nekoMicSyncBackendAvailable())
-        return QStringLiteral("micSyncWindowsNoCable");
     return QStringLiteral("micSyncHintWindows");
 }
 

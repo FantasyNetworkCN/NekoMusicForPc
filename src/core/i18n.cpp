@@ -136,6 +136,7 @@ static QMap<QString, QString> zhCN()
     m["micSyncUnsupported"] = QStringLiteral("当前平台暂不支持麦克风同步（目前仅支持 Linux）");
     m["micSyncSection"] = QStringLiteral("麦克风同步");
     m["micSyncEnable"] = QStringLiteral("将播放声音合并进麦克风");
+    m["micSyncInstall"] = QStringLiteral("安装 VB-CABLE");
     m["micSyncHint"] = QStringLiteral(
         "开启后会把正在播放的音乐合并进默认麦克风（%1），并接管系统默认输入设备；"
         "语音 / 会议 / 直播软件无需手动改设置即可同步听到。关闭后自动还原原来的麦克风。"
@@ -143,8 +144,8 @@ static QMap<QString, QString> zhCN()
     m["micSyncUnsupportedHint"] = QStringLiteral("当前平台暂不支持麦克风同步，目前仅 Linux 可用。");
     m["micSyncHintWindows"] = QStringLiteral(
         "开启后会把本应用的播放输出切到虚拟声卡；在语音 / 会议 / 直播软件里把输入设备选为「%1」，"
-        "即可同步听到播放的音乐。关闭后自动切回原来的输出设备。需要先安装 VB-Audio Virtual Cable "
-        "或 VoiceMeeter。当前快捷键：%2（可在「快捷键」设置中修改）。");
+        "即可同步听到播放的音乐。关闭后自动切回原来的输出设备。未检测到设备时，点击右侧开关会自动安装 "
+        "随应用附带的 VB-CABLE。当前快捷键：%2（可在「快捷键」设置中修改）。");
     m["micSyncWindowsNoCable"] = QStringLiteral(
         "未检测到虚拟声卡。Windows 需要先安装 VB-Audio Virtual Cable 或 VoiceMeeter，"
         "才能把播放声音合并进麦克风。");
@@ -900,6 +901,7 @@ static QMap<QString, QString> nyaCN()
     m["micSyncUnsupported"] = QStringLiteral("这个平台还不支持麦克风同步喵（现在只有 Linux 能用）");
     m["micSyncSection"] = QStringLiteral("麦克风同步喵");
     m["micSyncEnable"] = QStringLiteral("把播放声音合并进麦克风");
+    m["micSyncInstall"] = QStringLiteral("安装 VB-CABLE 喵");
     m["micSyncHint"] = QStringLiteral(
         "开起来后会把正在放的歌合并进默认麦克风（%1）喵，还会接管系统默认输入；"
         "语音 / 会议 / 直播软件不用改设置就能听到喵。关掉后会还原原来的麦克风喵。"
@@ -1178,6 +1180,7 @@ static QMap<QString, QString> enUS()
         "Microphone sync is not supported on this platform yet (Linux only for now)";
     m["micSyncSection"] = "Microphone Sync";
     m["micSyncEnable"] = "Merge playback into the microphone";
+    m["micSyncInstall"] = "Install VB-CABLE";
     m["micSyncHint"] =
         "When enabled, the playing music is merged into your default microphone (%1) and the system default "
         "input is switched to it, so voice / meeting / streaming apps pick it up without manual setup. "

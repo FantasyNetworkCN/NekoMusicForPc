@@ -115,6 +115,7 @@ private:
     QLabel *m_micSyncEnableLabel = nullptr;
     ToggleSwitch *m_micSyncToggle = nullptr;
     QLabel *m_micSyncHintLabel = nullptr;
+    QPushButton *m_micSyncInstallBtn = nullptr;
     QLabel *m_shortcutsSectionLabel = nullptr;
     QLabel *m_shortcutPlayPauseLabel = nullptr;
     QLabel *m_shortcutPrevLabel = nullptr;

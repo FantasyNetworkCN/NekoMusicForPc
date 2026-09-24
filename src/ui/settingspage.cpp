@@ -408,6 +408,16 @@ void SettingsPage::setupUi()
         MicSyncController::instance().setEnabled(on);
     });
     micSyncRow->addWidget(m_micSyncToggle);
+    m_micSyncInstallBtn = new QPushButton(I18n::instance().tr("micSyncInstall"), generalBody);
+    m_micSyncInstallBtn->setObjectName("settingsSecondaryButton");
+    m_micSyncInstallBtn->setVisible(false);
+    connect(m_micSyncInstallBtn, &QPushButton::clicked, this, [this]() {
+        if (MicSyncController::installBundledDriver())
+            Toast::show(window(), I18n::instance().tr("micSyncInstallPending"), Toast::Info, 5000);
+        else
+            Toast::show(window(), I18n::instance().tr("micSyncWindowsNoCable"), Toast::Error, 5000);
+    });
+    micSyncRow->addWidget(m_micSyncInstallBtn);
     generalLay->addLayout(micSyncRow);
 
     m_micSyncHintLabel = new QLabel(generalBody);
@@ -827,6 +837,8 @@ void SettingsPage::refreshMicSyncRow()
     // toggle must remain clickable even before the virtual device exists.
     m_micSyncToggle->setEnabled(true);
     m_micSyncToggle->setChecked(MicSyncController::instance().isEnabled());
+    if (m_micSyncInstallBtn)
+        m_micSyncInstallBtn->setVisible(!MicSyncController::isSupported());
 
     if (m_micSyncHintLabel) {
         const QString seq = AppShortcuts::instance()
