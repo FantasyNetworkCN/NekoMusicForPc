@@ -57,6 +57,10 @@ public:
     std::function<void(const MusicInfo &)> onSongActivate;
     std::function<void(const MusicInfo &)> onSongPlayNext;
     std::function<void(const MusicInfo &, const QPoint &)> onSongContextMenu;
+    /** 统一菜单（设计稿）所需回调：页面未接管 onSongContextMenu 时，列表自己弹出统一菜单 */
+    std::function<void(const MusicInfo &)> onToggleFavorite;
+    std::function<bool(int)> isInPlayQueue;
+    std::function<void(const MusicInfo &)> onToggleQueue;
     std::function<void(int)> onUnfavorite;
     std::function<void(const MusicInfo &)> onDownload;
     std::function<void(int)> onCancelDownload;
@@ -85,6 +89,8 @@ private:
     void releaseCard(SongCardWidget *card);
     /** 按当前语言的最宽表头文案重算列宽；「时长」列同步到数据行以保持对齐。 */
     void updateHeaderColumnWidths();
+    /** 弹出统一菜单（收藏 / 播放队列 / 下载）——设计稿的三点菜单内容 */
+    void showStandardContextMenu(const MusicInfo &info, const QPoint &globalPos);
 
     static constexpr int kHeaderHeight = 40;
     static constexpr int kListPad = 0;

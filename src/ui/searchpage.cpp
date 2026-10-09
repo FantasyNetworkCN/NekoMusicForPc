@@ -16,6 +16,7 @@
 #include "ui/svgicon.h"
 #include "ui/scrollareafix.h"
 #include "ui/songcontextmenu.h"
+#include "ui/songmenubuilder.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -838,12 +839,29 @@ void SearchPage::showSongContextMenu(const MusicInfo &info, const QPoint &global
     if (info.id <= 0 && info.localPath.isEmpty())
         return;
 
+    SongMenuBuilder::State state;
+    state.favorited = m_favoritedIds.contains(info.id);
+    state.downloaded = MusicDownloadManager::instance().isDownloaded(info.id);
+    state.inPlayQueue = SongMenuBuilder::queueContains(info.id);
+
+    SongMenuBuilder::Handlers handlers;
+    handlers.toggleFavorite = [this, info]() { emit favoriteRequested(info.id); };
+    handlers.toggleQueue = [info]() { SongMenuBuilder::toggleQueue(info); };
+    handlers.download = [this, info]() { emit downloadRequested(info); };
+
+    QList<SongContextMenuPopup::Entry> entries;
+
+    // 本页特有项：下一首播放（放在统一菜单之前）
     SongContextMenuPopup::Entry nextEntry;
     nextEntry.iconName = "PlayNext";
     nextEntry.label = I18n::instance().tr(QStringLiteral("playNext"));
     nextEntry.action = [this, info]() { emit playNextRequested(info); };
+    entries.append(nextEntry);
 
-    SongContextMenuPopup::showAt(window() ? window() : this, globalPos, {nextEntry});
+    // 统一菜单（设计稿）：收藏 / 播放队列 / 下载
+    entries += SongMenuBuilder::buildStandard(info, state, handlers);
+
+    SongContextMenuPopup::showAt(window() ? window() : this, globalPos, entries);
 }
 
 int SearchPage::currentPlayingMusicId() const

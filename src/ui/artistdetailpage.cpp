@@ -100,6 +100,8 @@ void ArtistDetailPage::setupUi()
     m_songList->onSongActivate = [this](const MusicInfo &info) { emit playMusic(info); };
     m_songList->onSongPlayNext = [this](const MusicInfo &info) { emit playMusic(info); };
     m_songList->onUnfavorite = [this](int id) { emit favoriteRequested(id); };
+    // 该页的“收藏”是切换语义：统一菜单里作为「添加/取消收藏」双向入口复用
+    m_songList->onToggleFavorite = [this](const MusicInfo &info) { emit favoriteRequested(info.id); };
     m_songList->onDownload = [this](const MusicInfo &info) { emit downloadRequested(info); };
     m_songList->isFavorited = [this](int id) { return m_favoritedIds.contains(id); };
     m_songList->isDownloaded = [](int id) { return MusicDownloadManager::instance().isDownloaded(id); };

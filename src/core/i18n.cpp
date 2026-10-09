@@ -369,6 +369,7 @@ static QMap<QString, QString> zhCN()
     m["addToPlaylist"] = QStringLiteral("添加到歌单");
     m["addToLocalPlaylist"] = QStringLiteral("添加到本地歌单");
     m["addToQueue"] = QStringLiteral("添加到播放队列");
+    m["removeFromQueue"] = QStringLiteral("从播放队列移除");
     m["playNext"] = QStringLiteral("下一首播放");
     m["playNextAdded"] = QStringLiteral("已添加到下一首播放");
     m["addToPlaylistTitle"] = QStringLiteral("添加到歌单");
@@ -1498,6 +1499,7 @@ static QMap<QString, QString> enUS()
     m["addToPlaylist"] = "Add to Playlist";
     m["addToLocalPlaylist"] = "Add to Local Playlist";
     m["addToQueue"] = "Add to Queue";
+    m["removeFromQueue"] = "Remove from Queue";
     m["playNext"] = "Play Next";
     m["playNextAdded"] = "Added to play next";
     m["addToPlaylistTitle"] = "Add to Playlist";

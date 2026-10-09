@@ -1,5 +1,7 @@
 #include "songlistwidget.h"
 #include "songcardwidget.h"
+#include "songcontextmenu.h"
+#include "songmenubuilder.h"
 #include "core/i18n.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
@@ -89,6 +91,8 @@ void SongListWidget::setupUi()
     m_hdrDuration->setFixedWidth(50);
     m_hdrDuration->setAlignment(Qt::AlignCenter);
     hdrLay->addWidget(m_hdrDuration);
+    // 与数据行最右侧的「三点菜单」按钮对齐（见 SongCardWidget::m_moreBtn）
+    hdrLay->addSpacing(40);
 
     root->addWidget(m_header);
     updateHeaderColumnWidths();
@@ -457,6 +461,42 @@ void SongListWidget::syncContainerHeight()
         m_container->setFixedWidth(m_scroll->viewport()->width());
 }
 
+void SongListWidget::showStandardContextMenu(const MusicInfo &info, const QPoint &globalPos)
+{
+    if (info.id <= 0 && info.localPath.isEmpty())
+        return;
+
+    SongMenuBuilder::State state;
+    state.favorited = isFavorited ? isFavorited(info.id) : false;
+    state.downloaded = isDownloaded ? isDownloaded(info.id) : false;
+    state.inPlayQueue = isInPlayQueue ? isInPlayQueue(info.id)
+                                      : SongMenuBuilder::queueContains(info.id);
+
+    SongMenuBuilder::Handlers handlers;
+    if (onToggleFavorite)
+        handlers.toggleFavorite = [this, info]() { onToggleFavorite(info); };
+    else if (onUnfavorite && state.favorited)
+        handlers.toggleFavorite = [this, info]() { onUnfavorite(info.id); };
+    if (onToggleQueue && isInPlayQueue)
+        handlers.toggleQueue = [this, info]() { onToggleQueue(info); };
+    else
+        handlers.toggleQueue = [info]() { SongMenuBuilder::toggleQueue(info); }; // 回退到全局播放队列
+    if (onDownload && !state.downloaded)
+        handlers.download = [this, info]() { onDownload(info); };
+
+    // 没有动作的菜单项直接不显示，避免出现点了没反应的死项
+    state.canFavorite = static_cast<bool>(handlers.toggleFavorite);
+    state.canQueue = static_cast<bool>(handlers.toggleQueue);
+    state.canDownload = static_cast<bool>(handlers.download);
+
+    const QList<SongContextMenuPopup::Entry> entries =
+        SongMenuBuilder::buildStandard(info, state, handlers);
+    if (entries.isEmpty())
+        return;
+
+    SongContextMenuPopup::showAt(window() ? window() : this, globalPos, entries);
+}
+
 SongCardWidget *SongListWidget::acquireCard()
 {
     SongCardWidget *card = m_cardPool.isEmpty() ? new SongCardWidget(m_container)
@@ -518,7 +558,14 @@ void SongListWidget::updateVisibleRows()
             m_rowCards[row] = card;
             card->onActivate = onSongActivate;
             card->onPlayNext = onSongPlayNext;
-            card->onContextMenu = onSongContextMenu;
+            // 页面未接管右键菜单时，统一使用设计稿的菜单（收藏 / 播放队列 / 下载）
+            card->onContextMenu = [this](const MusicInfo &info, const QPoint &pos) {
+                if (onSongContextMenu) {
+                    onSongContextMenu(info, pos);
+                    return;
+                }
+                showStandardContextMenu(info, pos);
+            };
             card->onUnfavorite = onUnfavorite;
             card->onDownload = onDownload;
             card->onCancelDownload = onCancelDownload;

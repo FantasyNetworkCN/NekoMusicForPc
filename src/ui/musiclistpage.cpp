@@ -8,6 +8,8 @@
 #include "core/apiclient.h"
 #include "core/i18n.h"
 #include "core/musicdownloadmanager.h"
+#include "ui/songcontextmenu.h"
+#include "ui/songmenubuilder.h"
 #include "core/playlistmanager.h"
 #include "core/usermanager.h"
 #include "theme/theme.h"
@@ -800,30 +802,31 @@ void MusicListPage::setFavoritedMusicIds(const QSet<int> &ids)
 
 void MusicListPage::showSongContextMenu(const MusicInfo &info, const QPoint &globalPos)
 {
-    const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    QMenu menu(this);
-    menu.setStyleSheet(dark
-                           ? QStringLiteral(
-                                 "QMenu { background: #2a2a2a; border: 1px solid rgba(255,255,255,0.1);"
-                                 " border-radius: 8px; padding: 6px 0; }"
-                                 "QMenu::item { color: #eee; padding: 10px 20px; }"
-                                 "QMenu::item:selected { background: rgba(230,57,80,0.2); }")
-                           : QStringLiteral(
-                                 "QMenu { background: #fff; border: 1px solid rgba(33,37,41,0.12);"
-                                 " border-radius: 8px; padding: 6px 0; }"
-                                 "QMenu::item { color: #212529; padding: 10px 20px; }"
-                                 "QMenu::item:selected { background: rgba(230,57,80,0.12); }"));
+    if (info.id <= 0 && info.localPath.isEmpty())
+        return;
 
-    QAction *queueAct = menu.addAction(I18n::instance().tr("addToQueue"));
-    QAction *plAct = menu.addAction(I18n::instance().tr("addToPlaylist"));
-    QAction *dlAct = menu.addAction(I18n::instance().tr("downloadMusic"));
-    QAction *picked = menu.exec(globalPos);
-    if (picked == queueAct)
-        emit addToQueue(info);
-    else if (picked == plAct)
-        emit addToPlaylist(info);
-    else if (picked == dlAct)
-        emit downloadRequested(info);
+    // 统一菜单（设计稿）：收藏 / 播放队列 / 下载，全站同一套
+    SongMenuBuilder::State state;
+    state.favorited = m_favoritedIds.contains(info.id);
+    state.downloaded = MusicDownloadManager::instance().isDownloaded(info.id);
+    state.inPlayQueue = SongMenuBuilder::queueContains(info.id);
+
+    SongMenuBuilder::Handlers handlers;
+    handlers.toggleFavorite = [this, info]() { emit favoriteRequested(info.id); };
+    handlers.toggleQueue = [info]() { SongMenuBuilder::toggleQueue(info); };
+    handlers.download = [this, info]() { emit downloadRequested(info); };
+
+    QList<SongContextMenuPopup::Entry> entries =
+        SongMenuBuilder::buildStandard(info, state, handlers);
+
+    // 本页特有项追加在统一菜单之后
+    SongContextMenuPopup::Entry playlistEntry;
+    playlistEntry.iconName = "AddList";
+    playlistEntry.label = I18n::instance().tr(QStringLiteral("addToPlaylist"));
+    playlistEntry.action = [this, info]() { emit addToPlaylist(info); };
+    entries.append(playlistEntry);
+
+    SongContextMenuPopup::showAt(window() ? window() : this, globalPos, entries);
 }
 
 void MusicListPage::paintEvent(QPaintEvent *event)
