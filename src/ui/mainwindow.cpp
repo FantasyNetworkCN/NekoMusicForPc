@@ -28,6 +28,7 @@
 #include "ui/qishuiimportdialog.h"
 #include "ui/playlistpanel.h"
 #include "ui/commentpanel.h"
+#include "ui/notificationpanel.h"
 #include "ui/toast.h"
 #include "ui/updatedialog.h"
 #include "ui/defaultmusicplayerdialog.h"
@@ -45,6 +46,7 @@
 #include "core/musicdownloader.h"
 #include "core/musicurlresolver.h"
 #include "core/musicdownloadmanager.h"
+#include "core/notificationcenter.h"
 #include "core/linuxtmpfscache.h"
 #include "core/usermanager.h"
 #include "core/playlistdb.h"
@@ -564,6 +566,16 @@ void MainWindow::setupUi()
 
     m_playlistPanel = new PlaylistPanel(central);
     m_playlistScrim = new PlaylistDrawerScrim(central);
+
+    // 消息中心抽屉：铃铛入口在标题栏，实时增量由 SSE 推送（未读数不做轮询）
+    m_notificationPanel = new NotificationPanel(m_apiClient, central);
+    connect(m_notificationPanel, &NotificationPanel::hideRequested, this,
+            &MainWindow::hideNotificationDrawer);
+    connect(m_notificationPanel, &NotificationPanel::messageActivated, this,
+            &MainWindow::openNotificationTarget);
+    NotificationCenter::instance().setApiClient(m_apiClient);
+    connect(&NotificationCenter::instance(), &NotificationCenter::unreadChanged, m_titleBar,
+            &TitleBar::setUnreadCount);
     static_cast<PlaylistDrawerScrim *>(m_playlistScrim)->onClicked = [this]() { hidePlaylistDrawer(); };
     connect(m_playlistPanel, &PlaylistPanel::hideRequested, this, &MainWindow::hidePlaylistDrawer);
     connect(m_playlistPanel, &PlaylistPanel::drawerClosed, this, [this]() {
@@ -799,6 +811,8 @@ void MainWindow::setupUi()
         m_vipPage->refresh();
         switchPage(m_vipPage);
     });
+    connect(m_titleBar, &TitleBar::notificationsClicked, this,
+            &MainWindow::toggleNotificationDrawer);
     connect(m_settingsPage, &SettingsPage::languageChanged, m_homePage, &HomePage::retranslate);
     connect(m_settingsPage, &SettingsPage::languageChanged, m_sidebar, &Sidebar::retranslate);
     connect(m_settingsPage, &SettingsPage::languageChanged, m_titleBar, &TitleBar::retranslate);
@@ -807,6 +821,8 @@ void MainWindow::setupUi()
     connect(m_settingsPage, &SettingsPage::languageChanged, m_favoritesPage, &FavoritesPage::retranslate);
     connect(m_settingsPage, &SettingsPage::languageChanged, m_recentPage, &RecentPage::retranslate);
     connect(m_settingsPage, &SettingsPage::languageChanged, m_downloadPage, &DownloadPage::retranslate);
+    connect(m_settingsPage, &SettingsPage::languageChanged, m_notificationPanel,
+            &NotificationPanel::retranslate);
 
     // 音乐加载器连接 — 由各播放方法按需单独连接
 
@@ -1754,12 +1770,82 @@ void MainWindow::toggleCommentDrawer(int musicId)
         hideCommentDrawer();
         return;
     }
+    showCommentDrawerFor(musicId);
+}
+
+/** 无条件打开某首歌的评论抽屉（与 toggleCommentDrawer 共用，消息中心跳转用）。 */
+void MainWindow::showCommentDrawerFor(int musicId)
+{
+    if (!m_commentPanel)
+        return;
     if (m_playlistPanel && m_playlistPanel->isDrawerOpen())
         hidePlaylistDrawer();
+    hideNotificationDrawer();
     syncCommentDrawerGeometry();
     m_commentPanel->openFor(musicId);
     m_commentPanel->show();
     m_commentPanel->raise();
+}
+
+void MainWindow::syncNotificationDrawerGeometry()
+{
+    if (!m_notificationPanel)
+        return;
+    QWidget *host = playlistDrawerHost();
+    if (!host)
+        return;
+    if (m_notificationPanel->parentWidget() != host)
+        m_notificationPanel->setParent(host);
+    m_notificationPanel->syncToHost();
+    if (m_notificationPanel->isDrawerOpen()) {
+        m_notificationPanel->show();
+        m_notificationPanel->raise();
+    }
+}
+
+void MainWindow::toggleNotificationDrawer()
+{
+    if (!m_notificationPanel)
+        return;
+    if (m_notificationPanel->isDrawerOpen()) {
+        hideNotificationDrawer();
+        return;
+    }
+    if (!UserManager::instance().isLoggedIn()) {
+        Toast::show(this, I18n::instance().tr(QStringLiteral("notificationsLoginHint")),
+                    Toast::Info);
+        return;
+    }
+    if (m_playlistPanel && m_playlistPanel->isDrawerOpen())
+        hidePlaylistDrawer();
+    hideCommentDrawer();
+    syncNotificationDrawerGeometry();
+    m_notificationPanel->openDrawer();
+    m_notificationPanel->raise();
+}
+
+void MainWindow::hideNotificationDrawer()
+{
+    if (m_notificationPanel && m_notificationPanel->isDrawerOpen())
+        m_notificationPanel->closeDrawer();
+}
+
+/**
+ * 消息中心点击一条消息：站内跳转路径形如 `/detail/{musicId}`。
+ *
+ * 客户端没有 web 的详情页路由，对应的「详情」就是这首歌的评论抽屉——消息本身
+ * 也是评论回复，直接把评论区打开最贴合上下文，且不会打断当前播放。
+ */
+void MainWindow::openNotificationTarget(const QVariantMap &item)
+{
+    const QString link = item.value(QStringLiteral("link")).toString().trimmed();
+    static const QString prefix = QStringLiteral("/detail/");
+    if (!link.startsWith(prefix))
+        return;
+    bool ok = false;
+    const int musicId = link.mid(prefix.size()).section(QLatin1Char('/'), 0, 0).toInt(&ok);
+    if (ok && musicId > 0)
+        showCommentDrawerFor(musicId);
 }
 
 void MainWindow::togglePlaylistPanel()
@@ -2350,6 +2436,8 @@ void MainWindow::resizeEvent(QResizeEvent *event)
     }
     if (m_commentPanel && m_commentPanel->isDrawerOpen())
         syncCommentDrawerGeometry();
+    if (m_notificationPanel && m_notificationPanel->isDrawerOpen())
+        syncNotificationDrawerGeometry();
     if (m_playerBar && m_playerBar->isVisible())
         m_playerBar->relayoutChrome();
     if (m_playlistPanel && m_playlistPanel->isDrawerOpen())

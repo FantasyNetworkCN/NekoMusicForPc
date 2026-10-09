@@ -93,6 +93,7 @@ bool isReplayProtected(const QNetworkRequest &request, QNetworkAccessManager::Op
         QStringLiteral("/api/music/ranking"),
         QStringLiteral("/api/payment/zpay/notify"),
         QStringLiteral("/api/user/qrlogin/status"),
+        QStringLiteral("/api/user/notifications/stream"), // 站内消息 SSE：长连接不能被整包缓冲
     };
     if (exemptPaths.contains(path))
         return false;

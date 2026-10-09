@@ -189,6 +189,7 @@ set(SOURCES
         src/core/apiclient.cpp
         src/core/nekonetworkaccessmanager.cpp
         src/core/replaynonce.cpp
+        src/core/notificationcenter.cpp
         src/core/musicurlresolver.cpp
         src/core/i18n.cpp
         src/core/legaltext.cpp
@@ -220,6 +221,7 @@ set(SOURCES
         src/ui/lineinputdialog.cpp
         src/ui/playlistpanel.cpp
         src/ui/commentpanel.cpp
+        src/ui/notificationpanel.cpp
         src/ui/updatedialog.cpp
         src/ui/defaultmusicplayerdialog.cpp
         src/ui/searchpage.cpp
@@ -274,6 +276,7 @@ set(HEADERS
         src/core/apiclient.h
         src/core/nekonetworkaccessmanager.h
         src/core/replaynonce.h
+        src/core/notificationcenter.h
         src/core/musicurlresolver.h
         src/core/httpprotocollabel.h
         src/core/i18n.h
@@ -304,6 +307,7 @@ set(HEADERS
         src/ui/lineinputdialog.h
         src/ui/playlistpanel.h
         src/ui/commentpanel.h
+        src/ui/notificationpanel.h
         src/ui/updatedialog.h
         src/ui/defaultmusicplayerdialog.h
         src/ui/searchpage.h

@@ -290,7 +290,24 @@ void TitleBar::setupUi()
 
     lay->addSpacing(10);
 
+    // 消息中心：铃铛 + 未读红点（未读数由 SSE 推送，无轮询）
+    m_notifyBtn = new QPushButton(this);
+    m_notifyBtn->setObjectName("tbIconBtn");
+    m_notifyBtn->setFixedSize(36, 36);
+    m_notifyBtn->setIcon(Icons::iconNamed("Bell", 18, iconNormal(), iconActive()));
+    m_notifyBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_notifyBtn, &QPushButton::clicked, this, &TitleBar::notificationsClicked);
+    m_notifyBadge = new QLabel(m_notifyBtn);
+    m_notifyBadge->setObjectName("tbNotifyBadge");
+    m_notifyBadge->setAlignment(Qt::AlignCenter);
+    m_notifyBadge->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    m_notifyBadge->hide();
+    lay->addWidget(m_notifyBtn, 0, Qt::AlignVCenter);
+
+    lay->addSpacing(4);
+
     auto *settingsBtn = new QPushButton(this);
+    m_settingsBtn = settingsBtn;
     settingsBtn->setObjectName("tbIconBtn");
     settingsBtn->setFixedSize(36, 36);
     settingsBtn->setIcon(Icons::iconNamed("Settings", 18, iconNormal(), iconActive()));
@@ -341,11 +358,46 @@ void TitleBar::retranslate()
     auto *search = findChild<QLineEdit *>("tbSearchInner");
     if (search) search->setPlaceholderText(I18n::instance().tr("searchPlaceholder"));
 
-    auto *settingsBtn = findChild<QPushButton *>("tbIconBtn");
-    if (settingsBtn) settingsBtn->setToolTip(I18n::instance().tr("settings"));
+    // 铃铛与设置按钮同为 tbIconBtn 样式，只能用成员指针区分（findChild 会拿到先建的那个）
+    if (m_settingsBtn) m_settingsBtn->setToolTip(I18n::instance().tr("settings"));
+    updateNotifyBadge();
 
     updateAvatar();
     updateVipPill();
+}
+
+void TitleBar::setUnreadCount(int unread)
+{
+    const int next = qMax(0, unread);
+    if (next == m_unreadCount)
+        return;
+    m_unreadCount = next;
+    updateNotifyBadge();
+}
+
+void TitleBar::updateNotifyBadge()
+{
+    if (!m_notifyBtn || !m_notifyBadge)
+        return;
+
+    m_notifyBtn->setToolTip(
+        I18n::instance().tr(QStringLiteral("notificationsTooltip")).arg(m_unreadCount));
+    if (m_unreadCount <= 0) {
+        m_notifyBadge->hide();
+        return;
+    }
+
+    m_notifyBadge->setText(m_unreadCount > 99 ? QStringLiteral("99+")
+                                              : QString::number(m_unreadCount));
+    m_notifyBadge->setStyleSheet(QStringLiteral(
+        "QLabel#tbNotifyBadge { background: #E63950; color: #ffffff; border-radius: 8px; "
+        "font-size: 10px; font-weight: 700; padding: 0 4px; }"));
+    m_notifyBadge->adjustSize();
+    const int w = qMax(16, m_notifyBadge->width());
+    m_notifyBadge->setFixedSize(w, 16);
+    m_notifyBadge->move(m_notifyBtn->width() - w, 0);
+    m_notifyBadge->raise();
+    m_notifyBadge->show();
 }
 
 void TitleBar::resizeEvent(QResizeEvent *event)

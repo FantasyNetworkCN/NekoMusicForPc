@@ -12,6 +12,7 @@
 #include <QEvent>
 #include <QUrl>
 #include <QList>
+#include <QVariantMap>
 #include <QStackedWidget>
 #include <QSystemTrayIcon>
 #include <QPixmap>
@@ -40,6 +41,7 @@ class PlaylistDetailPage;
 class AddToPlaylistDialog;
 class PlaylistPanel;
 class CommentPanel;
+class NotificationPanel;
 class SearchPage;
 class ArtistDetailPage;
 class VipPage;
@@ -105,6 +107,12 @@ private:
     void togglePlaylistPanel();
     void toggleCommentDrawer(int musicId);
     void hideCommentDrawer();
+    void showCommentDrawerFor(int musicId);
+    void toggleNotificationDrawer();
+    void hideNotificationDrawer();
+    void syncNotificationDrawerGeometry();
+    /** 消息中心点击一条消息：按 link 跳到对应内容 */
+    void openNotificationTarget(const QVariantMap &item);
     void showPlaylistDrawer();
     void hidePlaylistDrawer();
     QWidget *playlistDrawerHost() const;
@@ -180,6 +188,7 @@ private:
     VipPage *m_vipPage = nullptr;
     PlaylistPanel *m_playlistPanel = nullptr;
     CommentPanel *m_commentPanel = nullptr;
+    NotificationPanel *m_notificationPanel = nullptr;
     QWidget *m_playlistScrim = nullptr;
     PlayerBar *m_playerBar = nullptr;
     QWidget *m_midWidget = nullptr;

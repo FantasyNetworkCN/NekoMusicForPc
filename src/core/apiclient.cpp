@@ -1907,3 +1907,93 @@ void ApiClient::deleteComment(int commentId, CommentsCb cb)
         if (cb) cb(ok, message, data);
     });
 }
+
+// ─── 站内消息（/api/user/notifications/*） ───────────────────
+
+void ApiClient::fetchNotifications(int since, int before, int limit, NotificationsCb cb)
+{
+    QUrl url(QString::fromUtf8("%1/api/user/notifications").arg(QString::fromUtf8(Theme::kApiBase)));
+    QUrlQuery query;
+    if (since > 0)
+        query.addQueryItem(QStringLiteral("since"), QString::number(since));
+    if (before > 0)
+        query.addQueryItem(QStringLiteral("before"), QString::number(before));
+    if (limit > 0)
+        query.addQueryItem(QStringLiteral("limit"), QString::number(limit));
+    if (!query.isEmpty())
+        url.setQuery(query);
+
+    QNetworkRequest req(url);
+    req.setRawHeader("Authorization", UserManager::instance().token().toUtf8());
+
+    auto *reply = m_nam.get(req);
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = reply->error() == QNetworkReply::NoError && root.value("success").toBool();
+        const QString message = root.value("message").toString();
+        const QVariantMap data = root.value("data").toObject().toVariantMap();
+        if (cb) cb(ok, message, data);
+    });
+}
+
+void ApiClient::markNotificationsRead(const QList<int> &ids, NotificationsCb cb)
+{
+    QUrl url(QString::fromUtf8("%1/api/user/notifications/read").arg(QString::fromUtf8(Theme::kApiBase)));
+
+    QJsonArray idArray;
+    for (int id : ids)
+        idArray.append(id);
+    QJsonObject body;
+    body["ids"] = idArray;
+
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    req.setRawHeader("Authorization", UserManager::instance().token().toUtf8());
+
+    auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = reply->error() == QNetworkReply::NoError && root.value("success").toBool();
+        const QString message = root.value("message").toString();
+        const QVariantMap data = root.value("data").toObject().toVariantMap();
+        if (cb) cb(ok, message, data);
+    });
+}
+
+QNetworkReply *ApiClient::streamNotifications(NotificationsReadyCb onReady,
+                                             NotificationsMessageCb onMessage)
+{
+    QUrl url(QString::fromUtf8("%1/api/user/notifications/stream").arg(QString::fromUtf8(Theme::kApiBase)));
+
+    QNetworkRequest req(url);
+    req.setRawHeader("Accept", "text/event-stream");
+    req.setRawHeader("Authorization", UserManager::instance().token().toUtf8());
+    req.setTransferTimeout(0); // SSE 长连接，禁用传输超时
+
+    QNetworkReply *reply = m_nam.get(req);
+
+    auto buffer = std::make_shared<QByteArray>();
+    auto eventName = std::make_shared<QString>();
+    auto payload = std::make_shared<QByteArray>();
+
+    connect(reply, &QNetworkReply::readyRead, this,
+            [reply, buffer, eventName, payload, onReady, onMessage]() {
+                buffer->append(reply->readAll());
+                consumeSseChunk(*buffer, *eventName, *payload,
+                                [onReady, onMessage](const QString &name, const QByteArray &data) {
+                                    const QJsonObject obj = QJsonDocument::fromJson(data).object();
+                                    if (name == QLatin1String("ready")) {
+                                        if (onReady)
+                                            onReady(obj.value(QStringLiteral("unread")).toInt(),
+                                                    obj.value(QStringLiteral("latestId")).toInt());
+                                    } else if (name == QLatin1String("message")) {
+                                        if (onMessage)
+                                            onMessage(obj.toVariantMap());
+                                    }
+                                });
+            });
+
+    return reply;
+}

@@ -682,6 +682,16 @@ static QMap<QString, QString> zhCN()
     m["parseRecentPlayListFailed"] = QStringLiteral("解析最近播放列表失败");
     m["parseMusicFailed"] = QStringLiteral("解析音乐失败");
 
+    // --- 站内消息 ---
+    m["notificationsTitle"] = QStringLiteral("消息中心");
+    m["notificationsTooltip"] = QStringLiteral("消息中心（%1 条未读）");
+    m["notificationsUnreadFmt"] = QStringLiteral("%1 条未读");
+    m["notificationsAllRead"] = QStringLiteral("没有未读消息");
+    m["notificationsEmptyHint"] = QStringLiteral("暂无消息\n有人回复你的评论时，会在这里提醒你");
+    m["notificationsLoginHint"] = QStringLiteral("登录后即可查看消息");
+    m["markAllRead"] = QStringLiteral("全部已读");
+    m["loadEarlierMessages"] = QStringLiteral("加载更早的消息");
+
     return m;
 }
 
@@ -1080,6 +1090,16 @@ static QMap<QString, QString> nyaCN()
     m["addingToPlaylist"] = QStringLiteral("正在添加 %1 首歌曲到歌单喵...");
     m["addToPlaylistFailed"] = QStringLiteral("添加到歌单失败了喵...");
     m["importSuccess"] = QStringLiteral("导入成功喵！添加了 %1 首，共 %2 首，%3 首没找到喵~");
+
+    // --- 站内消息喵~ ---
+    m["notificationsTitle"] = QStringLiteral("消息小屋喵~");
+    m["notificationsTooltip"] = QStringLiteral("消息小屋里有 %1 条没看的喵~");
+    m["notificationsUnreadFmt"] = QStringLiteral("有 %1 条还没看喵~");
+    m["notificationsAllRead"] = QStringLiteral("全都看完啦喵~");
+    m["notificationsEmptyHint"] = QStringLiteral("什么消息都没有喵...\n有人回复你的评论就会跑来这里告诉你喵~");
+    m["notificationsLoginHint"] = QStringLiteral("先登录才看得到消息喵~");
+    m["markAllRead"] = QStringLiteral("全部看完喵~");
+    m["loadEarlierMessages"] = QStringLiteral("把更早的消息翻出来喵~");
 
     // --- QQ 音乐歌单导入喵~ ---
     m["importQqPlaylist"] = QStringLiteral("导入QQ音乐歌单喵~");
@@ -1785,6 +1805,16 @@ static QMap<QString, QString> enUS()
     m["invalidKugouLink"] = "Invalid playlist link or ID";
     m["emptyKugouPlaylist"] = "Playlist is empty";
     m["kugouPlaylistInfo"] = "Playlist: %1 (%2 songs)";
+
+    // --- In-app notifications ---
+    m["notificationsTitle"] = "Notifications";
+    m["notificationsTooltip"] = "Notifications (%1 unread)";
+    m["notificationsUnreadFmt"] = "%1 unread";
+    m["notificationsAllRead"] = "You're all caught up";
+    m["notificationsEmptyHint"] = "No messages yet\nReplies to your comments will show up here";
+    m["notificationsLoginHint"] = "Sign in to view your messages";
+    m["markAllRead"] = "Mark all read";
+    m["loadEarlierMessages"] = "Load earlier messages";
 
     return m;
 }

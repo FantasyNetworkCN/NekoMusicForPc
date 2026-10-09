@@ -287,6 +287,27 @@ public:
     void postComment(int musicId, const QString &content, int parentId, CommentsCb cb);
     void deleteComment(int commentId, CommentsCb cb);
 
+    // ─── 站内消息（/api/user/notifications/*） ────────────
+    /**
+     * 收件箱列表。`since > 0` 补拉更新的消息，`before > 0` 翻更早的历史，`limit <= 0` 用服务端默认值。
+     * data: { items: QVariantList, unread, hasMore, latestId }
+     */
+    using NotificationsCb = std::function<void(bool ok, const QString &message, const QVariantMap &data)>;
+    void fetchNotifications(int since, int before, int limit, NotificationsCb cb);
+    /** 标记已读：`ids` 为空表示全部已读。data: { updated, unread } */
+    void markNotificationsRead(const QList<int> &ids, NotificationsCb cb);
+    /**
+     * 订阅站内消息实时推送（SSE 长连接）。
+     *
+     * 连上先回调 `onReady(unread, latestId)`，此后每来一条新消息回调 `onMessage(item)`
+     * （结构与列表里的单条一致）。连接由服务端到点主动关闭，调用方负责重连；
+     * 该路径不需要 nonce（浏览器 EventSource 无法带请求头，服务端同样豁免）。
+     * 返回底层请求，可用于取消。
+     */
+    using NotificationsReadyCb = std::function<void(int unread, int latestId)>;
+    using NotificationsMessageCb = std::function<void(const QVariantMap &item)>;
+    QNetworkReply *streamNotifications(NotificationsReadyCb onReady, NotificationsMessageCb onMessage);
+
 private:
     NekoNetworkAccessManager m_nam;
     QString getAuthToken() const;
