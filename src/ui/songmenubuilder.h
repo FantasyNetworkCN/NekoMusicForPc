@@ -33,10 +33,14 @@ struct State {
 
 /** 菜单项动作；为空表示该项不可用（不显示） */
 struct Handlers {
+    std::function<void()> playNext;       ///< 下一首播放（排在最前）
     std::function<void()> toggleFavorite;
     std::function<void()> toggleQueue;
     std::function<void()> download;
 };
+
+/** 下一首播放的标准实现（对接全局 PlaylistManager）。 */
+void playNextNow(const MusicInfo &info);
 
 /**
  * 生成标准菜单项。

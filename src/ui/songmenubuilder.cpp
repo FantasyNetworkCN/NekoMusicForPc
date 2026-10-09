@@ -19,6 +19,15 @@ QList<SongContextMenuPopup::Entry> buildStandard(const MusicInfo &info, const St
     if (!hasTarget)
         return entries;
 
+    // 0) 下一首播放（统一放在最前）
+    if (handlers.playNext) {
+        SongContextMenuPopup::Entry e;
+        e.iconName = "PlayNext";
+        e.label = i18n.tr(QStringLiteral("playNext"));
+        e.action = handlers.playNext;
+        entries.append(e);
+    }
+
     // 1) 添加 / 移除收藏
     if (handlers.toggleFavorite && state.canFavorite) {
         SongContextMenuPopup::Entry e;
@@ -49,6 +58,13 @@ QList<SongContextMenuPopup::Entry> buildStandard(const MusicInfo &info, const St
     }
 
     return entries;
+}
+
+void playNextNow(const MusicInfo &info)
+{
+    if (info.id <= 0 && info.localPath.isEmpty())
+        return;
+    PlaylistManager::instance().playNext(info);
 }
 
 bool queueContains(int musicId)

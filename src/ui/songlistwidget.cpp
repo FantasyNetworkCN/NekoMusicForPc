@@ -473,6 +473,7 @@ void SongListWidget::showStandardContextMenu(const MusicInfo &info, const QPoint
                                       : SongMenuBuilder::queueContains(info.id);
 
     SongMenuBuilder::Handlers handlers;
+    handlers.playNext = [info]() { SongMenuBuilder::playNextNow(info); }; // 下一首播放（全局实现）
     if (onToggleFavorite)
         handlers.toggleFavorite = [this, info]() { onToggleFavorite(info); };
     else if (onUnfavorite && state.favorited)

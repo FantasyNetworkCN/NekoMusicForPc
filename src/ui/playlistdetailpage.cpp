@@ -780,20 +780,14 @@ void PlaylistDetailPage::showSongContextMenu(const MusicInfo &info, const QPoint
 
     QList<SongContextMenuPopup::Entry> entries;
 
-    // 本页特有项①：下一首播放（放在统一菜单之前）
-    SongContextMenuPopup::Entry nextEntry;
-    nextEntry.iconName = "PlayNext";
-    nextEntry.label = I18n::instance().tr(QStringLiteral("playNext"));
-    nextEntry.action = [this, info]() { emit playNextRequested(info); };
-    entries.append(nextEntry);
-
-    // 统一菜单（设计稿）：收藏 / 播放队列 / 下载
+    // 统一菜单（设计稿）：下一首播放 / 收藏 / 播放队列 / 下载
     SongMenuBuilder::State state;
     state.favorited = m_favoritedIds.contains(info.id);
     state.downloaded = MusicDownloadManager::instance().isDownloaded(info.id);
     state.inPlayQueue = SongMenuBuilder::queueContains(info.id);
 
     SongMenuBuilder::Handlers handlers;
+    handlers.playNext = [this, info]() { emit playNextRequested(info); };
     handlers.toggleFavorite = [this, info]() { emit favoriteRequested(info.id); };
     handlers.toggleQueue = [info]() { SongMenuBuilder::toggleQueue(info); };
     handlers.download = [this, info]() { emit downloadRequested(info); };
