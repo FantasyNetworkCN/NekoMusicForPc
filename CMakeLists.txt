@@ -277,6 +277,7 @@ set(HEADERS
         src/core/nekonetworkaccessmanager.h
         src/core/replaynonce.h
         src/core/notificationcenter.h
+        src/core/systemnotifier.h
         src/core/musicurlresolver.h
         src/core/httpprotocollabel.h
         src/core/i18n.h
@@ -326,6 +327,7 @@ if(NEKO_TARGET_WINDOWS)
     list(APPEND SOURCES src/core/defaultmusicappchecker_win.cpp)
     list(APPEND SOURCES src/core/globalshortcutcontroller_win.cpp)
     list(APPEND SOURCES src/core/micsynccontroller_win.cpp)
+    list(APPEND SOURCES src/core/systemnotifier_stub.cpp)
     set_source_files_properties(
         src/core/globalshortcutportal_linux.h
         src/core/globalshortcutportal_linux.cpp
@@ -336,16 +338,19 @@ elseif(NEKO_TARGET_APPLE)
     list(APPEND SOURCES src/core/systemmediacontroller_mac.mm)
     list(APPEND SOURCES src/core/defaultmusicappchecker_mac.mm)
     list(APPEND SOURCES src/core/micsynccontroller_stub.cpp)
+    list(APPEND SOURCES src/core/systemnotifier_stub.cpp)
 elseif(NEKO_TARGET_UNIX)
     list(APPEND SOURCES src/core/systemmediacontroller_linux.cpp)
     list(APPEND SOURCES src/core/defaultmusicappchecker_linux.cpp)
     list(APPEND SOURCES src/core/globalshortcutportal_linux.cpp)
     list(APPEND SOURCES src/core/globalshortcutcontroller_linux.cpp)
     list(APPEND SOURCES src/core/micsynccontroller_linux.cpp)
+    list(APPEND SOURCES src/core/systemnotifier_linux.cpp)
 else()
     list(APPEND SOURCES src/core/systemmediacontroller_stub.cpp)
     list(APPEND SOURCES src/core/defaultmusicappchecker_stub.cpp)
     list(APPEND SOURCES src/core/micsynccontroller_stub.cpp)
+    list(APPEND SOURCES src/core/systemnotifier_stub.cpp)
 endif()
 
 if(WIN32)

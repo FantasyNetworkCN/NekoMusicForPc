@@ -691,6 +691,9 @@ static QMap<QString, QString> zhCN()
     m["notificationsLoginHint"] = QStringLiteral("登录后即可查看消息");
     m["markAllRead"] = QStringLiteral("全部已读");
     m["loadEarlierMessages"] = QStringLiteral("加载更早的消息");
+    m["notifyActionView"] = QStringLiteral("查看");
+    m["systemNotifyEnable"] = QStringLiteral("系统通知");
+    m["systemNotifyHint"] = QStringLiteral("有人回复你的评论时，除应用内提醒外也弹出桌面通知");
 
     return m;
 }
@@ -1100,6 +1103,9 @@ static QMap<QString, QString> nyaCN()
     m["notificationsLoginHint"] = QStringLiteral("先登录才看得到消息喵~");
     m["markAllRead"] = QStringLiteral("全部看完喵~");
     m["loadEarlierMessages"] = QStringLiteral("把更早的消息翻出来喵~");
+    m["notifyActionView"] = QStringLiteral("看看喵~");
+    m["systemNotifyEnable"] = QStringLiteral("电脑通知喵~");
+    m["systemNotifyHint"] = QStringLiteral("有人回你评论的时候，桌面上也会弹出来喵~");
 
     // --- QQ 音乐歌单导入喵~ ---
     m["importQqPlaylist"] = QStringLiteral("导入QQ音乐歌单喵~");
@@ -1815,6 +1821,9 @@ static QMap<QString, QString> enUS()
     m["notificationsLoginHint"] = "Sign in to view your messages";
     m["markAllRead"] = "Mark all read";
     m["loadEarlierMessages"] = "Load earlier messages";
+    m["notifyActionView"] = "View";
+    m["systemNotifyEnable"] = "Desktop notifications";
+    m["systemNotifyHint"] = "Also pop a desktop notification when someone replies to your comment";
 
     return m;
 }

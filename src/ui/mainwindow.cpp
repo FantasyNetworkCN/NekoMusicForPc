@@ -47,6 +47,7 @@
 #include "core/musicurlresolver.h"
 #include "core/musicdownloadmanager.h"
 #include "core/notificationcenter.h"
+#include "core/systemnotifier.h"
 #include "core/linuxtmpfscache.h"
 #include "core/usermanager.h"
 #include "core/playlistdb.h"
@@ -576,6 +577,10 @@ void MainWindow::setupUi()
     NotificationCenter::instance().setApiClient(m_apiClient);
     connect(&NotificationCenter::instance(), &NotificationCenter::unreadChanged, m_titleBar,
             &TitleBar::setUnreadCount);
+    connect(&NotificationCenter::instance(), &NotificationCenter::messageReceived, this,
+            &MainWindow::showSystemNotification);
+    connect(&SystemNotifier::instance(), &SystemNotifier::clicked, this,
+            &MainWindow::onSystemNotificationClicked);
     static_cast<PlaylistDrawerScrim *>(m_playlistScrim)->onClicked = [this]() { hidePlaylistDrawer(); };
     connect(m_playlistPanel, &PlaylistPanel::hideRequested, this, &MainWindow::hidePlaylistDrawer);
     connect(m_playlistPanel, &PlaylistPanel::drawerClosed, this, [this]() {
@@ -1848,6 +1853,41 @@ void MainWindow::openNotificationTarget(const QVariantMap &item)
         showCommentDrawerFor(musicId);
 }
 
+/**
+ * 站内消息到达时补一条系统通知。
+ *
+ * Linux 上没有托盘装不上时也能弹（直接走桌面通知服务）；Windows/macOS 沿用托盘气泡。
+ */
+void MainWindow::showSystemNotification(const QVariantMap &item)
+{
+    if (!QSettings().value(QStringLiteral("notifications/system"), true).toBool())
+        return;
+
+    const QString title = item.value(QStringLiteral("title")).toString().trimmed();
+    const QString body = item.value(QStringLiteral("body")).toString().trimmed();
+    if (title.isEmpty() && body.isEmpty())
+        return;
+    const QString summary =
+        title.isEmpty() ? I18n::instance().tr(QStringLiteral("notificationsTitle")) : title;
+
+    if (SystemNotifier::isSupported() && SystemNotifier::instance().notify(summary, body))
+        return;
+    if (m_trayIcon && m_trayIcon->isVisible() && QSystemTrayIcon::supportsMessages())
+        m_trayIcon->showMessage(summary, body, QSystemTrayIcon::Information, 6000);
+}
+
+void MainWindow::onSystemNotificationClicked()
+{
+    onTrayShow();
+    if (!m_notificationPanel)
+        return;
+    if (m_notificationPanel->isDrawerOpen()) {
+        syncNotificationDrawerGeometry();
+        return;
+    }
+    toggleNotificationDrawer();
+}
+
 void MainWindow::togglePlaylistPanel()
 {
     if (!m_playlistPanel)
@@ -2558,6 +2598,9 @@ void MainWindow::createTrayIcon()
         
         // 连接托盘图标激活信号
         connect(m_trayIcon, &QSystemTrayIcon::activated, this, &MainWindow::onTrayIconActivated);
+        // Windows/macOS 的托盘气泡有点击回调；Linux 由 SystemNotifier 走 D-Bus
+        connect(m_trayIcon, &QSystemTrayIcon::messageClicked, this,
+                &MainWindow::onSystemNotificationClicked);
         
         // 显示托盘图标
         m_trayIcon->show();

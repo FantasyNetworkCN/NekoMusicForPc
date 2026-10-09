@@ -143,6 +143,9 @@ private:
     QPushButton *m_accountLoginBtn = nullptr;
     bool m_accountSaving = false;
     QLabel *m_langLabel = nullptr;
+    QLabel *m_sysNotifyLabel = nullptr;
+    QLabel *m_sysNotifyHintLabel = nullptr;
+    ToggleSwitch *m_sysNotifyToggle = nullptr;
     QLabel *m_micSyncSectionLabel = nullptr;
     QLabel *m_micSyncEnableLabel = nullptr;
     ToggleSwitch *m_micSyncToggle = nullptr;

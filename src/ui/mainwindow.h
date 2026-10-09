@@ -113,6 +113,10 @@ private:
     void syncNotificationDrawerGeometry();
     /** 消息中心点击一条消息：按 link 跳到对应内容 */
     void openNotificationTarget(const QVariantMap &item);
+    /** 新消息到达时弹一条系统通知（可在设置里关闭） */
+    void showSystemNotification(const QVariantMap &item);
+    /** 点击系统通知：唤起窗口并打开消息中心 */
+    void onSystemNotificationClicked();
     void showPlaylistDrawer();
     void hidePlaylistDrawer();
     QWidget *playlistDrawerHost() const;
