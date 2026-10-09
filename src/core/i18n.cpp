@@ -694,6 +694,7 @@ static QMap<QString, QString> zhCN()
     m["notifyActionView"] = QStringLiteral("查看");
     m["systemNotifyEnable"] = QStringLiteral("系统通知");
     m["systemNotifyHint"] = QStringLiteral("有人回复你的评论时，除应用内提醒外也弹出桌面通知");
+    m["systemNotifyMissedFmt"] = QStringLiteral("断线期间收到 %1 条新消息");
 
     return m;
 }
@@ -1106,6 +1107,7 @@ static QMap<QString, QString> nyaCN()
     m["notifyActionView"] = QStringLiteral("看看喵~");
     m["systemNotifyEnable"] = QStringLiteral("电脑通知喵~");
     m["systemNotifyHint"] = QStringLiteral("有人回你评论的时候，桌面上也会弹出来喵~");
+    m["systemNotifyMissedFmt"] = QStringLiteral("刚才没连上，攒了 %1 条新消息喵~");
 
     // --- QQ 音乐歌单导入喵~ ---
     m["importQqPlaylist"] = QStringLiteral("导入QQ音乐歌单喵~");
@@ -1824,6 +1826,7 @@ static QMap<QString, QString> enUS()
     m["notifyActionView"] = "View";
     m["systemNotifyEnable"] = "Desktop notifications";
     m["systemNotifyHint"] = "Also pop a desktop notification when someone replies to your comment";
+    m["systemNotifyMissedFmt"] = "%1 new messages arrived while reconnecting";
 
     return m;
 }

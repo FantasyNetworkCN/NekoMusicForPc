@@ -579,6 +579,8 @@ void MainWindow::setupUi()
             &TitleBar::setUnreadCount);
     connect(&NotificationCenter::instance(), &NotificationCenter::messageReceived, this,
             &MainWindow::showSystemNotification);
+    connect(&NotificationCenter::instance(), &NotificationCenter::missedMessages, this,
+            &MainWindow::showMissedNotifications);
     connect(&SystemNotifier::instance(), &SystemNotifier::clicked, this,
             &MainWindow::onSystemNotificationClicked);
     static_cast<PlaylistDrawerScrim *>(m_playlistScrim)->onClicked = [this]() { hidePlaylistDrawer(); };
@@ -1860,20 +1862,40 @@ void MainWindow::openNotificationTarget(const QVariantMap &item)
  */
 void MainWindow::showSystemNotification(const QVariantMap &item)
 {
-    if (!QSettings().value(QStringLiteral("notifications/system"), true).toBool())
-        return;
-
     const QString title = item.value(QStringLiteral("title")).toString().trimmed();
     const QString body = item.value(QStringLiteral("body")).toString().trimmed();
     if (title.isEmpty() && body.isEmpty())
         return;
-    const QString summary =
-        title.isEmpty() ? I18n::instance().tr(QStringLiteral("notificationsTitle")) : title;
+    popSystemNotification(
+        title.isEmpty() ? I18n::instance().tr(QStringLiteral("notificationsTitle")) : title, body);
+}
 
-    if (SystemNotifier::isSupported() && SystemNotifier::instance().notify(summary, body))
+/**
+ * 断线重连后补推漏掉的消息。
+ *
+ * 一条就照常弹；多条只弹一条汇总——反正桌面通知本来就复用同一个 id，逐条弹只会互相顶掉。
+ */
+void MainWindow::showMissedNotifications(const QVariantList &items)
+{
+    if (items.isEmpty())
+        return;
+    if (items.size() == 1) {
+        showSystemNotification(items.constFirst().toMap());
+        return;
+    }
+    popSystemNotification(I18n::instance().tr(QStringLiteral("notificationsTitle")),
+                          I18n::instance().tr(QStringLiteral("systemNotifyMissedFmt"))
+                              .arg(items.size()));
+}
+
+void MainWindow::popSystemNotification(const QString &title, const QString &body)
+{
+    if (!QSettings().value(QStringLiteral("notifications/system"), true).toBool())
+        return;
+    if (SystemNotifier::isSupported() && SystemNotifier::instance().notify(title, body))
         return;
     if (m_trayIcon && m_trayIcon->isVisible() && QSystemTrayIcon::supportsMessages())
-        m_trayIcon->showMessage(summary, body, QSystemTrayIcon::Information, 6000);
+        m_trayIcon->showMessage(title, body, QSystemTrayIcon::Information, 6000);
 }
 
 void MainWindow::onSystemNotificationClicked()

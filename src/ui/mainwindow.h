@@ -13,6 +13,7 @@
 #include <QUrl>
 #include <QList>
 #include <QVariantMap>
+#include <QVariantList>
 #include <QStackedWidget>
 #include <QSystemTrayIcon>
 #include <QPixmap>
@@ -115,6 +116,10 @@ private:
     void openNotificationTarget(const QVariantMap &item);
     /** 新消息到达时弹一条系统通知（可在设置里关闭） */
     void showSystemNotification(const QVariantMap &item);
+    /** 断线重连后补拉到的漏推消息：一条正常弹，多条只弹一条汇总 */
+    void showMissedNotifications(const QVariantList &items);
+    /** 系统通知的实际出口：Linux 走 D-Bus，其余平台回退托盘气泡 */
+    void popSystemNotification(const QString &title, const QString &body);
     /** 点击系统通知：唤起窗口并打开消息中心 */
     void onSystemNotificationClicked();
     void showPlaylistDrawer();
