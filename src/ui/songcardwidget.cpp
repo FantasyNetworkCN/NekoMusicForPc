@@ -270,6 +270,18 @@ void SongCardWidget::rebuildLayout()
     m_timeLbl->setAlignment(Qt::AlignCenter);
     lay->addWidget(m_timeLbl);
 
+    // 行右侧「三点菜单」入口（设计稿）：与右键菜单共用同一套 onContextMenu 回调，
+    // 因此所有使用 SongCardWidget 的界面自动获得统一菜单。
+    m_moreBtn = new QPushButton(m_content);
+    m_moreBtn->setFixedSize(40, 40);
+    m_moreBtn->setFlat(true);
+    m_moreBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_moreBtn, &QPushButton::clicked, this, [this](bool) {
+        if (onContextMenu)
+            onContextMenu(m_info, m_moreBtn->mapToGlobal(QPoint(0, m_moreBtn->height())));
+    });
+    lay->addWidget(m_moreBtn);
+
     outer->addWidget(m_content, 1);
 
     for (QLabel *lbl : {m_indexLbl, m_coverLbl, m_titleLbl, m_lrcBadge, m_qualityBadge,
@@ -299,7 +311,8 @@ void SongCardWidget::installContentEventFilters()
 
 bool SongCardWidget::isInteractiveButton(QObject *obj) const
 {
-    return obj == m_heartBtn || obj == m_downloadBtn || obj == m_playOverlay || obj == m_statusOverlay;
+    return obj == m_heartBtn || obj == m_downloadBtn || obj == m_moreBtn || obj == m_playOverlay
+        || obj == m_statusOverlay;
 }
 
 void SongCardWidget::setHover(bool hover)
@@ -596,6 +609,16 @@ void SongCardWidget::updateDownloadIcon()
     m_downloadBtn->setVisible(m_showDownloadButton && !m_info.isLocalFile());
 }
 
+void SongCardWidget::updateMoreIcon()
+{
+    if (!m_moreBtn)
+        return;
+    const bool dark = Theme::ThemeManager::instance().isDarkMode();
+    const QColor ic = dark ? QColor(244, 246, 255, 165) : QColor(33, 37, 41, 140);
+    m_moreBtn->setIcon(Icons::renderNamed("More", 20, ic));
+    m_moreBtn->setIconSize(QSize(20, 20));
+}
+
 void SongCardWidget::updateOverlayIcons()
 {
     const QColor overlayIc = kPrimary;
@@ -632,6 +655,11 @@ void SongCardWidget::applyTheme()
             "QPushButton:hover:enabled { background: rgba(230,57,80,0.15); }"
             "QPushButton:disabled { background: transparent; }"));
     }
+    if (m_moreBtn) {
+        m_moreBtn->setStyleSheet(QStringLiteral(
+            "QPushButton { background: transparent; border: none; border-radius: 8px; }"
+            "QPushButton:hover { background: rgba(230,57,80,0.15); }"));
+    }
     if (m_progressBar) {
         const QString track = dark ? QStringLiteral("#3a3a3a") : QStringLiteral("#e8e8e8");
         m_progressBar->setStyleSheet(QStringLiteral(
@@ -660,6 +688,7 @@ void SongCardWidget::applyTheme()
         updateHeartIcon();
         updateDownloadIcon();
     }
+    updateMoreIcon();
     updateOverlayIcons();
     updateLocalBadge();
     updateLrcBadge();

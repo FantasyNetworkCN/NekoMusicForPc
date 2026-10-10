@@ -180,6 +180,7 @@ set(SOURCES
         src/ui/localmusicbadgelabel.cpp
         src/ui/songlistwidget.cpp
         src/ui/songcontextmenu.cpp
+        src/ui/songmenubuilder.cpp
         src/ui/coverlistcard.cpp
         src/ui/artistdetailpage.cpp
         src/ui/roundcoverlabel.cpp
@@ -268,6 +269,7 @@ set(HEADERS
         src/ui/localmusicbadgelabel.h
         src/ui/songlistwidget.h
         src/ui/songcontextmenu.h
+        src/ui/songmenubuilder.h
         src/ui/coverlistcard.h
         src/ui/roundcoverlabel.h
         src/core/playerengine.h

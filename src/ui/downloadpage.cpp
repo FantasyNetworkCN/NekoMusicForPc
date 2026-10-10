@@ -152,6 +152,8 @@ void DownloadPage::setupUi()
             emit playRequested(info);
     };
     m_songList->onUnfavorite = [this](int id) { emit favoriteRequested(id); };
+    // 该页的“收藏”是切换语义：统一菜单里作为「添加/取消收藏」双向入口复用
+    m_songList->onToggleFavorite = [this](const MusicInfo &info) { emit favoriteRequested(info.id); };
     m_songList->isFavorited = [this](int id) { return m_favoritedIds.contains(id); };
     m_songList->onTogglePlayPause = [this]() { emit playPauseRequested(); };
     m_songList->setShowDownloadActions(false);

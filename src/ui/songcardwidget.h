@@ -68,6 +68,7 @@ private:
     void updateHoverOverlays();
     void updateHeartIcon();
     void updateDownloadIcon();
+    void updateMoreIcon();
     void updateCancelIcon();
     void updateDownloadTaskUi();
     void updateOverlayIcons();
@@ -114,6 +115,8 @@ private:
     QLabel *m_timeLbl = nullptr;
     QPushButton *m_heartBtn = nullptr;
     QPushButton *m_downloadBtn = nullptr;
+    /** 行右侧三点菜单按钮（设计稿入口），点击后走同一套 onContextMenu 回调 */
+    QPushButton *m_moreBtn = nullptr;
     int m_durationWidth = 50;
 
     QMetaObject::Connection m_coverConn;
