@@ -151,7 +151,6 @@ set(SOURCES
         src/ui/glasspaint.cpp
         src/ui/titlebar.cpp
         src/ui/sidebar.cpp
-        src/ui/carousel.cpp
         src/ui/homepage.cpp
         src/ui/playlistcard.cpp
         src/ui/playerbar.cpp
@@ -242,7 +241,6 @@ set(HEADERS
         src/ui/scrollareafix.h
         src/ui/titlebar.h
         src/ui/sidebar.h
-        src/ui/carousel.h
         src/ui/homepage.h
         src/ui/playlistcard.h
         src/ui/playerbar.h

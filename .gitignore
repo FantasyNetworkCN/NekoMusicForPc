@@ -38,3 +38,5 @@ dist-electron/
 node_modules/
 release/
 build-mac-intel/
+# 本地清理/审计脚本的扫描输出（tools/ 下的脚本本身要提交）
+_scan/

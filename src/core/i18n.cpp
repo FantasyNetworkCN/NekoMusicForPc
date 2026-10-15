@@ -28,18 +28,13 @@ static QMap<QString, QString> zhCN()
     m["noData"] = QStringLiteral("暂无数据");
     m["cancel"] = QStringLiteral("取消");
     m["confirm"] = QStringLiteral("确认");
-    m["delete"] = QStringLiteral("删除");
     m["edit"] = QStringLiteral("编辑");
     m["save"] = QStringLiteral("保存");
     m["close"] = QStringLiteral("关闭");
-    m["submit"] = QStringLiteral("提交");
     m["back"] = QStringLiteral("返回");
     m["refresh"] = QStringLiteral("刷新");
     m["clear"] = QStringLiteral("清空");
-    m["all"] = QStringLiteral("全部");
     m["create"] = QStringLiteral("创建");
-    m["rename"] = QStringLiteral("重命名");
-    m["actions"] = QStringLiteral("操作");
     m["none"] = QStringLiteral("无");
     m["unknown"] = QStringLiteral("未知");
     m["defaultMusicPlayerTitle"] = QStringLiteral("默认音乐播放器");
@@ -54,7 +49,6 @@ static QMap<QString, QString> zhCN()
         "已打开 Windows「默认应用」设置。\n"
         "请将所有支持的媒体文件类型（.mp3、.flac、.wav、.m4a、.aac、.ogg、.wma、.m3u 等）的默认打开方式设置为本程序。");
     m["inputRequired"] = QStringLiteral("请输入");
-    m["inputValid"] = QStringLiteral("请输入有效的内容");
     m["justNow"] = QStringLiteral("刚刚");
     m["minutesAgo"] = QStringLiteral("分钟前");
     m["hoursAgo"] = QStringLiteral("小时前");
@@ -75,15 +69,10 @@ static QMap<QString, QString> zhCN()
     m["playQueue"] = QStringLiteral("播放队列");
     m["playlistSongCount"] = QStringLiteral("%1 首音乐");
     m["scrollToCurrentPlay"] = QStringLiteral("当前播放");
-    m["emptyPlaylist"] = QStringLiteral("播放列表为空");
     m["emptyPlaylistHint"] = QStringLiteral("播放列表暂无歌曲，快去添加吧");
     m["notPlaying"] = QStringLiteral("未播放");
     m["volume"] = QStringLiteral("音量");
     m["standard"] = QStringLiteral("标准");
-    m["muted"] = QStringLiteral("已静音");
-    m["unmuted"] = QStringLiteral("取消静音");
-    m["toggleMute"] = QStringLiteral("取消静音");
-    m["mute"] = QStringLiteral("静音");
     m["desktopLyrics"] = QStringLiteral("词");
     m["desktopLyricsEnabled"] = QStringLiteral("桌面歌词已开启");
     m["desktopLyricsDisabled"] = QStringLiteral("桌面歌词已关闭");
@@ -133,10 +122,6 @@ static QMap<QString, QString> zhCN()
     m["shortcutResetDefault"] = QStringLiteral("恢复默认");
     m["shortcutResetAll"] = QStringLiteral("恢复全部默认");
     m["shortcutConflict"] = QStringLiteral("快捷键冲突：%1");
-    m["shortcutWaylandHint"] = QStringLiteral(
-        "全局快捷键通过 xdg-desktop-portal 向系统申请权限。首次启动或修改后可能弹出系统授权对话框；"
-        "也可点击下方按钮在系统设置中调整。");
-    m["shortcutOpenSystemSettings"] = QStringLiteral("在系统设置中配置全局快捷键");
     m["shortcutGlobalPortalActive"] = QStringLiteral("全局快捷键已启用（系统 portal）");
     m["shortcutGlobalFallbackActive"] = QStringLiteral("portal 不可用，已回退为窗口内快捷键");
     m["shortcutGlobalInactive"] = QStringLiteral("全局快捷键未启用");
@@ -171,10 +156,6 @@ static QMap<QString, QString> zhCN()
     m["playModeList"] = QStringLiteral("列表循环");
     m["playModeSingle"] = QStringLiteral("单曲循环");
     m["playModeRandom"] = QStringLiteral("随机播放");
-    m["playModeOff"] = QStringLiteral("不循环");
-    m["minimize"] = QStringLiteral("最小化");
-    m["maximize"] = QStringLiteral("全屏");
-    m["closeWindow"] = QStringLiteral("关闭窗口");
     m["duration"] = QStringLiteral("时长");
     m["title"] = QStringLiteral("标题");
     m["cover"] = QStringLiteral("封面");
@@ -182,13 +163,10 @@ static QMap<QString, QString> zhCN()
     m["playlists"] = QStringLiteral("歌单");
     m["album"] = QStringLiteral("专辑");
     m["artist"] = QStringLiteral("艺术家");
-    m["count"] = QStringLiteral("数量");
     m["musicCount"] = QStringLiteral("首歌曲");
-    m["songList"] = QStringLiteral("歌曲列表");
 
     // --- 导航 & 视图名称 ---
     m["home"] = QStringLiteral("首页");
-    m["myPlaylists"] = QStringLiteral("我的歌单");
     m["myPlaylistsTitle"] = QStringLiteral("我的歌单");
     m["favorites"] = QStringLiteral("我喜欢的");
     m["myFavorites"] = QStringLiteral("我喜欢的音乐");
@@ -202,7 +180,6 @@ static QMap<QString, QString> zhCN()
     m["listColActions"] = QStringLiteral("操作");
     m["fuzzySearch"] = QStringLiteral("模糊搜索");
     m["favoritesSearchEmpty"] = QStringLiteral("搜不到关于 %1 的任何歌曲呀");
-    m["favoritePlaylists"] = QStringLiteral("收藏的歌单");
     m["favoritePlaylistsTitle"] = QStringLiteral("收藏的歌单");
     m["recentPlay"] = QStringLiteral("最近播放");
     m["emptyRecent"] = QStringLiteral("暂无最近播放记录");
@@ -261,49 +238,32 @@ static QMap<QString, QString> zhCN()
     m["queueAddAllEmpty"] = QStringLiteral("当前列表还没有歌曲");
     m["localMusicBadge"] = QStringLiteral("本地");
     m["hasLyrics"] = QStringLiteral("有歌词");
-    m["ranking"] = QStringLiteral("排行榜");
-    m["latest"] = QStringLiteral("最新音乐");
-    m["library"] = QStringLiteral("音乐库");
-    m["topSongs"] = QStringLiteral("热门歌曲");
     m["hotMusic"] = QStringLiteral("热门音乐");
     m["hotMusicDesc"] = QStringLiteral("播放次数最高的热门歌曲");
     m["latestMusic"] = QStringLiteral("最新音乐");
     m["latestMusicDesc"] = QStringLiteral("刚刚上传的最新歌曲");
     m["dailyRecommend"] = QStringLiteral("每日推荐");
     m["dailyRecommendDesc"] = QStringLiteral("根据你的收藏口味生成");
-    m["newSongs"] = QStringLiteral("新歌上架");
-    m["discoverMusic"] = QStringLiteral("去发现音乐");
-    m["recommendPlaylists"] = QStringLiteral("推荐歌单");
     m["recommend_playlists"] = QStringLiteral("推荐歌单");
     m["hot_music"] = QStringLiteral("热门音乐");
     m["latest_music"] = QStringLiteral("最新音乐");
     m["searchMusic"] = QStringLiteral("单曲");
     m["searchPlaylist"] = QStringLiteral("歌单");
-    m["searchResults"] = QStringLiteral("搜索结果");
     m["searchRelatedSuffix"] = QStringLiteral("的相关搜索");
     m["searchStartHint"] = QStringLiteral("请先在顶部搜索框输入关键词并搜索");
     m["searchEmptySongs"] = QStringLiteral("很抱歉，未能找到与 %1 相关的任何歌曲");
     m["searchEmptyPlaylists"] = QStringLiteral("很抱歉，未能找到与 %1 相关的任何歌单");
     m["searchEmptyArtists"] = QStringLiteral("很抱歉，未能找到与 %1 相关的任何歌手");
-    m["searchBackArtists"] = QStringLiteral("← 歌手");
     m["searchBackToSearch"] = QStringLiteral("返回搜索");
     m["loadMore"] = QStringLiteral("加载更多");
-    m["noResults"] = QStringLiteral("暂无搜索结果");
 
     // --- 账户 & 登录注册 ---
     m["login"] = QStringLiteral("登录");
     m["loginSubtitle"] = QStringLiteral("登录 NekoMusic，继续享受你的音乐空间");
     m["registerSubtitle"] = QStringLiteral("创建账号，开启你的专属音乐空间");
     m["qrLoginSubtitle"] = QStringLiteral("使用手机扫码，快速安全地登录");
-    m["qrLogin"] = QStringLiteral("扫码登录");
     m["qrLoginTitle"] = QStringLiteral("扫码登录");
-    m["qrLoginBack"] = QStringLiteral("账号密码登录");
     m["qrLoginHint"] = QStringLiteral("打开手机端 NekoMusic，点「我的」页右上角的「扫一扫」，扫描上方二维码");
-    m["qrLoginLoading"] = QStringLiteral("正在生成二维码…");
-    m["qrLoginPending"] = QStringLiteral("正在等待扫码…");
-    m["qrLoginScanned"] = QStringLiteral("已扫码，请在手机上确认");
-    m["qrLoginCanceled"] = QStringLiteral("已在手机上取消登录");
-    m["qrLoginConnectionLost"] = QStringLiteral("连接已断开，请点击刷新");
     m["logout"] = QStringLiteral("退出登录");
     m["register"] = QStringLiteral("注册");
     m["email"] = QStringLiteral("邮箱");
@@ -313,12 +273,8 @@ static QMap<QString, QString> zhCN()
     m["nicknamePlaceholder"] = QStringLiteral("请输入新昵称（1-20字）");
     m["nicknameUpdated"] = QStringLiteral("昵称修改成功");
     m["nicknameUpdateFailed"] = QStringLiteral("昵称修改失败，请稍后重试");
-    m["emailOrName"] = QStringLiteral("邮箱/名称");
     m["verificationCode"] = QStringLiteral("验证码");
-    m["verifyCode"] = QStringLiteral("验证码");
-    m["getCode"] = QStringLiteral("获取验证码");
     m["sendCode"] = QStringLiteral("发送验证码");
-    m["resendCode"] = QStringLiteral("重新发送");
     m["registerNeedNicknameForCode"] = QStringLiteral("发送验证码前请先填写昵称");
     m["captchaSecurityTitle"] = QStringLiteral("安全验证");
     m["captchaSecurityDesc"] =
@@ -330,10 +286,7 @@ static QMap<QString, QString> zhCN()
     m["captchaLoadFailed"] = QStringLiteral("加载安全验证失败");
     m["captchaVerifyFail"] = QStringLiteral("位置不正确或已失效，请换一张重试");
     m["registerTime"] = QStringLiteral("注册时间");
-    m["accountInfo"] = QStringLiteral("账号信息");
     m["account"] = QStringLiteral("账号");
-    m["accountSettings"] = QStringLiteral("账号设置");
-    m["notLoggedIn"] = QStringLiteral("未登录");
     m["goToLogin"] = QStringLiteral("去登录");
     m["forgotPassword"] = QStringLiteral("忘记密码?");
     m["forgotPasswordTitle"] = QStringLiteral("找回密码");
@@ -350,29 +303,18 @@ static QMap<QString, QString> zhCN()
     m["inputTooLong"] = QStringLiteral("输入内容超出长度限制");
     m["loadingShort"] = QStringLiteral("处理中…");
     m["countdownSeconds"] = QStringLiteral("%1秒");
-    m["welcome"] = QStringLiteral("欢迎回来");
-    m["welcomeSubtitle"] = QStringLiteral("发现好音乐，享受每一刻");
-    m["goodMorning"] = QStringLiteral("早上好");
-    m["goodAfternoon"] = QStringLiteral("下午好");
-    m["goodEvening"] = QStringLiteral("晚上好");
-    m["lateNight"] = QStringLiteral("夜深了");
 
     // --- 歌单特定操作 ---
     m["createPlaylist"] = QStringLiteral("创建歌单");
-    m["createFirstPlaylist"] = QStringLiteral("创建第一个歌单");
     m["noPlaylists"] = QStringLiteral("暂无歌单，请先创建歌单");
     m["playlistName"] = QStringLiteral("歌单名称");
-    m["playlistDescription"] = QStringLiteral("歌单描述");
     m["playlistNamePlaceholder"] = QStringLiteral("输入歌单名称");
-    m["playlistDescPlaceholder"] = QStringLiteral("输入歌单描述");
     m["creator"] = QStringLiteral("创建者");
     m["editPlaylist"] = QStringLiteral("编辑歌单");
-    m["deletePlaylist"] = QStringLiteral("删除歌单");
     m["renamePlaylist"] = QStringLiteral("重命名歌单");
     m["modifyPlaylistDesc"] = QStringLiteral("修改歌单描述");
     m["inputNewPlaylistName"] = QStringLiteral("输入新歌单名称");
     m["inputPlaylistDesc"] = QStringLiteral("输入歌单描述");
-    m["inputPlaylistName"] = QStringLiteral("请输入歌单名称");
     m["collectPlaylist"] = QStringLiteral("收藏歌单");
     // 版本更新
     m["newVersionAvailable"] = QStringLiteral("发现新版本");
@@ -384,7 +326,6 @@ static QMap<QString, QString> zhCN()
     m["downloadComplete"] = QStringLiteral("下载完成");
     m["installNow"] = QStringLiteral("立即安装");
     m["installLater"] = QStringLiteral("稍后安装");
-    m["updateViaAur"] = QStringLiteral("通过 AUR 更新");
     m["updateViaAurHint"] = QStringLiteral("点击「立即更新」后将在终端显示命令，请自行执行：%1");
     m["updateViaAurNoHelper"] = QStringLiteral("未检测到 yay 或 paru，将打开 AUR 包页面");
     m["openAurPage"] = QStringLiteral("打开 AUR 页面");
@@ -392,9 +333,7 @@ static QMap<QString, QString> zhCN()
     m["downloadFailed"] = QStringLiteral("下载失败");
     m["retry"] = QStringLiteral("重试");
     m["checkForUpdates"] = QStringLiteral("检查更新");
-    m["alreadyLatest"] = QStringLiteral("已是最新版本");
     m["version"] = QStringLiteral("版本");
-    m["collectedPlaylist"] = QStringLiteral("已收藏歌单");
     m["uncollectPlaylist"] = QStringLiteral("取消收藏");
     m["removeFromPlaylist"] = QStringLiteral("从歌单中移除");
     m["addToPlaylist"] = QStringLiteral("添加到歌单");
@@ -403,34 +342,17 @@ static QMap<QString, QString> zhCN()
     m["removeFromQueue"] = QStringLiteral("从播放队列移除");
     m["playNext"] = QStringLiteral("下一首播放");
     m["playNextAdded"] = QStringLiteral("已添加到下一首播放");
-    m["addToPlaylistTitle"] = QStringLiteral("添加到歌单");
     m["createNewPlaylistRow"] = QStringLiteral("创建新歌单");
     m["addingToPlaylist"] = QStringLiteral("正在添加歌曲至歌单");
-    m["selectPlaylist"] = QStringLiteral("选择歌单");
-    m["orCreateNewPlaylist"] = QStringLiteral("或创建新歌单");
-    m["addMusicToPlaylist"] = QStringLiteral("添加音乐到歌单");
     m["newPlaylist"] = QStringLiteral("新歌单");
     m["ok"] = QStringLiteral("确定");
-    m["musicAdded"] = QStringLiteral("音乐已添加到歌单");
     m["musicAddFailed"] = QStringLiteral("添加音乐失败");
     m["noMusicInPlaylist"] = QStringLiteral("该歌单暂无音乐");
 
     // --- 系统设置 & 缓存 & 更新 ---
     m["settings"] = QStringLiteral("设置");
-    m["playSettings"] = QStringLiteral("播放设置");
     m["language"] = QStringLiteral("语言");
-    m["languageSettings"] = QStringLiteral("语言设置");
-    m["languageNya"] = QStringLiteral("喵语中文");
-    m["languageChinese"] = QStringLiteral("简体中文");
-    m["languageEnglish"] = QStringLiteral("English");
-    m["musicCache"] = QStringLiteral("音乐缓存");
-    m["musicCacheDesc"] = QStringLiteral("自动缓存听过的音乐到本地下载目录");
-    m["cachePath"] = QStringLiteral("缓存路径");
-    m["cacheEnabled"] = QStringLiteral("音乐缓存已开启");
-    m["cacheDisabled"] = QStringLiteral("音乐缓存已关闭");
-    m["loadFromCache"] = QStringLiteral("从缓存加载");
     m["about"] = QStringLiteral("关于");
-    m["appVersion"] = QStringLiteral("版本号");
     m["githubRepo"] = QStringLiteral("GitHub 仓库");
     m["apiDocs"] = QStringLiteral("API 文档");
     // --- 法律与声明（用户协议 / 隐私政策）---
@@ -450,36 +372,14 @@ static QMap<QString, QString> zhCN()
         "我已阅读并同意<a href=\"agreement\">《用户协议》</a>与<a href=\"privacy\">《隐私政策》</a>");
     m["consentRequired"] = QStringLiteral("请先阅读并同意《用户协议》与《隐私政策》");
     m["createdAt"] = QStringLiteral("创建时间");
-    m["updatedAt"] = QStringLiteral("更新时间");
     m["description"] = QStringLiteral("描述");
-    m["checkUpdate"] = QStringLiteral("检查更新");
-    m["checking"] = QStringLiteral("检查中...");
-    m["updateAvailable"] = QStringLiteral("发现新版本");
-    m["downloadUpdate"] = QStringLiteral("立即下载");
     m["downloadCancelled"] = QStringLiteral("下载已取消");
     m["isLatest"] = QStringLiteral("当前已是最新版本");
-    m["versionDownloaded"] = QStringLiteral("版本 {version} 已下载完成");
-    m["updateDownloadComplete"] = QStringLiteral("更新下载完成");
 
     // --- 交互反馈 (成功/失败/校验) ---
-    m["operationFailed"] = QStringLiteral("操作失败");
     m["networkError"] = QStringLiteral("网络错误，请检查服务器连接");
     m["networkErrorRetry"] = QStringLiteral("网络错误，请重试");
-    m["lanDeviceConnected"] = QStringLiteral("已连接到%1");
-    m["loginSuccess"] = QStringLiteral("登录成功，欢迎回来！");
-    m["loginFailed"] = QStringLiteral("登录失败");
-    m["logoutSuccess"] = QStringLiteral("已退出登录");
-    m["registerSuccess"] = QStringLiteral("注册成功，请登录");
-    m["registerFailed"] = QStringLiteral("注册失败");
-    m["createSuccess"] = QStringLiteral("创建成功");
-    m["createFailed"] = QStringLiteral("创建失败");
-    m["createPlaylistSuccess"] = QStringLiteral("歌单创建成功");
     m["createPlaylistFailed"] = QStringLiteral("创建失败");
-    m["deleteSuccess"] = QStringLiteral("删除成功");
-    m["deleteFailed"] = QStringLiteral("删除失败");
-    m["modifySuccess"] = QStringLiteral("修改成功");
-    m["renameSuccess"] = QStringLiteral("重命名成功");
-    m["updateSuccess"] = QStringLiteral("更新成功");
     m["favoriteSuccess"] = QStringLiteral("收藏成功");
     m["favoriteFailed"] = QStringLiteral("收藏失败");
     m["cancelFavoriteSuccess"] = QStringLiteral("已取消收藏");
@@ -488,37 +388,13 @@ static QMap<QString, QString> zhCN()
     m["cancelFavoritePlaylistFailed"] = QStringLiteral("取消收藏失败");
     m["collectPlaylistSuccess"] = QStringLiteral("已收藏歌单");
     m["collectPlaylistFailed"] = QStringLiteral("收藏失败");
-    m["unfavoriteSuccess"] = QStringLiteral("取消收藏成功");
     m["addToPlaylistSuccess"] = QStringLiteral("添加到歌单成功");
     m["addToPlaylistFailed"] = QStringLiteral("添加失败");
-    m["addSuccess"] = QStringLiteral("添加成功");
-    m["removeSuccess"] = QStringLiteral("移除成功");
-    m["removeFailed"] = QStringLiteral("移除失败");
     m["musicRemovedSuccess"] = QStringLiteral("音乐已从歌单中移除");
-    m["switchLanguageSuccess"] = QStringLiteral("语言设置已保存");
-    m["switchLanguageFailed"] = QStringLiteral("切换语言失败");
-    m["checkUpdateFailed"] = QStringLiteral("检查更新失败，请稍后重试");
-    m["showWindow"] = QStringLiteral("显示窗口");
-    m["exitApp"] = QStringLiteral("退出");
-    m["sendVerifyCodeFailed"] = QStringLiteral("发送验证码失败");
-    m["verifyCodeSent"] = QStringLiteral("验证码已发送至您的邮箱");
-    m["codeSent"] = QStringLiteral("验证码已发送");
-    m["inputEmail"] = QStringLiteral("请先输入邮箱地址");
-    m["inputValidEmail"] = QStringLiteral("请输入有效的邮箱地址");
-    m["emailRequired"] = QStringLiteral("请输入邮箱");
-    m["passwordRequired"] = QStringLiteral("请输入密码");
-    m["codeRequired"] = QStringLiteral("请输入验证码");
-    m["nameRequired"] = QStringLiteral("请输入昵称");
-    m["inputNameRequired"] = QStringLiteral("请输入歌单名称");
     m["fillEmailAndPassword"] = QStringLiteral("请填写邮箱和密码");
-    m["fillEmail"] = QStringLiteral("请填写邮箱");
-    m["fillVerificationCode"] = QStringLiteral("请填写验证码");
     m["fillAllFields"] = QStringLiteral("请填写所有字段");
     m["pleaseEnterEmail"] = QStringLiteral("请先输入邮箱地址");
     m["pleaseLoginFirst"] = QStringLiteral("请先登录");
-    m["deleteConfirm"] = QStringLiteral("确定要删除吗？");
-    m["confirmRemove"] = QStringLiteral("确认移除");
-    m["confirmRemoveMessage"] = QStringLiteral("确定要从歌单中移除这首音乐吗？");
     m["emptyFavorites"] = QStringLiteral("暂无收藏音乐");
     m["addToFavorites"] = QStringLiteral("添加到收藏");
     m["removeFromFavorites"] = QStringLiteral("取消收藏");
@@ -539,61 +415,11 @@ static QMap<QString, QString> zhCN()
         "本首为本地音频文件。Neko歌姬计划 同样提供丰富的在线曲库与歌单发现，完全免费；可继续使用客户端管理本地与在线音乐。");
     m["shareClipboardLinkOnline"] = QStringLiteral("歌曲详情页链接（在浏览器中打开）：");
     m["shareClipboardLinkLocal"] = QStringLiteral("本地文件（可粘贴到支持 file:// 的环境）：");
-    m["deleteConfirmWithPlaylistName"] = QStringLiteral("确定要删除歌单\"{name}\"吗？此操作不可恢复。");
-    m["invalidEmail"] = QStringLiteral("邮箱格式不正确");
-    m["emailPlaceholder"] = QStringLiteral("请输入邮箱");
-    m["passwordPlaceholder"] = QStringLiteral("请输入密码");
-    m["namePlaceholder"] = QStringLiteral("请输入名称（昵称）");
-    m["inputKeywordToSearch"] = QStringLiteral("输入关键词开始搜索");
 
     // --- 上传音乐 ---
-    m["uploadMusic"] = QStringLiteral("上传音乐");
-    m["uploadMusicTitle"] = QStringLiteral("上传音乐");
-    m["uploadMusicDesc"] = QStringLiteral("上传你的音乐作品，等待管理员审核后发布");
-    m["selectMusicFile"] = QStringLiteral("选择音乐文件");
-    m["selectCoverFile"] = QStringLiteral("选择封面图片");
-    m["selectLyricsFile"] = QStringLiteral("选择歌词文件");
-    m["musicTitle"] = QStringLiteral("歌曲标题");
-    m["artistName"] = QStringLiteral("歌手名称");
-    m["uploadLanguageLabel"] = QStringLiteral("语言");
     m["albumName"] = QStringLiteral("专辑名称（可选）");
-    m["tagsLabel"] = QStringLiteral("标签（可选）");
-    m["durationLabel"] = QStringLiteral("时长（秒）");
-    m["uploadBtn"] = QStringLiteral("上传");
-    m["uploading"] = QStringLiteral("上传中...");
-    m["uploadSuccess"] = QStringLiteral("上传成功，等待审核");
-    m["uploadFailed"] = QStringLiteral("上传失败");
-    m["uploadDuplicate"] = QStringLiteral("已有重复音乐，请检查后重新上传");
-    m["uploadUnauthorized"] = QStringLiteral("请先登录");
-    m["musicFileRequired"] = QStringLiteral("请选择音乐文件");
-    m["titleRequired"] = QStringLiteral("请输入歌曲标题");
-    m["artistRequired"] = QStringLiteral("请输入歌手名称");
-    m["languageRequired"] = QStringLiteral("请选择语言");
-    m["durationRequired"] = QStringLiteral("请输入时长");
-    m["durationInvalid"] = QStringLiteral("时长必须是正整数");
-    m["noMusicFileSelected"] = QStringLiteral("未选择音乐文件");
-    m["noCoverSelected"] = QStringLiteral("未选择封面");
-    m["noLyricsSelected"] = QStringLiteral("未选择歌词");
-    m["musicFileFormat"] = QStringLiteral("支持 MP3、FLAC、WAV 格式");
-    m["coverFileFormat"] = QStringLiteral("支持 JPG、PNG、GIF 等格式");
-    m["lyricsFileFormat"] = QStringLiteral("支持 LRC 格式");
-    m["fillRequiredFields"] = QStringLiteral("请填写必填项");
-    m["langChinese"] = QStringLiteral("中文");
-    m["langCantonese"] = QStringLiteral("粤语");
-    m["langShanghainese"] = QStringLiteral("上海语");
-    m["langEnglish"] = QStringLiteral("英文");
-    m["langJapanese"] = QStringLiteral("日语");
-    m["langKorean"] = QStringLiteral("韩语");
-    m["langFrench"] = QStringLiteral("法语");
-    m["langGerman"] = QStringLiteral("德语");
-    m["langRussian"] = QStringLiteral("俄语");
-    m["langInstrumental"] = QStringLiteral("纯音乐");
     m["required"] = QStringLiteral("*");
     m["optional"] = QStringLiteral("可选");
-    m["musicFileInfo"] = QStringLiteral("音乐文件");
-    m["coverInfo"] = QStringLiteral("封面图片");
-    m["lyricsInfo"] = QStringLiteral("歌词文件");
-    m["lyrics"] = QStringLiteral("歌词");
     m["unknownArtist"] = QStringLiteral("未知艺术家");
     m["noLyrics"] = QStringLiteral("暂无歌词");
     m["videoRenderButton"] = QStringLiteral("生成分享视频");
@@ -615,7 +441,6 @@ static QMap<QString, QString> zhCN()
     m["videoRenderFailed"] = QStringLiteral("视频渲染失败：%1");
     m["videoRenderCreateFailed"] = QStringLiteral("创建任务失败");
     m["videoRenderLocalUnsupported"] = QStringLiteral("本地音乐暂不支持生成分享视频");
-    m["vipNav"] = QStringLiteral("会员中心");
     m["vipCenterTitle"] = QStringLiteral("会员中心");
     m["vipStatusActive"] = QStringLiteral("尊贵 VIP");
     m["vipStatusExpires"] = QStringLiteral("到期：%1");
@@ -626,8 +451,6 @@ static QMap<QString, QString> zhCN()
     m["vipPricingLoadFailed"] = QStringLiteral("价目表加载失败");
     m["vipPayNoUrl"] = QStringLiteral("没有拿到支付链接");
     m["vipPayCreateFailed"] = QStringLiteral("下单失败");
-    m["vipPayOpenFailed"] = QStringLiteral("无法打开支付链接");
-    m["vipPayBrowserHint"] = QStringLiteral("已在浏览器打开收银台，支付完成后请返回并点击刷新");
     m["vipRefresh"] = QStringLiteral("刷新状态");
     m["vipMonthsSuffix"] = QStringLiteral("个月");
     m["vipDaysSuffix"] = QStringLiteral("天");
@@ -654,15 +477,12 @@ static QMap<QString, QString> zhCN()
     m["vipChangePayMethod"] = QStringLiteral("更换支付方式");
     m["vipQrGenerateFailed"] = QStringLiteral("二维码生成失败，请稍后再试");
     m["vipQrImageLoadFailed"] = QStringLiteral("二维码图片加载失败");
-    m["basicInfo"] = QStringLiteral("基本信息");
-    m["uploadNote"] = QStringLiteral("上传的音乐会进入待审核状态，审核通过后发布");
 
     // --- 网易云歌单导入 ---
     m["importNeteasePlaylist"] = QStringLiteral("导入网易云歌单");
     m["importNeteaseDesc"] = QStringLiteral("输入网易云歌单链接或ID，将歌曲导入到本地歌单");
     m["inputNeteaseLink"] = QStringLiteral("输入网易云歌单链接或ID...");
     m["createNewPlaylist"] = QStringLiteral("新建歌单");
-    m["creatingPlaylist"] = QStringLiteral("正在创建歌单...");
     m["fetchPlaylist"] = QStringLiteral("获取歌单");
     m["selectTargetPlaylist"] = QStringLiteral("选择目标歌单：");
     m["startImport"] = QStringLiteral("开始导入");
@@ -671,12 +491,8 @@ static QMap<QString, QString> zhCN()
     m["emptyNeteasePlaylist"] = QStringLiteral("歌单为空");
     m["neteasePlaylistInfo"] = QStringLiteral("歌单：%1（共 %2 首歌曲）");
     m["loadPlaylistsFailed"] = QStringLiteral("加载歌单列表失败");
-    m["noPlaylistsToImport"] = QStringLiteral("没有可用的歌单，请先创建歌单");
     m["noTracksToImport"] = QStringLiteral("没有歌曲可导入");
     m["searchingTracks"] = QStringLiteral("正在搜索匹配歌曲...");
-    m["searchFailed"] = QStringLiteral("搜索失败");
-    m["searchServiceBusy"] = QStringLiteral("服务繁忙，请稍后再试");
-    m["noMatchedTracks"] = QStringLiteral("未找到匹配的歌曲");
     m["addingToPlaylist"] = QStringLiteral("正在添加 %1 首歌曲到歌单...");
     m["addToPlaylistFailed"] = QStringLiteral("添加到歌单失败");
     m["importSuccess"] = QStringLiteral("导入成功！成功添加 %1 首，共 %2 首，%3 首未匹配");
@@ -704,15 +520,6 @@ static QMap<QString, QString> zhCN()
     m["kugouPlaylistInfo"] = QStringLiteral("歌单：%1（共 %2 首歌曲）");
 
     // --- 异常与调试 ---
-    m["emptyMusic"] = QStringLiteral("音乐数据为空");
-    m["musicInPlaylist"] = QStringLiteral("音乐已在播放列表中");
-    m["invalidMusicList"] = QStringLiteral("无效的音乐列表");
-    m["musicExistsSkip"] = QStringLiteral("音乐已存在，跳过");
-    m["downloadMusicFailedSkipCache"] = QStringLiteral("下载音乐失败，跳过缓存");
-    m["getFilePathFailedSkipCache"] = QStringLiteral("获取文件路径失败，跳过缓存");
-    m["writeToFileFailedSkipCache"] = QStringLiteral("写入文件失败，跳过缓存");
-    m["parseRecentPlayListFailed"] = QStringLiteral("解析最近播放列表失败");
-    m["parseMusicFailed"] = QStringLiteral("解析音乐失败");
 
     // --- 站内消息 ---
     m["notificationsTitle"] = QStringLiteral("消息中心");
@@ -729,9 +536,6 @@ static QMap<QString, QString> zhCN()
     m["systemNotifyMissedFmt"] = QStringLiteral("断线期间收到 %1 条新消息");
 
     // --- 扫码登录补漏（此前只有英表有，简中/猫娘会显示键名）---
-    m["qrLoginExpired"] = QStringLiteral("二维码已过期，请点击刷新");
-    m["qrLoginFailed"] = QStringLiteral("二维码生成失败，请点击刷新");
-    m["qrLoginRefresh"] = QStringLiteral("刷新二维码");
     // --- 登录提示（此前三张表都没有，会直接显示 loginRequired）---
     m["loginRequired"] = QStringLiteral("请先登录");
 
@@ -748,17 +552,13 @@ static QMap<QString, QString> nyaCN()
     m["noData"] = QStringLiteral("空荡荡的，什么都没有喵... 呜喵...");
     m["cancel"] = QStringLiteral("才、才不要了喵~");
     m["confirm"] = QStringLiteral("决定就是你啦喵！");
-    m["delete"] = QStringLiteral("悄悄丢掉喵~");
     m["edit"] = QStringLiteral("变身改名术喵！");
     m["save"] = QStringLiteral("好好存起来喵~");
     m["close"] = QStringLiteral("消失掉喵~");
-    m["submit"] = QStringLiteral("交给指挥官喵~");
     m["back"] = QStringLiteral("退回刚才的地方喵~");
     m["refresh"] = QStringLiteral("让世界焕然一新喵~");
     m["clear"] = QStringLiteral("全部洗干净喵~");
-    m["all"] = QStringLiteral("全都要喵！");
     m["create"] = QStringLiteral("变出一个新的喵~");
-    m["rename"] = QStringLiteral("换个称呼喵~");
     m["play"] = QStringLiteral("让节奏响起来喵~");
     m["pause"] = QStringLiteral("稍微休息一下喵~");
     m["previous"] = QStringLiteral("前一首的说~");
@@ -786,18 +586,15 @@ static QMap<QString, QString> nyaCN()
     m["playQueue"] = QStringLiteral("播放队列喵~");
     m["playlistSongCount"] = QStringLiteral("共 %1 首歌喵");
     m["scrollToCurrentPlay"] = QStringLiteral("正在播的");
-    m["emptyPlaylist"] = QStringLiteral("播放列表空空的，快去加歌喵~");
     m["emptyPlaylistHint"] = QStringLiteral("队列空空的，快去加歌喵~");
     m["notPlaying"] = QStringLiteral("耳朵好寂寞喵，还没在唱歌呢...");
     m["volume"] = QStringLiteral("音量调节喵~");
     m["standard"] = QStringLiteral("标准");
-    m["muted"] = QStringLiteral("嘘——人家静音了喵~");
     m["songs"] = QStringLiteral("音符碎片喵~");
     m["playlists"] = QStringLiteral("音乐星系喵~");
     m["album"] = QStringLiteral("珍藏集喵~");
     m["artist"] = QStringLiteral("大歌星喵~");
     m["home"] = QStringLiteral("温暖的家喵~");
-    m["myPlaylists"] = QStringLiteral("咱的私人领性喵~");
     m["myPlaylistsTitle"] = QStringLiteral("指挥官的秘密歌单喵~");
     m["favorites"] = QStringLiteral("最最最喜欢的喵！");
     m["myFavorites"] = QStringLiteral("我最喜欢的音乐喵~");
@@ -816,7 +613,6 @@ static QMap<QString, QString> nyaCN()
     m["listColActions"] = QStringLiteral("操作");
     m["fuzzySearch"] = QStringLiteral("模糊搜索");
     m["favoritesSearchEmpty"] = QStringLiteral("搜不到关于 %1 的任何歌曲呀");
-    m["favoritePlaylists"] = QStringLiteral("珍藏的歌单喵~");
     m["favoritePlaylistsTitle"] = QStringLiteral("这些歌单超赞的喵~");
     m["recentPlay"] = QStringLiteral("刚才路过的声音喵~");
     m["emptyRecent"] = QStringLiteral("这里还没有留下过声音喵~");
@@ -875,19 +671,12 @@ static QMap<QString, QString> nyaCN()
     m["queueAddAllEmpty"] = QStringLiteral("现在这里一首歌都没有喵...");
     m["localMusicBadge"] = QStringLiteral("家里的音乐喵~");
     m["hasLyrics"] = QStringLiteral("有歌词喵~");
-    m["ranking"] = QStringLiteral("最厉害的排行喵~");
-    m["latest"] = QStringLiteral("新降临的旋律喵~");
-    m["library"] = QStringLiteral("大大的宝库喵~");
-    m["topSongs"] = QStringLiteral("超级热门曲喵~");
     m["hotMusic"] = QStringLiteral("火热音乐喵~");
     m["hotMusicDesc"] = QStringLiteral("大家都在听的火热音乐喵~");
     m["latestMusic"] = QStringLiteral("新鲜出炉喵~");
     m["latestMusicDesc"] = QStringLiteral("刚刚诞生到这个世界的音乐喵~");
     m["dailyRecommend"] = QStringLiteral("今日推荐喵~");
     m["dailyRecommendDesc"] = QStringLiteral("按你的收藏口味挑出来的喵~");
-    m["newSongs"] = QStringLiteral("新歌上架了喵~");
-    m["discoverMusic"] = QStringLiteral("一起去冒险寻歌喵！");
-    m["recommendPlaylists"] = QStringLiteral("为您挑选的礼物喵~");
     m["recommend_playlists"] = QStringLiteral("为您挑选的礼物喵~");
     m["hot_music"] = QStringLiteral("火热音乐喵~");
     m["latest_music"] = QStringLiteral("新鲜出炉喵~");
@@ -895,19 +684,9 @@ static QMap<QString, QString> nyaCN()
     m["loginSubtitle"] = QStringLiteral("登录 NekoMusic，继续享受你的音乐空间喵~");
     m["registerSubtitle"] = QStringLiteral("创建账号，开启你的专属音乐空间喵~");
     m["qrLoginSubtitle"] = QStringLiteral("使用手机扫码，快速安全地登录喵~");
-    m["qrLogin"] = QStringLiteral("喵码登录喵");
     m["qrLoginTitle"] = QStringLiteral("扫喵码登录喵");
-    m["qrLoginBack"] = QStringLiteral("用暗号登录喵");
     m["qrLoginHint"] = QStringLiteral("打开手机上的 NekoMusic，点「我的」右上角的「扫一扫喵」，对准上面的喵码喵");
-    m["qrLoginLoading"] = QStringLiteral("正在画喵码…");
-    m["qrLoginPending"] = QStringLiteral("等指挥官扫喵码喵…");
-    m["qrLoginScanned"] = QStringLiteral("扫到啦！在手机上点确认喵～");
-    m["qrLoginCanceled"] = QStringLiteral("指挥官在手机上取消了喵…");
-    m["qrLoginFailed"] = QStringLiteral("喵码画不出来喵，点一下刷新吧");
-    m["qrLoginConnectionLost"] = QStringLiteral("连接断掉了喵，点一下刷新吧");
-    m["qrLoginRefresh"] = QStringLiteral("换一张喵码");
     m["logout"] = QStringLiteral("要离开了喵？人家会想你的喵...");
-    m["accountInfo"] = QStringLiteral("账号信息喵");
     m["account"] = QStringLiteral("账号喵");
     m["registerTime"] = QStringLiteral("注册时间喵");
     m["vipStatusLabel"] = QStringLiteral("会员状态喵");
@@ -940,26 +719,14 @@ static QMap<QString, QString> nyaCN()
     m["mcpStatusStopped"] = QStringLiteral("还没打开喵");
     m["mcpStatusError"] = QStringLiteral("启动失败了喵：%1");
     m["mcpCopied"] = QStringLiteral("配置已经塞进剪贴板啦喵！");
-    m["playSettings"] = QStringLiteral("播放习惯设置喵~");
     m["language"] = QStringLiteral("交流语言喵~");
-    m["languageSettings"] = QStringLiteral("语言调校喵~");
-    m["languageNya"] = QStringLiteral("喵语中文喵");
-    m["languageChinese"] = QStringLiteral("简体中文");
-    m["languageEnglish"] = QStringLiteral("English");
-    m["musicCache"] = QStringLiteral("音乐零食缓存喵~");
-    m["musicCacheDesc"] = QStringLiteral("把听过的音乐偷偷藏进下载目录，下次就不费力了喵~");
-    m["cachePath"] = QStringLiteral("零食仓库路径喵~");
     m["about"] = QStringLiteral("关于咱的事喵~");
-    m["appVersion"] = QStringLiteral("版本代号喵~");
     m["currentVersion"] = QStringLiteral("现在的等级喵~");
     m["githubRepo"] = QStringLiteral("我们的秘密基地(GitHub)喵~");
     m["apiDocs"] = QStringLiteral("魔法说明书(API)喵~");
-    m["checkUpdate"] = QStringLiteral("看看有没有变聪明喵？");
-    m["checking"] = QStringLiteral("正在努力询问总部喵~...");
     m["isLatest"] = QStringLiteral("人家现在已经是超进化形态了喵！");
     m["createPlaylist"] = QStringLiteral("变出一个新歌单喵~");
     m["playlistName"] = QStringLiteral("歌单的名字喵~");
-    m["playlistDescription"] = QStringLiteral("给歌单写点什么喵~");
     m["musicCount"] = QStringLiteral("首音符喵~");
     m["goToLogin"] = QStringLiteral("快去登录嘛喵~");
     m["forgotPassword"] = QStringLiteral("弄丢暗号了吗喵？");
@@ -1003,7 +770,6 @@ static QMap<QString, QString> nyaCN()
     m["playModeList"] = QStringLiteral("乖乖排队循环喵~");
     m["playModeSingle"] = QStringLiteral("就喜欢这一首，死不放手喵！");
     m["playModeRandom"] = QStringLiteral("随心所欲乱点兵喵~");
-    m["playModeOff"] = QStringLiteral("播完就下班喵~");
     m["shortcuts"] = QStringLiteral("快捷键喵~");
     m["shortcutPlayPause"] = QStringLiteral("播放/暂停喵~");
     m["shortcutPreviousTrack"] = QStringLiteral("上一曲喵~");
@@ -1013,10 +779,6 @@ static QMap<QString, QString> nyaCN()
     m["shortcutResetDefault"] = QStringLiteral("恢复默认喵");
     m["shortcutResetAll"] = QStringLiteral("全部恢复默认喵");
     m["shortcutConflict"] = QStringLiteral("快捷键撞车啦：%1 喵");
-    m["shortcutWaylandHint"] = QStringLiteral(
-        "全局快捷键要走 xdg-desktop-portal 向系统申请权限喵~ 第一次或改键后可能会弹授权框；"
-        "也可以点下面按钮去系统设置里调喵~");
-    m["shortcutOpenSystemSettings"] = QStringLiteral("去系统设置里配全局快捷键喵");
     m["shortcutGlobalPortalActive"] = QStringLiteral("全局快捷键已启用（系统 portal）喵~");
     m["shortcutGlobalFallbackActive"] = QStringLiteral("portal 不可用，暂时只能窗口内用喵");
     m["shortcutGlobalInactive"] = QStringLiteral("全局快捷键还没启用喵");
@@ -1048,54 +810,11 @@ static QMap<QString, QString> nyaCN()
         "没找到虚拟声卡喵。Windows 上要先装 VB-Audio Virtual Cable 或 VoiceMeeter，"
         "才能把播放声音合并进麦克风喵。");
     m["micSyncInstallPending"] = QStringLiteral("正在安装 NekoMusic 虚拟麦克风喵，安装完成后请再开一次麦克风同步喵。");
-    m["showWindow"] = QStringLiteral("快现身喵~");
-    m["exitApp"] = QStringLiteral("残忍离去喵...");
 
     // --- 上传音乐喵~ ---
-    m["uploadMusic"] = QStringLiteral("把好歌喂给服务器喵~");
-    m["uploadMusicTitle"] = QStringLiteral("奉献音乐喵~");
-    m["uploadMusicDesc"] = QStringLiteral("上传你的大作喵~ 等管理员大大点头就能发布的说");
-    m["selectMusicFile"] = QStringLiteral("挑选音乐文件喵~");
-    m["selectCoverFile"] = QStringLiteral("挑选漂亮封面喵~");
-    m["selectLyricsFile"] = QStringLiteral("挑选歌词脚本喵~");
-    m["musicTitle"] = QStringLiteral("歌曲的大名喵~");
-    m["artistName"] = QStringLiteral("歌星的名字喵~");
-    m["uploadLanguageLabel"] = QStringLiteral("语言种类喵~");
     m["albumName"] = QStringLiteral("属于哪个专辑喵？（不写也行喵）");
-    m["tagsLabel"] = QStringLiteral("贴上标签喵~（选填喵）");
-    m["durationLabel"] = QStringLiteral("要唱多久喵~（秒）");
-    m["uploadBtn"] = QStringLiteral("投喂开始喵！");
-    m["uploading"] = QStringLiteral("正在拼命上传中喵~...");
-    m["uploadSuccess"] = QStringLiteral("投喂成功喵！乖乖等审核的说~");
-    m["uploadFailed"] = QStringLiteral("呜喵... 失败了，是不是网络欺负你喵？");
-    m["uploadDuplicate"] = QStringLiteral("这首歌已经住在这里了喵，换一首嘛~");
-    m["uploadUnauthorized"] = QStringLiteral("还没告诉人家你是谁喵，快登录！");
-    m["musicFileRequired"] = QStringLiteral("不给人家音乐文件，人家吃什么喵！");
-    m["titleRequired"] = QStringLiteral("歌曲叫什么名字喵？");
-    m["artistRequired"] = QStringLiteral("是谁唱的喵？");
-    m["languageRequired"] = QStringLiteral("一定要选一种语言喵~");
-    m["durationRequired"] = QStringLiteral("告诉人家要唱多久喵~");
-    m["durationInvalid"] = QStringLiteral("时长得是正整数才行喵~");
-    m["musicFileFormat"] = QStringLiteral("人家只吃 MP3、FLAC 和 WAV 喵~");
-    m["coverFileFormat"] = QStringLiteral("封面要漂亮的图片格式喵~");
-    m["lyricsFileFormat"] = QStringLiteral("歌词要 LRC 格式的喵~");
-    m["fillRequiredFields"] = QStringLiteral("红星号标记的都要填喵！");
-    m["langChinese"] = QStringLiteral("中土方言喵~");
-    m["langCantonese"] = QStringLiteral("粤味十足喵~");
-    m["langShanghainese"] = QStringLiteral("阿拉上海语喵~");
-    m["langEnglish"] = QStringLiteral("异域英文喵~");
-    m["langJapanese"] = QStringLiteral("霓虹语喵~");
-    m["langKorean"] = QStringLiteral("思密达语喵~");
-    m["langFrench"] = QStringLiteral("浪漫法语喵~");
-    m["langGerman"] = QStringLiteral("严谨德语喵~");
-    m["langRussian"] = QStringLiteral("战斗俄语喵~");
-    m["langInstrumental"] = QStringLiteral("纯纯的器乐喵~");
     m["required"] = QStringLiteral("*必须填喵！");
     m["optional"] = QStringLiteral("随你喜欢喵~");
-    m["musicFileInfo"] = QStringLiteral("档案信息喵~");
-    m["coverInfo"] = QStringLiteral("外貌信息喵~");
-    m["lyricsInfo"] = QStringLiteral("歌词信息喵~");
-    m["lyrics"] = QStringLiteral("歌词全文喵~");
     m["unknownArtist"] = QStringLiteral("无名歌星喵~");
     m["noLyrics"] = QStringLiteral("歌词逃走了喵~");
     m["videoRenderButton"] = QStringLiteral("生成分享视频喵");
@@ -1117,8 +836,6 @@ static QMap<QString, QString> nyaCN()
     m["videoRenderFailed"] = QStringLiteral("视频渲染失败：%1 喵");
     m["videoRenderCreateFailed"] = QStringLiteral("创建任务失败喵");
     m["videoRenderLocalUnsupported"] = QStringLiteral("本地音乐暂不支持生成分享视频喵");
-    m["basicInfo"] = QStringLiteral("基本档案喵~");
-    m["uploadNote"] = QStringLiteral("上传之后会进入幻境审核喵，审核通过才会正式降临的说~");
 
     // 版本更新喵~
     m["newVersionAvailable"] = QStringLiteral("锵锵！发现新版本喵！");
@@ -1129,7 +846,6 @@ static QMap<QString, QString> nyaCN()
     m["downloadComplete"] = QStringLiteral("呼，搬回来了！快安装喵~");
     m["installNow"] = QStringLiteral("现在就合体喵！");
     m["installLater"] = QStringLiteral("晚点再合体喵~");
-    m["updateViaAur"] = QStringLiteral("走 AUR 进化喵！");
     m["updateViaAurHint"] = QStringLiteral("点「马上进化」会在终端显示命令，自己敲喵：%1");
     m["updateViaAurNoHelper"] = QStringLiteral("没找到 yay/paru，只好带你去 AUR 页面喵...");
     m["openAurPage"] = QStringLiteral("打开 AUR 页面喵");
@@ -1137,7 +853,6 @@ static QMap<QString, QString> nyaCN()
     m["downloadFailed"] = QStringLiteral("半路摔倒了喵，下载失败...");
     m["retry"] = QStringLiteral("再试一次嘛，拜托了喵~");
     m["checkForUpdates"] = QStringLiteral("看看有没有变聪明喵？");
-    m["alreadyLatest"] = QStringLiteral("已经是顶级形态了喵~");
     m["version"] = QStringLiteral("版本代号喵~");
     
     // --- 网易云歌单导入喵~ ---
@@ -1145,7 +860,6 @@ static QMap<QString, QString> nyaCN()
     m["importNeteaseDesc"] = QStringLiteral("把网易云的歌单链接或ID告诉人家，人家帮你搬过来喵~");
     m["inputNeteaseLink"] = QStringLiteral("输入网易云歌单链接或ID喵...");
     m["createNewPlaylist"] = QStringLiteral("变出一个新歌单喵~");
-    m["creatingPlaylist"] = QStringLiteral("正在变出歌单中喵...");
     m["fetchPlaylist"] = QStringLiteral("获取歌单喵~");
     m["selectTargetPlaylist"] = QStringLiteral("选择目标歌单喵：");
     m["startImport"] = QStringLiteral("开始导入喵！");
@@ -1154,12 +868,8 @@ static QMap<QString, QString> nyaCN()
     m["emptyNeteasePlaylist"] = QStringLiteral("歌单空空的没有歌喵...");
     m["neteasePlaylistInfo"] = QStringLiteral("歌单：%1（共 %2 首歌曲喵）");
     m["loadPlaylistsFailed"] = QStringLiteral("加载歌单列表失败了喵...");
-    m["noPlaylistsToImport"] = QStringLiteral("没有歌单可以放歌喵，先创建一个嘛~");
     m["noTracksToImport"] = QStringLiteral("没有歌曲可导入喵~");
     m["searchingTracks"] = QStringLiteral("正在努力搜索匹配歌曲喵...");
-    m["searchFailed"] = QStringLiteral("搜索失败了喵...");
-    m["searchServiceBusy"] = QStringLiteral("服务繁忙，请稍后再试喵");
-    m["noMatchedTracks"] = QStringLiteral("找不到匹配的歌曲喵...");
     m["addingToPlaylist"] = QStringLiteral("正在添加 %1 首歌曲到歌单喵...");
     m["addToPlaylistFailed"] = QStringLiteral("添加到歌单失败了喵...");
     m["importSuccess"] = QStringLiteral("导入成功喵！添加了 %1 首，共 %2 首，%3 首没找到喵~");
@@ -1201,7 +911,6 @@ static QMap<QString, QString> nyaCN()
     m["kugouPlaylistInfo"] = QStringLiteral("歌单：%1（共 %2 首歌曲喵）");
 
     // --- 扫码登录补漏 ---
-    m["qrLoginExpired"] = QStringLiteral("喵码过期啦，点一下换新的喵");
     // --- 登录提示 ---
     m["loginRequired"] = QStringLiteral("要先登录才行喵~");
 
@@ -1218,18 +927,13 @@ static QMap<QString, QString> enUS()
     m["noData"] = "No Data";
     m["cancel"] = "Cancel";
     m["confirm"] = "Confirm";
-    m["delete"] = "Delete";
     m["edit"] = "Edit";
     m["save"] = "Save";
     m["close"] = "Close";
-    m["submit"] = "Submit";
     m["back"] = "Back";
     m["refresh"] = "Refresh";
     m["clear"] = "Clear";
-    m["all"] = "All";
     m["create"] = "Create";
-    m["rename"] = "Rename";
-    m["actions"] = "Actions";
     m["none"] = "None";
     m["unknown"] = "Unknown";
     m["defaultMusicPlayerTitle"] = "Default music player";
@@ -1244,7 +948,6 @@ static QMap<QString, QString> enUS()
         "The Windows Default apps page has been opened.\n"
         "Set Neko Music as the default opener for all supported media types such as .mp3, .flac, .wav, .m4a, .aac, .ogg, .wma, and .m3u.";
     m["inputRequired"] = "Please input";
-    m["inputValid"] = "Please enter valid content";
     m["justNow"] = "Just now";
     m["minutesAgo"] = "m ago";
     m["hoursAgo"] = "h ago";
@@ -1265,15 +968,10 @@ static QMap<QString, QString> enUS()
     m["playQueue"] = "Play Queue";
     m["playlistSongCount"] = "%1 songs";
     m["scrollToCurrentPlay"] = "Now Playing";
-    m["emptyPlaylist"] = "Playlist is empty";
     m["emptyPlaylistHint"] = "Queue is empty. Add some songs!";
     m["notPlaying"] = "Not Playing";
     m["volume"] = "Volume";
     m["standard"] = "Standard";
-    m["muted"] = "Muted";
-    m["unmuted"] = "Unmuted";
-    m["toggleMute"] = "Toggle Mute";
-    m["mute"] = "Mute";
     m["desktopLyrics"] = "Lyrics";
     m["desktopLyricsEnabled"] = "Desktop lyrics enabled";
     m["desktopLyricsDisabled"] = "Desktop lyrics disabled";
@@ -1323,11 +1021,6 @@ static QMap<QString, QString> enUS()
     m["shortcutResetDefault"] = "Reset";
     m["shortcutResetAll"] = "Reset All to Defaults";
     m["shortcutConflict"] = "Shortcut conflict: %1";
-    m["shortcutWaylandHint"] =
-        "Global shortcuts use xdg-desktop-portal to request system permission. "
-        "You may see an authorization dialog on first launch or after changes; "
-        "use the button below to configure in system settings.";
-    m["shortcutOpenSystemSettings"] = "Configure in System Settings";
     m["shortcutGlobalPortalActive"] = "Global shortcuts active (system portal)";
     m["shortcutGlobalFallbackActive"] = "Portal unavailable; using in-window shortcuts";
     m["shortcutGlobalInactive"] = "Global shortcuts inactive";
@@ -1369,10 +1062,6 @@ static QMap<QString, QString> enUS()
     m["playModeList"] = "List Loop";
     m["playModeSingle"] = "Single Loop";
     m["playModeRandom"] = "Random";
-    m["playModeOff"] = "No Loop";
-    m["minimize"] = "Minimize";
-    m["maximize"] = "Maximize";
-    m["closeWindow"] = "Close Window";
     m["duration"] = "Duration";
     m["title"] = "Title";
     m["cover"] = "Cover";
@@ -1380,13 +1069,10 @@ static QMap<QString, QString> enUS()
     m["playlists"] = "Playlists";
     m["album"] = "Album";
     m["artist"] = "Artist";
-    m["count"] = "Count";
     m["musicCount"] = "Songs";
-    m["songList"] = "Song List";
 
     // --- Navigation & Views ---
     m["home"] = "Home";
-    m["myPlaylists"] = "My Playlists";
     m["myPlaylistsTitle"] = "My Playlists";
     m["favorites"] = "My Favorites";
     m["myFavorites"] = "My Favorite Music";
@@ -1400,7 +1086,6 @@ static QMap<QString, QString> enUS()
     m["listColActions"] = "Actions";
     m["fuzzySearch"] = "Search";
     m["favoritesSearchEmpty"] = "No songs found for \"%1\"";
-    m["favoritePlaylists"] = "Favorite Playlists";
     m["favoritePlaylistsTitle"] = "Favorite Playlists";
     m["recentPlay"] = "Recently Played";
     m["emptyRecent"] = "No recently played records";
@@ -1459,52 +1144,32 @@ static QMap<QString, QString> enUS()
     m["queueAddAllEmpty"] = "There are no songs in this list yet";
     m["localMusicBadge"] = "Local";
     m["hasLyrics"] = "Has lyrics";
-    m["ranking"] = "Ranking";
-    m["latest"] = "Latest";
-    m["library"] = "Library";
-    m["topSongs"] = "Top Songs";
     m["hotMusic"] = "Hot Music";
     m["hotMusicDesc"] = "Most played popular songs";
     m["latestMusic"] = "Latest Music";
     m["latestMusicDesc"] = "Recently uploaded songs";
     m["dailyRecommend"] = "Daily Picks";
     m["dailyRecommendDesc"] = "Generated from your favorites taste";
-    m["newSongs"] = "New Songs";
-    m["discoverMusic"] = "Discover Music";
-    m["recommendPlaylists"] = "Recommended Playlists";
     m["recommend_playlists"] = "Recommended Playlists";
     m["hot_music"] = "Hot Music";
     m["latest_music"] = "Latest Music";
     m["searchMusic"] = "Songs";
     m["searchPlaylist"] = "Playlists";
-    m["searchResults"] = "Search Results";
     m["searchRelatedSuffix"] = " search results";
     m["searchStartHint"] = "Enter a keyword in the top search box first";
     m["searchEmptySongs"] = "Sorry, no songs found for \"%1\"";
     m["searchEmptyPlaylists"] = "Sorry, no playlists found for \"%1\"";
     m["searchEmptyArtists"] = "Sorry, no artists found for \"%1\"";
-    m["searchBackArtists"] = "← Artists";
     m["searchBackToSearch"] = "Back to search";
     m["loadMore"] = "Load more";
-    m["noResults"] = "No results found";
 
     // --- Account & Auth ---
     m["login"] = "Login";
     m["loginSubtitle"] = "Log in to NekoMusic to continue listening";
     m["registerSubtitle"] = "Create an account for your personal music space";
     m["qrLoginSubtitle"] = "Scan with your phone to log in securely";
-    m["qrLogin"] = "Scan QR Code";
     m["qrLoginTitle"] = "Scan QR to Log In";
-    m["qrLoginBack"] = "Use Password";
     m["qrLoginHint"] = "Open NekoMusic on your phone, tap Scan at the top-right of the Me tab, then scan the code above";
-    m["qrLoginLoading"] = "Generating QR code…";
-    m["qrLoginPending"] = "Waiting for scan…";
-    m["qrLoginScanned"] = "Scanned. Please confirm on your phone.";
-    m["qrLoginCanceled"] = "Canceled on your phone";
-    m["qrLoginExpired"] = "QR code expired. Click refresh.";
-    m["qrLoginFailed"] = "Failed to generate QR code. Click refresh.";
-    m["qrLoginConnectionLost"] = "Connection lost. Click refresh.";
-    m["qrLoginRefresh"] = "Refresh QR Code";
     m["logout"] = "Logout";
     m["register"] = "Register";
     m["email"] = "Email";
@@ -1514,12 +1179,8 @@ static QMap<QString, QString> enUS()
     m["nicknamePlaceholder"] = "Enter a new nickname (1-20 chars)";
     m["nicknameUpdated"] = "Nickname updated";
     m["nicknameUpdateFailed"] = "Failed to update nickname, please try again later";
-    m["emailOrName"] = "Email/Name";
     m["verificationCode"] = "Verification Code";
-    m["verifyCode"] = "Verify Code";
-    m["getCode"] = "Get Code";
     m["sendCode"] = "Send Code";
-    m["resendCode"] = "Resend";
     m["registerNeedNicknameForCode"] = "Please enter a nickname before requesting the verification code";
     m["captchaSecurityTitle"] = "Security check";
     m["captchaSecurityDesc"] =
@@ -1532,10 +1193,7 @@ static QMap<QString, QString> enUS()
     m["captchaLoadFailed"] = "Failed to load security check";
     m["captchaVerifyFail"] = "Incorrect position or expired challenge; try a new image";
     m["registerTime"] = "Registration Time";
-    m["accountInfo"] = "Account Info";
     m["account"] = "Account";
-    m["accountSettings"] = "Account Settings";
-    m["notLoggedIn"] = "Not Logged In";
     m["goToLogin"] = "Go to Login";
     m["forgotPassword"] = "Forgot Password?";
     m["forgotPasswordTitle"] = "Reset your password";
@@ -1552,29 +1210,18 @@ static QMap<QString, QString> enUS()
     m["inputTooLong"] = "Some input is too long";
     m["loadingShort"] = "Working...";
     m["countdownSeconds"] = "%1s";
-    m["welcome"] = "Welcome Back";
-    m["welcomeSubtitle"] = "Discover great music, enjoy every moment";
-    m["goodMorning"] = "Good Morning";
-    m["goodAfternoon"] = "Good Afternoon";
-    m["goodEvening"] = "Good Evening";
-    m["lateNight"] = "Late Night";
 
     // --- Playlist Operations ---
     m["createPlaylist"] = "Create Playlist";
-    m["createFirstPlaylist"] = "Create your first playlist";
     m["noPlaylists"] = "No playlists yet, please create one";
     m["playlistName"] = "Playlist Name";
-    m["playlistDescription"] = "Description";
     m["playlistNamePlaceholder"] = "Enter playlist name";
-    m["playlistDescPlaceholder"] = "Enter playlist description";
     m["creator"] = "Creator";
     m["editPlaylist"] = "Edit Playlist";
-    m["deletePlaylist"] = "Delete Playlist";
     m["renamePlaylist"] = "Rename Playlist";
     m["modifyPlaylistDesc"] = "Edit Description";
     m["inputNewPlaylistName"] = "Enter new playlist name";
     m["inputPlaylistDesc"] = "Enter description";
-    m["inputPlaylistName"] = "Please enter playlist name";
     m["collectPlaylist"] = "Collect Playlist";
     // Update
     m["newVersionAvailable"] = "New Version Available";
@@ -1586,7 +1233,6 @@ static QMap<QString, QString> enUS()
     m["downloadComplete"] = "Download Complete";
     m["installNow"] = "Install Now";
     m["installLater"] = "Install Later";
-    m["updateViaAur"] = "Update via AUR";
     m["updateViaAurHint"] = "Terminal will show this command after you click Update: %1";
     m["updateViaAurNoHelper"] = "yay or paru not found; opening AUR package page";
     m["openAurPage"] = "Open AUR Page";
@@ -1594,9 +1240,7 @@ static QMap<QString, QString> enUS()
     m["downloadFailed"] = "Download Failed";
     m["retry"] = "Retry";
     m["checkForUpdates"] = "Check for Updates";
-    m["alreadyLatest"] = "Already Latest";
     m["version"] = "Version";
-    m["collectedPlaylist"] = "Collected";
     m["uncollectPlaylist"] = "Uncollect";
     m["removeFromPlaylist"] = "Remove from Playlist";
     m["addToPlaylist"] = "Add to Playlist";
@@ -1605,34 +1249,17 @@ static QMap<QString, QString> enUS()
     m["removeFromQueue"] = "Remove from Queue";
     m["playNext"] = "Play Next";
     m["playNextAdded"] = "Added to play next";
-    m["addToPlaylistTitle"] = "Add to Playlist";
     m["createNewPlaylistRow"] = "Create New Playlist";
     m["addingToPlaylist"] = "Adding to playlist…";
-    m["selectPlaylist"] = "Select Playlist";
-    m["orCreateNewPlaylist"] = "Or create new playlist";
-    m["addMusicToPlaylist"] = "Add music to playlist";
     m["newPlaylist"] = "New Playlist";
     m["ok"] = "OK";
-    m["musicAdded"] = "Music added to playlist";
     m["musicAddFailed"] = "Failed to add music to playlist";
     m["noMusicInPlaylist"] = "No music in this playlist";
 
     // --- Settings & Cache & Update ---
     m["settings"] = "Settings";
-    m["playSettings"] = "Playback Settings";
     m["language"] = "Language";
-    m["languageSettings"] = "Language Settings";
-    m["languageNya"] = "喵语中文";
-    m["languageChinese"] = "简体中文";
-    m["languageEnglish"] = "English";
-    m["musicCache"] = "Music Cache";
-    m["musicCacheDesc"] = "Automatically cache played music to local directory";
-    m["cachePath"] = "Cache Path";
-    m["cacheEnabled"] = "Cache Enabled";
-    m["cacheDisabled"] = "Cache Disabled";
-    m["loadFromCache"] = "Load from Cache";
     m["about"] = "About";
-    m["appVersion"] = "Version";
     m["currentVersion"] = "Current Version";
     m["githubRepo"] = "GitHub Repository";
     m["apiDocs"] = "API Docs";
@@ -1653,36 +1280,14 @@ static QMap<QString, QString> enUS()
         "I have read and agree to the <a href=\"agreement\">User Agreement</a> and <a href=\"privacy\">Privacy Policy</a>";
     m["consentRequired"] = "Please read and agree to the User Agreement and Privacy Policy first";
     m["createdAt"] = "Created At";
-    m["updatedAt"] = "Updated At";
     m["description"] = "Description";
-    m["checkUpdate"] = "Check for Updates";
-    m["checking"] = "Checking...";
-    m["updateAvailable"] = "New version available";
-    m["downloadUpdate"] = "Download Now";
     m["downloadCancelled"] = "Download Cancelled";
     m["isLatest"] = "Already the latest version";
-    m["versionDownloaded"] = "Version {version} downloaded";
-    m["updateDownloadComplete"] = "Update download complete";
 
     // --- Feedback ---
-    m["operationFailed"] = "Operation Failed";
     m["networkError"] = "Network Error, please check server connection";
     m["networkErrorRetry"] = "Network error, please try again";
-    m["lanDeviceConnected"] = "Connected to %1";
-    m["loginSuccess"] = "Login Successful, welcome back!";
-    m["loginFailed"] = "Login Failed";
-    m["logoutSuccess"] = "Logged out successfully";
-    m["registerSuccess"] = "Registered successfully, please login";
-    m["registerFailed"] = "Registration Failed";
-    m["createSuccess"] = "Created Successfully";
-    m["createFailed"] = "Creation Failed";
-    m["createPlaylistSuccess"] = "Playlist created successfully";
     m["createPlaylistFailed"] = "Failed to create playlist";
-    m["deleteSuccess"] = "Deleted successfully";
-    m["deleteFailed"] = "Deletion failed";
-    m["modifySuccess"] = "Modified successfully";
-    m["renameSuccess"] = "Renamed successfully";
-    m["updateSuccess"] = "Updated successfully";
     m["favoriteSuccess"] = "Added to favorites";
     m["favoriteFailed"] = "Failed to favorite";
     m["cancelFavoriteSuccess"] = "Removed from favorites";
@@ -1691,35 +1296,13 @@ static QMap<QString, QString> enUS()
     m["cancelFavoritePlaylistFailed"] = "Failed to uncollect";
     m["collectPlaylistSuccess"] = "Collected playlist";
     m["collectPlaylistFailed"] = "Failed to collect";
-    m["unfavoriteSuccess"] = "Unfavorited successfully";
     m["addToPlaylistSuccess"] = "Added to playlist successfully";
     m["addToPlaylistFailed"] = "Failed to add";
-    m["addSuccess"] = "Added successfully";
-    m["removeSuccess"] = "Removed successfully";
-    m["removeFailed"] = "Removal failed";
     m["musicRemovedSuccess"] = "Music removed from playlist";
-    m["switchLanguageSuccess"] = "Language settings saved";
-    m["switchLanguageFailed"] = "Failed to switch language";
-    m["checkUpdateFailed"] = "Failed to check for updates";
-    m["sendVerifyCodeFailed"] = "Failed to send code";
-    m["verifyCodeSent"] = "Verification code sent to your email";
-    m["codeSent"] = "Code sent";
-    m["inputEmail"] = "Please enter email address";
-    m["inputValidEmail"] = "Please enter a valid email";
-    m["emailRequired"] = "Email is required";
-    m["passwordRequired"] = "Password is required";
-    m["codeRequired"] = "Verification code is required";
-    m["nameRequired"] = "Nickname is required";
-    m["inputNameRequired"] = "Playlist name is required";
     m["fillEmailAndPassword"] = "Please fill email and password";
-    m["fillEmail"] = "Please fill email";
-    m["fillVerificationCode"] = "Please fill verification code";
     m["fillAllFields"] = "Please fill all fields";
     m["pleaseEnterEmail"] = "Please enter email address first";
     m["pleaseLoginFirst"] = "Please login first";
-    m["deleteConfirm"] = "Are you sure you want to delete?";
-    m["confirmRemove"] = "Confirm Removal";
-    m["confirmRemoveMessage"] = "Are you sure you want to remove this music from the playlist?";
     m["emptyFavorites"] = "No favorite music yet";
     m["addToFavorites"] = "Add to favorites";
     m["removeFromFavorites"] = "Remove from favorites";
@@ -1741,75 +1324,14 @@ static QMap<QString, QString> enUS()
         "for local + online playback.";
     m["shareClipboardLinkOnline"] = "Song page (open in your browser):";
     m["shareClipboardLinkLocal"] = "Local file (file URL):";
-    m["deleteConfirmWithPlaylistName"] = "Are you sure you want to delete playlist \"{name}\"? This cannot be undone.";
-    m["invalidEmail"] = "Invalid email format";
-    m["emailPlaceholder"] = "Enter email";
-    m["passwordPlaceholder"] = "Enter password";
-    m["namePlaceholder"] = "Enter nickname";
-    m["inputKeywordToSearch"] = "Enter keyword to search";
 
     // --- Errors & Debug ---
-    m["emptyMusic"] = "Music data is empty";
-    m["musicInPlaylist"] = "Music is already in playlist";
-    m["invalidMusicList"] = "Invalid music list";
-    m["musicExistsSkip"] = "Music already exists, skipping";
-    m["downloadMusicFailedSkipCache"] = "Failed to download, skipping cache";
-    m["getFilePathFailedSkipCache"] = "Failed to get path, skipping cache";
-    m["writeToFileFailedSkipCache"] = "Failed to write file, skipping cache";
-    m["parseRecentPlayListFailed"] = "Failed to parse recent plays";
-    m["parseMusicFailed"] = "Failed to parse music";
 
-    m["showWindow"] = "Show Window";
-    m["exitApp"] = "Exit";
 
     // --- Upload Music ---
-    m["uploadMusic"] = "Upload Music";
-    m["uploadMusicTitle"] = "Upload Music";
-    m["uploadMusicDesc"] = "Upload your music, waiting for admin review and publish";
-    m["selectMusicFile"] = "Select Music File";
-    m["selectCoverFile"] = "Select Cover Image";
-    m["selectLyricsFile"] = "Select Lyrics File";
-    m["musicTitle"] = "Song Title";
-    m["artistName"] = "Artist Name";
-    m["uploadLanguageLabel"] = "Language";
     m["albumName"] = "Album Name (Optional)";
-    m["tagsLabel"] = "Tags (Optional)";
-    m["durationLabel"] = "Duration (seconds)";
-    m["uploadBtn"] = "Upload";
-    m["uploading"] = "Uploading...";
-    m["uploadSuccess"] = "Uploaded successfully, pending review";
-    m["uploadFailed"] = "Upload failed";
-    m["uploadDuplicate"] = "Duplicate music exists, please check and re-upload";
-    m["uploadUnauthorized"] = "Please login first";
-    m["musicFileRequired"] = "Please select a music file";
-    m["titleRequired"] = "Please enter song title";
-    m["artistRequired"] = "Please enter artist name";
-    m["languageRequired"] = "Please select language";
-    m["durationRequired"] = "Please enter duration";
-    m["durationInvalid"] = "Duration must be a positive integer";
-    m["noMusicFileSelected"] = "No music file selected";
-    m["noCoverSelected"] = "No cover selected";
-    m["noLyricsSelected"] = "No lyrics selected";
-    m["musicFileFormat"] = "Supports MP3, FLAC, WAV formats";
-    m["coverFileFormat"] = "Supports JPG, PNG, GIF formats";
-    m["lyricsFileFormat"] = "Supports LRC format";
-    m["fillRequiredFields"] = "Please fill required fields";
-    m["langChinese"] = "Chinese";
-    m["langCantonese"] = "Cantonese";
-    m["langShanghainese"] = "Shanghainese";
-    m["langEnglish"] = "English";
-    m["langJapanese"] = "Japanese";
-    m["langKorean"] = "Korean";
-    m["langFrench"] = "French";
-    m["langGerman"] = "German";
-    m["langRussian"] = "Russian";
-    m["langInstrumental"] = "Instrumental";
     m["required"] = "*";
     m["optional"] = "Optional";
-    m["musicFileInfo"] = "Music File";
-    m["coverInfo"] = "Cover Image";
-    m["lyricsInfo"] = "Lyrics File";
-    m["lyrics"] = "Lyrics";
     m["unknownArtist"] = "Unknown Artist";
     m["noLyrics"] = "No Lyrics";
     m["videoRenderButton"] = "Create share video";
@@ -1831,7 +1353,6 @@ static QMap<QString, QString> enUS()
     m["videoRenderFailed"] = "Render failed: %1";
     m["videoRenderCreateFailed"] = "Failed to create job";
     m["videoRenderLocalUnsupported"] = "Local tracks cannot create share videos";
-    m["vipNav"] = "VIP Center";
     m["vipCenterTitle"] = "VIP Center";
     m["vipStatusActive"] = "VIP Member";
     m["vipStatusExpires"] = "Expires: %1";
@@ -1842,8 +1363,6 @@ static QMap<QString, QString> enUS()
     m["vipPricingLoadFailed"] = "Failed to load pricing";
     m["vipPayNoUrl"] = "No payment URL received";
     m["vipPayCreateFailed"] = "Failed to create order";
-    m["vipPayOpenFailed"] = "Could not open payment URL";
-    m["vipPayBrowserHint"] = "Checkout opened in browser. Return here and tap Refresh after payment.";
     m["vipRefresh"] = "Refresh";
     m["vipMonthsSuffix"] = " mo";
     m["vipDaysSuffix"] = " days";
@@ -1870,15 +1389,12 @@ static QMap<QString, QString> enUS()
     m["vipChangePayMethod"] = "Change method";
     m["vipQrGenerateFailed"] = "Failed to generate QR code";
     m["vipQrImageLoadFailed"] = "Failed to load QR image";
-    m["basicInfo"] = "Basic Info";
-    m["uploadNote"] = "Uploaded music will be pending review, published after approval";
 
     // --- Netease Playlist Import ---
     m["importNeteasePlaylist"] = "Import Netease Playlist";
     m["importNeteaseDesc"] = "Enter Netease playlist link or ID to import songs to local playlist";
     m["inputNeteaseLink"] = "Enter Netease playlist link or ID...";
     m["createNewPlaylist"] = "Create New Playlist";
-    m["creatingPlaylist"] = "Creating playlist...";
     m["fetchPlaylist"] = "Fetch Playlist";
     m["selectTargetPlaylist"] = "Select target playlist:";
     m["startImport"] = "Start Import";
@@ -1887,12 +1403,8 @@ static QMap<QString, QString> enUS()
     m["emptyNeteasePlaylist"] = "Playlist is empty";
     m["neteasePlaylistInfo"] = "Playlist: %1 (%2 songs)";
     m["loadPlaylistsFailed"] = "Failed to load playlists";
-    m["noPlaylistsToImport"] = "No playlists available, please create one first";
     m["noTracksToImport"] = "No tracks to import";
     m["searchingTracks"] = "Searching for matching tracks...";
-    m["searchFailed"] = "Search failed";
-    m["searchServiceBusy"] = "Server is busy. Please try again later.";
-    m["noMatchedTracks"] = "No matching tracks found";
     m["addingToPlaylist"] = "Adding %1 tracks to playlist...";
     m["addToPlaylistFailed"] = "Failed to add to playlist";
     m["importSuccess"] = "Import successful! Added %1 of %2 tracks, %3 not matched";
