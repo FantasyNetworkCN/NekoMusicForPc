@@ -5,15 +5,21 @@
         <file>icons/app.png</file>
         <file>icons/Album.svg</file>
         <file>icons/Artist.svg</file>
+        <file>icons/AutoFix.svg</file>
+        <file>icons/AutoTheme.svg</file>
         <file>icons/Batch.svg</file>
         <file>icons/Bell.svg</file>
         <file>icons/Calendar-Empty.svg</file>
         <file>icons/Chat.svg</file>
         <file>icons/Check.svg</file>
         <file>icons/Close.svg</file>
+        <file>icons/CloudLockOpen.svg</file>
+        <file>icons/Cloud.svg</file>
         <file>icons/Code.svg</file>
+        <file>icons/Collapse.svg</file>
         <file>icons/Controls.svg</file>
         <file>icons/Copy.svg</file>
+        <file>icons/DarkTheme.svg</file>
         <file>icons/Delete.svg</file>
         <file>icons/DeleteSweep.svg</file>
         <file>icons/DesktopLyric2.svg</file>
@@ -23,16 +29,29 @@
         <file>icons/DownloadDone.svg</file>
         <file>icons/Download.svg</file>
         <file>icons/Down.svg</file>
+        <file>icons/DropDown.svg</file>
+        <file>icons/Earth.svg</file>
         <file>icons/EditNote.svg</file>
         <file>icons/Edit.svg</file>
         <file>icons/Eq.svg</file>
+        <file>icons/ExitToApp.svg</file>
         <file>icons/Expand.svg</file>
         <file>icons/Extension.svg</file>
+        <file>icons/EyeLock.svg</file>
+        <file>icons/Eye.svg</file>
         <file>icons/FavoriteBorder.svg</file>
         <file>icons/Favorite.svg</file>
+        <file>icons/Fire.svg</file>
+        <file>icons/FolderCog.svg</file>
+        <file>icons/FolderMusic.svg</file>
+        <file>icons/FolderPlus.svg</file>
         <file>icons/Folder.svg</file>
+        <file>icons/FormatList.svg</file>
+        <file>icons/Forward5.svg</file>
+        <file>icons/FullscreenExit.svg</file>
         <file>icons/Fullscreen.svg</file>
         <file>icons/Github.svg</file>
+        <file>icons/HeartBit.svg</file>
         <file>icons/HeartBroken.svg</file>
         <file>icons/Help.svg</file>
         <file>icons/HiRes.svg</file>
@@ -45,9 +64,12 @@
         <file>icons/Info.svg</file>
         <file>icons/IP.svg</file>
         <file>icons/Keyboard.svg</file>
+        <file>icons/LightTheme.svg</file>
         <file>icons/Link.svg</file>
+        <file>icons/ListLockOpen.svg</file>
         <file>icons/List.svg</file>
         <file>icons/Location.svg</file>
+        <file>icons/LockOpen.svg</file>
         <file>icons/Lock.svg</file>
         <file>icons/Lyrics.svg</file>
         <file>icons/Menu.svg</file>
@@ -59,31 +81,61 @@
         <file>icons/NavigateNext.svg</file>
         <file>icons/Palette.svg</file>
         <file>icons/Password.svg</file>
+        <file>icons/Paste.svg</file>
+        <file>icons/PauseCircle.svg</file>
         <file>icons/Pause.svg</file>
         <file>icons/Person.svg</file>
+        <file>icons/Phone.svg</file>
+        <file>icons/PlayCircle.svg</file>
+        <file>icons/PlayFilled.svg</file>
         <file>icons/PlaylistAddCheck.svg</file>
         <file>icons/PlaylistAdd.svg</file>
         <file>icons/PlayList.svg</file>
         <file>icons/PlayNext.svg</file>
+        <file>icons/PlayRate.svg</file>
         <file>icons/Play.svg</file>
+        <file>icons/Podcast.svg</file>
         <file>icons/Power.svg</file>
         <file>icons/QQ.svg</file>
+        <file>icons/Radio.svg</file>
+        <file>icons/Record.svg</file>
         <file>icons/Refresh.svg</file>
         <file>icons/RepeatSong.svg</file>
         <file>icons/Repeat.svg</file>
+        <file>icons/Replay5.svg</file>
         <file>icons/Restart.svg</file>
         <file>icons/Right.svg</file>
+        <file>icons/RssFeed.svg</file>
         <file>icons/SearchOff.svg</file>
         <file>icons/Search.svg</file>
+        <file>icons/SettingsLine.svg</file>
+        <file>icons/SettingsOther.svg</file>
         <file>icons/Settings.svg</file>
         <file>icons/Share.svg</file>
         <file>icons/Shuffle.svg</file>
         <file>icons/SkipNext.svg</file>
         <file>icons/SkipPrev.svg</file>
+        <file>icons/SnippetFolder.svg</file>
+        <file>icons/SortAZ.svg</file>
+        <file>icons/SortClockDown.svg</file>
+        <file>icons/SortClockUp.svg</file>
+        <file>icons/SortDateDown.svg</file>
+        <file>icons/SortDateUp.svg</file>
+        <file>icons/SortDown.svg</file>
+        <file>icons/Sort.svg</file>
+        <file>icons/SortUp.svg</file>
+        <file>icons/SortZA.svg</file>
         <file>icons/Star.svg</file>
         <file>icons/Storage.svg</file>
         <file>icons/Stream.svg</file>
         <file>icons/Tag.svg</file>
+        <file>icons/TextPlay.svg</file>
+        <file>icons/TextSizeAdd.svg</file>
+        <file>icons/TextSizeReduce.svg</file>
+        <file>icons/ThumbDown.svg</file>
+        <file>icons/ThumbUpOff.svg</file>
+        <file>icons/ThumbUp.svg</file>
+        <file>icons/TimeAuto.svg</file>
         <file>icons/Time.svg</file>
         <file>icons/Update.svg</file>
         <file>icons/Up.svg</file>
@@ -93,8 +145,12 @@
         <file>icons/VolumeOff.svg</file>
         <file>icons/VolumeUp.svg</file>
         <file>icons/WindowClose.svg</file>
+        <file>icons/WindowHide.svg</file>
         <file>icons/WindowMaximize.svg</file>
         <file>icons/WindowMinimize.svg</file>
+        <file>icons/WindowRestore.svg</file>
+        <file>icons/ZoomIn.svg</file>
+        <file>icons/Zoom.svg</file>
         <file>style.qss</file>
         <file>style-light.qss</file>
         <file>background-pages.jpg</file>
