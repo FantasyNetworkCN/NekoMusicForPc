@@ -254,7 +254,8 @@ private:
         for (const auto &pair : pairs)
             setRawHeader(pair.first, pair.second);
 
-        for (int header = 0; header < QNetworkRequest::NumKnownHeaders; ++header) {
+        // Qt 6.7 没有 NumKnownHeaders，使用保守上限
+        for (int header = 0; header < 64; ++header) {
             const auto known = static_cast<QNetworkRequest::KnownHeaders>(header);
             const QVariant value = inner->header(known);
             if (value.isValid())

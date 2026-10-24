@@ -900,8 +900,8 @@ void PlayerPage::refreshCoverLayout()
 
 QColor PlayerPage::idleIconColor() const
 {
-    const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QColor fb = dark ? QColor(255, 255, 255, 210) : QColor(33, 37, 41, 210);
+    // 播放页背景恒为封面深色，图标固定浅色，不跟随系统主题
+    const QColor fb(255, 255, 255, 210);
     return blendCoverTint(m_coverMainColor, fb, 70);
 }
 
@@ -912,19 +912,18 @@ QColor PlayerPage::accentIconColor() const
 
 void PlayerPage::refreshTintedPalette()
 {
-    const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QColor titleBase = dark ? QColor(252, 248, 255) : QColor(33, 37, 41);
-    const QColor subBase = dark ? QColor(245, 240, 255, 178) : QColor(33, 37, 41, 178);
-    const QColor muteBase = dark ? QColor(245, 240, 255, 130) : QColor(33, 37, 41, 130);
+    // 播放页背景恒为封面深色，文字固定浅色，不跟随系统主题
+    const QColor titleBase(252, 248, 255);
+    const QColor subBase(245, 240, 255, 178);
+    const QColor muteBase(245, 240, 255, 130);
 
-    const QColor titleC = blendCoverTint(m_coverMainColor, titleBase, dark ? 78 : 55);
-    const QColor subC = blendCoverTint(m_coverMainColor, subBase, dark ? 62 : 48);
-    const QColor muteC = blendCoverTint(m_coverMainColor, muteBase, dark ? 50 : 40);
+    const QColor titleC = blendCoverTint(m_coverMainColor, titleBase, 78);
+    const QColor subC = blendCoverTint(m_coverMainColor, subBase, 62);
+    const QColor muteC = blendCoverTint(m_coverMainColor, muteBase, 50);
     m_clrTitle = titleC.name(QColor::HexRgb);
     m_clrArtist = subC.name(QColor::HexArgb);
     m_clrAlbum = muteC.name(QColor::HexArgb);
     // SPlayer DefaultLyric：默认继承浅色；当前行 .on opacity 1，其余 .is-lrc opacity 0.3
-    Q_UNUSED(dark);
     m_clrLyricDim = QStringLiteral("rgba(255,255,255,77)");
     m_clrLyricHi = QStringLiteral("#FFFFFF");
     m_clrLyricHiTrans = QStringLiteral("rgba(255,255,255,153)");
@@ -1811,7 +1810,7 @@ void PlayerPage::setupPlayerControl()
     barLay->addWidget(m_ppRightTools, 1);
 
     m_ppControlOpacity = new QGraphicsOpacityEffect(m_controlBar);
-    m_ppControlOpacity->setOpacity(0.0);
+    m_ppControlOpacity->setOpacity(1.0);
     m_controlBar->setGraphicsEffect(m_ppControlOpacity);
     m_ppControlOpAnim = new QPropertyAnimation(m_ppControlOpacity, "opacity", this);
     m_ppControlOpAnim->setDuration(300);
@@ -1996,6 +1995,11 @@ void PlayerPage::updateCoverBackdrop(const QPixmap &source)
 
 void PlayerPage::setControlSidesVisible(bool visible)
 {
+    // 播放页控件常驻显示，避免自动隐藏后用户找不到
+    if (m_ppControlOpacity) m_ppControlOpacity->setOpacity(1.0);
+    if (m_ppMenuOpacity) m_ppMenuOpacity->setOpacity(1.0);
+    if (m_controlBar) m_controlBar->setAttribute(Qt::WA_TransparentForMouseEvents, false);
+    return;
     if (m_controlSidesVisible == visible)
         return;
     m_controlSidesVisible = visible;

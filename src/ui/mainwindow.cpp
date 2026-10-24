@@ -446,7 +446,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     });
 
     setWindowTitle(QStringLiteral("NekoMusic"));
-    resize(1200, 800);
+    resize(1000, 680);
     setMinimumSize(960, 640);
     scheduleShellBackdropRebuild(0);
 
