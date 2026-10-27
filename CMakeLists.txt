@@ -40,6 +40,10 @@ else()
 endif()
 message(STATUS "NEKO target: WINDOWS=${NEKO_TARGET_WINDOWS} APPLE=${NEKO_TARGET_APPLE} UNIX=${NEKO_TARGET_UNIX} SYSTEM=${CMAKE_SYSTEM_NAME}")
 
+if(NEKO_TARGET_UNIX)
+    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+endif()
+
 # Qt6
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Multimedia Network SvgWidgets Sql Concurrent)
 if(NEKO_TARGET_UNIX)
@@ -189,6 +193,8 @@ set(SOURCES
         src/core/mcpserver.cpp
         src/core/mcpbridge.cpp
         src/core/apiclient.cpp
+        src/core/clientidentity.cpp
+        src/core/clientidentitykey.cpp
         src/core/nekonetworkaccessmanager.cpp
         src/core/replaynonce.cpp
         src/core/notificationcenter.cpp
@@ -278,6 +284,8 @@ set(HEADERS
         src/core/mcpserver.h
         src/core/mcpbridge.h
         src/core/apiclient.h
+        src/core/clientidentity.h
+        src/core/clientidentitykey.h
         src/core/nekonetworkaccessmanager.h
         src/core/replaynonce.h
         src/core/notificationcenter.h
@@ -393,7 +401,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         Qt6::Concurrent
 )
 if(NEKO_TARGET_UNIX)
-    target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::DBus)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::DBus OpenSSL::Crypto)
     find_package(X11)
     if(X11_FOUND)
         target_link_libraries(${PROJECT_NAME} PRIVATE X11::X11)
@@ -447,15 +455,17 @@ if(APPLE)
             "-framework Foundation"
             "-framework MediaPlayer"
             "-framework CoreServices"
+            "-framework Security"
+            "-framework CoreFoundation"
     )
 endif()
 if(WIN32)
     # MSVC 用 Shlwapi.lib；MinGW 交叉编译用 libshlwapi.a（小写 -lshlwapi）
     # user32 提供全局快捷键所需的 RegisterHotKey/UnregisterHotKey
     if(MINGW)
-        target_link_libraries(${PROJECT_NAME} PRIVATE shlwapi advapi32 user32)
+        target_link_libraries(${PROJECT_NAME} PRIVATE shlwapi advapi32 user32 bcrypt ncrypt)
     else()
-        target_link_libraries(${PROJECT_NAME} PRIVATE Shlwapi Advapi32 User32)
+        target_link_libraries(${PROJECT_NAME} PRIVATE Shlwapi Advapi32 User32 bcrypt ncrypt)
     endif()
 endif()
 
@@ -532,6 +542,7 @@ if(LINUX)
             libqt6network6
             libqt6sql6
             libqt6dbus6
+            libssl3
     )
     if(TARGET KF6::WindowSystem)
         list(APPEND _neko_debian_depends libkf6windowsystem6)

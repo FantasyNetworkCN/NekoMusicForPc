@@ -24,12 +24,13 @@
 | --- | --- |
 | CMake | ≥ 3.20 |
 | Qt 6 | ≥ 6.2（需 Multimedia、Widgets 等，与 `CMakeLists.txt` 一致） |
+| OpenSSL | ≥ 3.0（Linux 客户端实例密钥，需开发头文件） |
 | C++17 编译器 | GCC ≥ 9 / MSVC 2019 / Clang ≥ 10 |
 
 **Debian / Ubuntu 示例：**
 
 ```bash
-sudo apt install cmake qt6-base-dev qt6-multimedia-dev
+sudo apt install cmake qt6-base-dev qt6-multimedia-dev libssl-dev
 ```
 
 ---

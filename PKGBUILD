@@ -6,7 +6,7 @@ pkgdesc="NekoMusic: Free High-Quality Cloud Music"
 arch=('x86_64' 'aarch64')
 url="https://github.com/FantasyNetworkCN/NekoMusicForPc"
 license=('AGPL-3.0-or-later')
-depends=('qt6-base' 'qt6-multimedia' 'qt6-svg')
+depends=('qt6-base' 'qt6-multimedia' 'qt6-svg' 'openssl')
 makedepends=('cmake' 'ninja')
 
 _commit=8b8a6bd49d4ac737ae8ac55279ce95ea4394fe0f
