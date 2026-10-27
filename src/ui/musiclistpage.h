@@ -69,6 +69,7 @@ private:
     void backfillDurationsFromMusicInfo(int gen);
     QString pageTitle() const;
     QString pageDesc() const;
+    void showMoreMenu();
     /** 批量编辑模式：按钮排 ↔ 批量操作条切换 */
     void setupBatchBar();
     void enterBatchMode();
@@ -86,10 +87,8 @@ private:
     QLabel *m_descLbl = nullptr;
     QLabel *m_countLbl = nullptr;
     QPushButton *m_playAllBtn = nullptr;
-    QPushButton *m_downloadAllBtn = nullptr;
     QWidget *m_menuRow = nullptr;
-    QPushButton *m_addAllToQueueBtn = nullptr;
-    QPushButton *m_batchManageBtn = nullptr;
+    QPushButton *m_moreBtn = nullptr;
     BatchActionBar *m_batchBar = nullptr;
 
     SongListWidget *m_songList = nullptr;

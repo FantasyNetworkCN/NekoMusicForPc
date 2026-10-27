@@ -20,6 +20,7 @@
 #include "ui/toast.h"
 #include "ui/songcontextmenu.h"
 #include "ui/songmenubuilder.h"
+#include "ui/headeractionmenu.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -33,7 +34,6 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPoint>
-#include <QMenu>
 #include <QAction>
 #include <QDialog>
 #include <QNetworkReply>
@@ -200,67 +200,13 @@ void PlaylistDetailPage::setupUi()
     });
     menuLay->addWidget(m_playBtn);
 
-    m_downloadAllBtn = new QPushButton(I18n::instance().tr(QStringLiteral("downloadAll")), menuRow);
-    m_downloadAllBtn->setCursor(Qt::PointingHandCursor);
-    m_downloadAllBtn->setFixedHeight(40);
-    connect(m_downloadAllBtn, &QPushButton::clicked, this, [this]() {
-        if (!m_displaySongs.isEmpty())
-            emit downloadAllRequested(m_displaySongs);
-    });
-    menuLay->addWidget(m_downloadAllBtn);
-
-    // 一键把整个歌单加入播放队列（本地队列，不去重时会给出实际新增数）
-    m_addAllToQueueBtn = new QPushButton(I18n::instance().tr(QStringLiteral("addAllToQueue")), menuRow);
-    m_addAllToQueueBtn->setCursor(Qt::PointingHandCursor);
-    m_addAllToQueueBtn->setFixedHeight(40);
-    connect(m_addAllToQueueBtn, &QPushButton::clicked, this, &PlaylistDetailPage::addAllToQueue);
-    menuLay->addWidget(m_addAllToQueueBtn);
-
-    m_editPlaylistBtn = new QPushButton(I18n::instance().tr(QStringLiteral("editPlaylist")), menuRow);
-    m_editPlaylistBtn->setCursor(Qt::PointingHandCursor);
-    m_editPlaylistBtn->setFixedHeight(40);
-    m_editPlaylistBtn->hide();
-    connect(m_editPlaylistBtn, &QPushButton::clicked, this, &PlaylistDetailPage::editPlaylistDescription);
-    menuLay->addWidget(m_editPlaylistBtn);
-
-    m_collectPlaylistBtn = new QPushButton(I18n::instance().tr(QStringLiteral("collectPlaylist")), menuRow);
-    m_collectPlaylistBtn->setCursor(Qt::PointingHandCursor);
-    m_collectPlaylistBtn->setFixedHeight(40);
-    m_collectPlaylistBtn->hide();
-    connect(m_collectPlaylistBtn, &QPushButton::clicked, this, &PlaylistDetailPage::toggleCollectPlaylist);
-    menuLay->addWidget(m_collectPlaylistBtn);
-
     m_moreBtn = new QPushButton(menuRow);
     m_moreBtn->setFixedSize(40, 40);
     m_moreBtn->setCursor(Qt::PointingHandCursor);
     m_moreBtn->setFlat(true);
-    connect(m_moreBtn, &QPushButton::clicked, this, [this]() {
-        QMenu menu(this);
-        const bool dark = Theme::ThemeManager::instance().isDarkMode();
-        menu.setStyleSheet(dark
-                               ? QStringLiteral(
-                                     "QMenu { background: #2a2a2a; border: 1px solid rgba(255,255,255,0.1);"
-                                     " border-radius: 8px; padding: 6px 0; }"
-                                     "QMenu::item { color: #eee; padding: 10px 20px; }"
-                                     "QMenu::item:selected { background: rgba(230,57,80,0.2); }")
-                               : QStringLiteral(
-                                     "QMenu { background: #fff; border: 1px solid rgba(33,37,41,0.12);"
-                                     " border-radius: 8px; padding: 6px 0; }"
-                                     "QMenu::item { color: #212529; padding: 10px 20px; }"
-                                     "QMenu::item:selected { background: rgba(230,57,80,0.12); }"));
-        QAction *refreshAct = menu.addAction(I18n::instance().tr(QStringLiteral("refresh")));
-        QAction *picked = menu.exec(m_moreBtn->mapToGlobal(QPoint(0, m_moreBtn->height())));
-        if (picked == refreshAct)
-            reloadPlaylist();
-    });
+    m_moreBtn->setToolTip(I18n::instance().tr(QStringLiteral("moreActions")));
+    connect(m_moreBtn, &QPushButton::clicked, this, &PlaylistDetailPage::showMoreMenu);
     menuLay->addWidget(m_moreBtn);
-
-    // 批量管理入口：进入后这排按钮整体让位给 BatchActionBar
-    m_batchManageBtn = new QPushButton(I18n::instance().tr(QStringLiteral("batchManage")), menuRow);
-    m_batchManageBtn->setCursor(Qt::PointingHandCursor);
-    m_batchManageBtn->setFixedHeight(40);
-    connect(m_batchManageBtn, &QPushButton::clicked, this, &PlaylistDetailPage::enterBatchMode);
-    menuLay->addWidget(m_batchManageBtn);
 
     menuLay->addStretch();
 
@@ -340,6 +286,48 @@ void PlaylistDetailPage::setupUi()
     });
 
     applyPageStyle();
+}
+
+void PlaylistDetailPage::showMoreMenu()
+{
+    const bool hasDisplaySongs = !m_displaySongs.isEmpty();
+    HeaderActionMenu menu(this);
+    QAction *downloadAll = menu.addHeaderAction(
+        I18n::instance().tr(QStringLiteral("downloadAll")), "Download", hasDisplaySongs);
+    QAction *addAll = menu.addHeaderAction(
+        I18n::instance().tr(QStringLiteral("addAllToQueue")), "MusicList", !m_allSongs.isEmpty());
+    menu.addSeparator();
+
+    QAction *editPlaylist = nullptr;
+    QAction *collectPlaylist = nullptr;
+    if (m_isUserPlaylist) {
+        editPlaylist = menu.addHeaderAction(
+            I18n::instance().tr(QStringLiteral("editPlaylist")), "EditNote");
+    } else {
+        collectPlaylist = menu.addHeaderAction(
+            I18n::instance().tr(m_isPlaylistCollected ? QStringLiteral("uncollectPlaylist")
+                                                      : QStringLiteral("collectPlaylist")),
+            m_isPlaylistCollected ? "Favorite" : "FavoriteBorder");
+    }
+    QAction *batchManage = menu.addHeaderAction(
+        I18n::instance().tr(QStringLiteral("batchManage")), "Batch", hasDisplaySongs);
+    menu.addSeparator();
+    QAction *refresh = menu.addHeaderAction(
+        I18n::instance().tr(QStringLiteral("refresh")), "Refresh");
+
+    QAction *picked = menu.exec(m_moreBtn->mapToGlobal(QPoint(0, m_moreBtn->height())));
+    if (picked == downloadAll)
+        emit downloadAllRequested(m_displaySongs);
+    else if (picked == addAll)
+        addAllToQueue();
+    else if (picked == editPlaylist)
+        editPlaylistDescription();
+    else if (picked == collectPlaylist)
+        toggleCollectPlaylist();
+    else if (picked == batchManage)
+        enterBatchMode();
+    else if (picked == refresh)
+        reloadPlaylist();
 }
 
 /** 批量编辑模式：顶部按钮排 ↔ 批量操作条 的公共接线 */
@@ -561,48 +549,11 @@ void PlaylistDetailPage::applyPageStyle()
             "QPushButton:disabled { background: rgba(230,57,80,0.35); color: rgba(255,255,255,0.6); }"));
     }
     const QString secondaryBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
-    const QString secondaryFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
     const QColor secondaryIc = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
-    const QString secondaryStyle = QStringLiteral(
-        "QPushButton {"
-        "  background: %1;"
-        "  color: %2;"
-        "  border: none;"
-        "  border-radius: 20px;"
-        "  font-size: 14px;"
-        "  font-weight: 500;"
-        "  padding: 0 20px;"
-        "}"
-        "QPushButton:hover { background: rgba(230,57,80,0.15); }")
-                                     .arg(secondaryBg, secondaryFg);
-
-    if (m_downloadAllBtn) {
-        m_downloadAllBtn->setIcon(Icons::renderNamed("Download", 18, secondaryIc));
-        m_downloadAllBtn->setIconSize(QSize(18, 18));
-        m_downloadAllBtn->setStyleSheet(secondaryStyle);
-    }
-    if (m_editPlaylistBtn) {
-        m_editPlaylistBtn->setIcon(Icons::renderNamed("EditNote", 18, secondaryIc));
-        m_editPlaylistBtn->setIconSize(QSize(18, 18));
-        m_editPlaylistBtn->setStyleSheet(secondaryStyle);
-    }
-    // 批量操作相关按钮沿用同一套次级按钮样式
-    if (m_addAllToQueueBtn) {
-        m_addAllToQueueBtn->setIcon(Icons::renderNamed("MusicList", 18, secondaryIc));
-        m_addAllToQueueBtn->setIconSize(QSize(18, 18));
-        m_addAllToQueueBtn->setStyleSheet(secondaryStyle);
-    }
-    if (m_batchManageBtn) {
-        m_batchManageBtn->setIcon(Icons::renderNamed("Batch", 18, secondaryIc));
-        m_batchManageBtn->setIconSize(QSize(18, 18));
-        m_batchManageBtn->setStyleSheet(secondaryStyle);
-    }
     if (m_batchBar)
         m_batchBar->applyTheme();
-    if (m_collectPlaylistBtn)
-        updateCollectPlaylistButton();
     if (m_moreBtn) {
-        m_moreBtn->setIcon(Icons::renderNamed("List", 20, secondaryIc));
+        m_moreBtn->setIcon(Icons::renderNamed("More", 20, secondaryIc));
         m_moreBtn->setIconSize(QSize(20, 20));
         m_moreBtn->setStyleSheet(QStringLiteral(
             "QPushButton { background: %1; border: none; border-radius: 20px; }"
@@ -639,17 +590,10 @@ void PlaylistDetailPage::retranslate()
 {
     if (m_playBtn)
         m_playBtn->setText(I18n::instance().tr(QStringLiteral("play")));
-    if (m_downloadAllBtn)
-        m_downloadAllBtn->setText(I18n::instance().tr(QStringLiteral("downloadAll")));
-    if (m_addAllToQueueBtn)
-        m_addAllToQueueBtn->setText(I18n::instance().tr(QStringLiteral("addAllToQueue")));
-    if (m_batchManageBtn)
-        m_batchManageBtn->setText(I18n::instance().tr(QStringLiteral("batchManage")));
+    if (m_moreBtn)
+        m_moreBtn->setToolTip(I18n::instance().tr(QStringLiteral("moreActions")));
     if (m_batchBar)
         m_batchBar->retranslate();
-    if (m_editPlaylistBtn)
-        m_editPlaylistBtn->setText(I18n::instance().tr(QStringLiteral("editPlaylist")));
-    updateCollectPlaylistButton();
     if (m_searchEdit)
         m_searchEdit->setPlaceholderText(I18n::instance().tr(QStringLiteral("fuzzySearch")));
     if (m_titleLbl)
@@ -734,16 +678,9 @@ void PlaylistDetailPage::updateHeaderMeta()
         m_playCountLbl->setText(formatSongCount(m_allSongs.size()));
     if (m_playBtn)
         m_playBtn->setEnabled(!m_displaySongs.isEmpty());
-    if (m_downloadAllBtn)
-        m_downloadAllBtn->setEnabled(!m_displaySongs.isEmpty());
-    // 「全部加入队列」以整个歌单为准（不受搜索过滤影响），空歌单置灰
-    if (m_addAllToQueueBtn)
-        m_addAllToQueueBtn->setEnabled(!m_allSongs.isEmpty());
-    // 没有曲目就没有可批量的对象：入口置灰，已经进去了就退出来
+
     const bool hasSongs = !m_displaySongs.isEmpty();
     const bool batchActive = m_songList && m_songList->batchMode();
-    if (m_batchManageBtn)
-        m_batchManageBtn->setEnabled(hasSongs);
     if (!hasSongs && batchActive)
         exitBatchMode();
     // 批量模式下按钮排已让位给批量操作条，别被这里又显示出来
@@ -901,56 +838,14 @@ int PlaylistDetailPage::currentUserId() const
     return id;
 }
 
-void PlaylistDetailPage::updateActionButtons()
-{
-    if (m_editPlaylistBtn)
-        m_editPlaylistBtn->setVisible(m_isUserPlaylist);
-    if (m_collectPlaylistBtn)
-        m_collectPlaylistBtn->setVisible(!m_isUserPlaylist);
-}
-
-void PlaylistDetailPage::updateCollectPlaylistButton()
-{
-    if (!m_collectPlaylistBtn)
-        return;
-
-    const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QString secondaryBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
-    const QString secondaryFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
-    m_collectPlaylistBtn->setStyleSheet(QStringLiteral(
-        "QPushButton {"
-        "  background: %1;"
-        "  color: %2;"
-        "  border: none;"
-        "  border-radius: 20px;"
-        "  font-size: 14px;"
-        "  font-weight: 500;"
-        "  padding: 0 20px;"
-        "}"
-        "QPushButton:hover { background: rgba(230,57,80,0.15); }")
-                                            .arg(secondaryBg, secondaryFg));
-
-    if (m_isPlaylistCollected) {
-        m_collectPlaylistBtn->setText(I18n::instance().tr(QStringLiteral("uncollectPlaylist")));
-        m_collectPlaylistBtn->setIcon(Icons::renderNamed("Favorite", 18, QColor(255, 69, 69)));
-    } else {
-        m_collectPlaylistBtn->setText(I18n::instance().tr(QStringLiteral("collectPlaylist")));
-        const QColor ic = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
-        m_collectPlaylistBtn->setIcon(Icons::renderNamed("FavoriteBorder", 18, ic));
-    }
-    m_collectPlaylistBtn->setIconSize(QSize(18, 18));
-}
-
 void PlaylistDetailPage::refreshPlaylistCollectedState()
 {
     m_isPlaylistCollected = false;
     if (m_isUserPlaylist || m_playlistId <= 0 || !m_apiClient) {
-        updateCollectPlaylistButton();
         return;
     }
 
     if (!UserManager::instance().isLoggedIn()) {
-        updateCollectPlaylistButton();
         return;
     }
 
@@ -964,7 +859,6 @@ void PlaylistDetailPage::refreshPlaylistCollectedState()
                 }
             }
         }
-        updateCollectPlaylistButton();
     });
 }
 
@@ -982,7 +876,6 @@ void PlaylistDetailPage::toggleCollectPlaylist()
         m_apiClient->unfavoritePlaylist(m_playlistId, [this](bool success, const QString &message) {
             if (success) {
                 m_isPlaylistCollected = false;
-                updateCollectPlaylistButton();
                 emit refreshSidebarPlaylists();
                 Toast::show(this, I18n::instance().tr(QStringLiteral("cancelFavoritePlaylistSuccess")),
                             Toast::Success);
@@ -997,7 +890,6 @@ void PlaylistDetailPage::toggleCollectPlaylist()
         m_apiClient->favoritePlaylist(m_playlistId, [this](bool success, const QString &message) {
             if (success) {
                 m_isPlaylistCollected = true;
-                updateCollectPlaylistButton();
                 emit refreshSidebarPlaylists();
                 Toast::show(this, I18n::instance().tr(QStringLiteral("collectPlaylistSuccess")),
                             Toast::Success);
@@ -1143,7 +1035,6 @@ void PlaylistDetailPage::loadPlaylist(int playlistId)
             m_isUserPlaylist = false;
         }
 
-        updateActionButtons();
         refreshPlaylistCollectedState();
         updateHeaderMeta();
 

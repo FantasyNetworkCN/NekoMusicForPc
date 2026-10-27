@@ -64,6 +64,7 @@ private:
     void onBatchSelectionChanged(int count);
     /** 一键把当前列表的全部曲目加入本地播放队列 */
     void addAllToQueue();
+    void showMoreMenu();
 
     ApiClient *m_apiClient = nullptr;
 
@@ -78,14 +79,11 @@ private:
     QWidget *m_metaRow = nullptr;
     QLabel *m_creatorLbl = nullptr;
     QPushButton *m_playBtn = nullptr;
-    QPushButton *m_downloadAllBtn = nullptr;
     QPushButton *m_moreBtn = nullptr;
     QLineEdit *m_searchEdit = nullptr;
     QWidget *m_searchWrap = nullptr;
-    /** 批量模式：「播放 / 全部下载 / 更多」那排按钮整体让位给批量操作条 */
+    /** 批量模式：「播放 / 更多」那排按钮整体让位给批量操作条 */
     QWidget *m_menuRow = nullptr;
-    QPushButton *m_addAllToQueueBtn = nullptr;
-    QPushButton *m_batchManageBtn = nullptr;
     BatchActionBar *m_batchBar = nullptr;
 
     SongListWidget *m_songList = nullptr;

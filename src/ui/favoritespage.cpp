@@ -17,6 +17,7 @@
 #include "theme/thememanager.h"
 #include "ui/svgicon.h"
 #include "ui/toast.h"
+#include "ui/headeractionmenu.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -30,7 +31,6 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QFontMetrics>
-#include <QMenu>
 #include <QAction>
 #include <QPoint>
 #include <QSignalBlocker>
@@ -196,52 +196,13 @@ void FavoritesPage::setupUi()
     });
     menuLay->addWidget(m_playBtn);
 
-    m_downloadAllBtn = new QPushButton(I18n::instance().tr(QStringLiteral("downloadAll")), menuRow);
-    m_downloadAllBtn->setCursor(Qt::PointingHandCursor);
-    m_downloadAllBtn->setFixedHeight(40);
-    connect(m_downloadAllBtn, &QPushButton::clicked, this, [this]() {
-        if (!m_displaySongs.isEmpty())
-            emit downloadAllRequested(m_displaySongs);
-    });
-    menuLay->addWidget(m_downloadAllBtn);
-
-    // 一键把整页歌曲加入本地播放队列
-    m_addAllToQueueBtn = new QPushButton(I18n::instance().tr(QStringLiteral("addAllToQueue")), menuRow);
-    m_addAllToQueueBtn->setCursor(Qt::PointingHandCursor);
-    m_addAllToQueueBtn->setFixedHeight(40);
-    connect(m_addAllToQueueBtn, &QPushButton::clicked, this, &FavoritesPage::addAllToQueue);
-    menuLay->addWidget(m_addAllToQueueBtn);
-
     m_moreBtn = new QPushButton(menuRow);
     m_moreBtn->setFixedSize(40, 40);
     m_moreBtn->setCursor(Qt::PointingHandCursor);
     m_moreBtn->setFlat(true);
-    connect(m_moreBtn, &QPushButton::clicked, this, [this]() {
-        QMenu menu(this);
-        const bool dark = Theme::ThemeManager::instance().isDarkMode();
-        menu.setStyleSheet(dark
-                               ? QStringLiteral(
-                                     "QMenu { background: #2a2a2a; border: 1px solid rgba(255,255,255,0.1);"
-                                     " border-radius: 8px; padding: 6px 0; }"
-                                     "QMenu::item { color: #eee; padding: 10px 20px; }"
-                                     "QMenu::item:selected { background: rgba(230,57,80,0.2); }")
-                               : QStringLiteral(
-                                     "QMenu { background: #fff; border: 1px solid rgba(33,37,41,0.12);"
-                                     " border-radius: 8px; padding: 6px 0; }"
-                                     "QMenu::item { color: #212529; padding: 10px 20px; }"
-                                     "QMenu::item:selected { background: rgba(230,57,80,0.12); }"));
-        QAction *act = menu.addAction(I18n::instance().tr(QStringLiteral("refresh")));
-        if (menu.exec(m_moreBtn->mapToGlobal(QPoint(0, m_moreBtn->height()))) == act)
-            FavoritesPage::refresh();
-    });
+    m_moreBtn->setToolTip(I18n::instance().tr(QStringLiteral("moreActions")));
+    connect(m_moreBtn, &QPushButton::clicked, this, &FavoritesPage::showMoreMenu);
     menuLay->addWidget(m_moreBtn);
-
-    // 批量管理入口：进入后这排按钮整体让位给 BatchActionBar
-    m_batchManageBtn = new QPushButton(I18n::instance().tr(QStringLiteral("batchManage")), menuRow);
-    m_batchManageBtn->setCursor(Qt::PointingHandCursor);
-    m_batchManageBtn->setFixedHeight(40);
-    connect(m_batchManageBtn, &QPushButton::clicked, this, &FavoritesPage::enterBatchMode);
-    menuLay->addWidget(m_batchManageBtn);
 
     menuLay->addStretch();
 
@@ -312,6 +273,32 @@ void FavoritesPage::setupUi()
     });
 
     applyPageStyle();
+}
+
+void FavoritesPage::showMoreMenu()
+{
+    const bool hasSongs = !m_displaySongs.isEmpty();
+    HeaderActionMenu menu(this);
+    QAction *downloadAll = menu.addHeaderAction(
+        I18n::instance().tr(QStringLiteral("downloadAll")), "Download", hasSongs);
+    QAction *addAll = menu.addHeaderAction(
+        I18n::instance().tr(QStringLiteral("addAllToQueue")), "MusicList", hasSongs);
+    menu.addSeparator();
+    QAction *batchManage = menu.addHeaderAction(
+        I18n::instance().tr(QStringLiteral("batchManage")), "Batch", hasSongs);
+    menu.addSeparator();
+    QAction *refreshAction = menu.addHeaderAction(
+        I18n::instance().tr(QStringLiteral("refresh")), "Refresh");
+
+    QAction *picked = menu.exec(m_moreBtn->mapToGlobal(QPoint(0, m_moreBtn->height())));
+    if (picked == downloadAll)
+        emit downloadAllRequested(m_displaySongs);
+    else if (picked == addAll)
+        addAllToQueue();
+    else if (picked == batchManage)
+        enterBatchMode();
+    else if (picked == refreshAction)
+        refresh();
 }
 
 /** 批量编辑模式：顶部按钮排 ↔ 批量操作条 的公共接线 */
@@ -463,69 +450,14 @@ void FavoritesPage::applyPageStyle()
             "QPushButton:disabled { background: rgba(230,57,80,0.35); color: rgba(255,255,255,0.6); }"));
     }
     const QString secondaryBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
-    const QString secondaryFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
-    const QColor secondaryIc = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
-    if (m_downloadAllBtn) {
-        m_downloadAllBtn->setIcon(Icons::renderNamed("Download", 18, secondaryIc));
-        m_downloadAllBtn->setIconSize(QSize(18, 18));
-        m_downloadAllBtn->setStyleSheet(QStringLiteral(
-            "QPushButton {"
-            "  background: %1;"
-            "  color: %2;"
-            "  border: none;"
-            "  border-radius: 20px;"
-            "  font-size: 14px;"
-            "  font-weight: 500;"
-            "  padding: 0 20px;"
-            "}"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }"
-            "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
-                                         .arg(secondaryBg, secondaryFg));
-    }
     if (m_moreBtn) {
-        const QString moreBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
         const QColor moreIc = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
-        m_moreBtn->setIcon(Icons::renderNamed("List", 20, moreIc));
+        m_moreBtn->setIcon(Icons::renderNamed("More", 20, moreIc));
         m_moreBtn->setIconSize(QSize(20, 20));
         m_moreBtn->setStyleSheet(QStringLiteral(
             "QPushButton { background: %1; border: none; border-radius: 20px; }"
             "QPushButton:hover { background: rgba(230,57,80,0.15); }")
-                                     .arg(moreBg));
-    }
-    if (m_batchManageBtn) {
-        const QColor ic = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
-        m_batchManageBtn->setIcon(Icons::renderNamed("Batch", 18, ic));
-        m_batchManageBtn->setIconSize(QSize(18, 18));
-        m_batchManageBtn->setStyleSheet(QStringLiteral(
-            "QPushButton {"
-            "  background: %1;"
-            "  color: %2;"
-            "  border: none;"
-            "  border-radius: 20px;"
-            "  font-size: 14px;"
-            "  font-weight: 500;"
-            "  padding: 0 20px;"
-            "}"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }"
-            "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
-                                            .arg(secondaryBg, secondaryFg));
-    }
-    if (m_addAllToQueueBtn) {
-        m_addAllToQueueBtn->setIcon(Icons::renderNamed("MusicList", 18, secondaryIc));
-        m_addAllToQueueBtn->setIconSize(QSize(18, 18));
-        m_addAllToQueueBtn->setStyleSheet(QStringLiteral(
-            "QPushButton {"
-            "  background: %1;"
-            "  color: %2;"
-            "  border: none;"
-            "  border-radius: 20px;"
-            "  font-size: 14px;"
-            "  font-weight: 500;"
-            "  padding: 0 20px;"
-            "}"
-            "QPushButton:hover:enabled { background: rgba(230,57,80,0.15); }"
-            "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
-                                              .arg(secondaryBg, secondaryFg));
+                                     .arg(secondaryBg));
     }
     if (m_batchBar)
         m_batchBar->applyTheme();
@@ -562,14 +494,10 @@ void FavoritesPage::retranslate()
         m_titleLbl->setText(I18n::instance().tr(QStringLiteral("myFavorites")));
     if (m_playBtn)
         m_playBtn->setText(I18n::instance().tr(QStringLiteral("play")));
-    if (m_downloadAllBtn)
-        m_downloadAllBtn->setText(I18n::instance().tr(QStringLiteral("downloadAll")));
+    if (m_moreBtn)
+        m_moreBtn->setToolTip(I18n::instance().tr(QStringLiteral("moreActions")));
     if (m_searchEdit)
         m_searchEdit->setPlaceholderText(I18n::instance().tr(QStringLiteral("fuzzySearch")));
-    if (m_batchManageBtn)
-        m_batchManageBtn->setText(I18n::instance().tr(QStringLiteral("batchManage")));
-    if (m_addAllToQueueBtn)
-        m_addAllToQueueBtn->setText(I18n::instance().tr(QStringLiteral("addAllToQueue")));
     if (m_batchBar)
         m_batchBar->retranslate();
     if (m_songList)
@@ -655,15 +583,9 @@ void FavoritesPage::updateHeaderMeta()
 
     if (m_playBtn)
         m_playBtn->setEnabled(!m_displaySongs.isEmpty());
-    if (m_downloadAllBtn)
-        m_downloadAllBtn->setEnabled(!m_displaySongs.isEmpty());
-    // 列表空了就没有可批量的对象：入口置灰，已经进去了就退出来，避免留下空操作条
+
     const bool hasSongs = !m_displaySongs.isEmpty();
     const bool batchActive = m_songList && m_songList->batchMode();
-    if (m_batchManageBtn)
-        m_batchManageBtn->setEnabled(hasSongs);
-    if (m_addAllToQueueBtn)
-        m_addAllToQueueBtn->setEnabled(hasSongs);
     if (!hasSongs && batchActive)
         exitBatchMode();
     // 批量模式下按钮排已让位给批量操作条，别被这里又显示出来

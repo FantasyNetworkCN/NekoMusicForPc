@@ -70,8 +70,6 @@ private:
     void hidePageStatus();
     void reloadPlaylist();
     void editPlaylistDescription();
-    void updateActionButtons();
-    void updateCollectPlaylistButton();
     void refreshPlaylistCollectedState();
     void toggleCollectPlaylist();
     void showSongContextMenu(const MusicInfo &info, const QPoint &globalPos);
@@ -86,6 +84,7 @@ private:
     void removeSongsFromPlaylistBatch(const QList<MusicInfo> &songs);
     /** 一键把当前歌单的全部曲目加入本地播放队列 */
     void addAllToQueue();
+    void showMoreMenu();
 
     ApiClient *m_apiClient = nullptr;
     int m_playlistId = 0;
@@ -108,17 +107,11 @@ private:
     QWidget *m_metaRow = nullptr;
     QLabel *m_creatorLbl = nullptr;
     QPushButton *m_playBtn = nullptr;
-    QPushButton *m_downloadAllBtn = nullptr;
-    /** 一键把整个歌单加入播放队列 */
-    QPushButton *m_addAllToQueueBtn = nullptr;
-    QPushButton *m_editPlaylistBtn = nullptr;
-    QPushButton *m_collectPlaylistBtn = nullptr;
     QPushButton *m_moreBtn = nullptr;
     QLineEdit *m_searchEdit = nullptr;
     QWidget *m_searchWrap = nullptr;
-    /** 批量模式：「播放 / 全部下载 / 编辑 / 收藏 / 更多」那排按钮整体让位给批量操作条 */
+    /** 批量模式：「播放 / 更多」那排按钮整体让位给批量操作条 */
     QWidget *m_menuRow = nullptr;
-    QPushButton *m_batchManageBtn = nullptr;
     BatchActionBar *m_batchBar = nullptr;
 
     SongListWidget *m_songList = nullptr;

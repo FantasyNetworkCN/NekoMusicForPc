@@ -14,6 +14,7 @@
 #include "theme/thememanager.h"
 #include "ui/svgicon.h"
 #include "ui/toast.h"
+#include "ui/headeractionmenu.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -130,25 +131,13 @@ void DownloadPage::setupUi()
     });
     menuLay->addWidget(m_playBtn);
 
-    // 一键把整页歌曲加入本地播放队列
-    m_addAllToQueueBtn = new QPushButton(I18n::instance().tr(QStringLiteral("addAllToQueue")), menuRow);
-    m_addAllToQueueBtn->setCursor(Qt::PointingHandCursor);
-    m_addAllToQueueBtn->setFixedHeight(40);
-    connect(m_addAllToQueueBtn, &QPushButton::clicked, this, &DownloadPage::addAllToQueue);
-    menuLay->addWidget(m_addAllToQueueBtn);
-
-    m_clearBtn = new QPushButton(I18n::instance().tr(QStringLiteral("clearDownloads")), menuRow);
-    m_clearBtn->setCursor(Qt::PointingHandCursor);
-    m_clearBtn->setFixedHeight(40);
-    connect(m_clearBtn, &QPushButton::clicked, this, &DownloadPage::confirmClearDownloads);
-    menuLay->addWidget(m_clearBtn);
-
-    // 批量管理入口：进入后这排按钮整体让位给 BatchActionBar（仅「已完成」分区可用）
-    m_batchManageBtn = new QPushButton(I18n::instance().tr(QStringLiteral("batchManage")), menuRow);
-    m_batchManageBtn->setCursor(Qt::PointingHandCursor);
-    m_batchManageBtn->setFixedHeight(40);
-    connect(m_batchManageBtn, &QPushButton::clicked, this, &DownloadPage::enterBatchMode);
-    menuLay->addWidget(m_batchManageBtn);
+    m_moreBtn = new QPushButton(menuRow);
+    m_moreBtn->setFixedSize(40, 40);
+    m_moreBtn->setCursor(Qt::PointingHandCursor);
+    m_moreBtn->setFlat(true);
+    m_moreBtn->setToolTip(I18n::instance().tr(QStringLiteral("moreActions")));
+    connect(m_moreBtn, &QPushButton::clicked, this, &DownloadPage::showMoreMenu);
+    menuLay->addWidget(m_moreBtn);
 
     menuLay->addStretch();
     headerLay->addWidget(menuRow);
@@ -198,6 +187,40 @@ void DownloadPage::setupUi()
     m_pendingDownloads = MusicDownloadManager::instance().pendingDownloads();
     loadCompletedDownloads();
     setActiveTab(Tab::Downloading);
+}
+
+void DownloadPage::showMoreMenu()
+{
+    const bool completedTab = m_activeTab == Tab::Completed;
+    const bool hasCompleted = completedTab && !m_completedDownloads.isEmpty();
+    HeaderActionMenu menu(this);
+    if (completedTab) {
+        QAction *addAll = menu.addHeaderAction(
+            I18n::instance().tr(QStringLiteral("addAllToQueue")), "MusicList", hasCompleted);
+        QAction *batchManage = menu.addHeaderAction(
+            I18n::instance().tr(QStringLiteral("batchManage")), "Batch", hasCompleted);
+        QAction *clearDownloads = menu.addHeaderAction(
+            I18n::instance().tr(QStringLiteral("clearDownloads")), "Delete", hasCompleted);
+        menu.addSeparator();
+        QAction *refreshAction = menu.addHeaderAction(
+            I18n::instance().tr(QStringLiteral("refresh")), "Refresh");
+
+        QAction *picked = menu.exec(m_moreBtn->mapToGlobal(QPoint(0, m_moreBtn->height())));
+        if (picked == addAll)
+            addAllToQueue();
+        else if (picked == batchManage)
+            enterBatchMode();
+        else if (picked == clearDownloads)
+            confirmClearDownloads();
+        else if (picked == refreshAction)
+            refresh();
+        return;
+    }
+
+    QAction *refreshAction = menu.addHeaderAction(
+        I18n::instance().tr(QStringLiteral("refresh")), "Refresh");
+    if (menu.exec(m_moreBtn->mapToGlobal(QPoint(0, m_moreBtn->height()))) == refreshAction)
+        refresh();
 }
 
 /** 批量编辑模式：顶部按钮排 ↔ 批量操作条 的公共接线 */
@@ -444,58 +467,13 @@ void DownloadPage::applyPageStyle()
     }
 
     const QString secondaryBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
-    const QString secondaryFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
-    const QColor secondaryIc = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
-    if (m_clearBtn) {
-        m_clearBtn->setIcon(Icons::renderNamed("Delete", 18, secondaryIc));
-        m_clearBtn->setIconSize(QSize(18, 18));
-        m_clearBtn->setStyleSheet(QStringLiteral(
-            "QPushButton {"
-            "  background: %1;"
-            "  color: %2;"
-            "  border: none;"
-            "  border-radius: 20px;"
-            "  font-size: 14px;"
-            "  font-weight: 500;"
-            "  padding: 0 20px;"
-            "}"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }"
-            "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
-                                     .arg(secondaryBg, secondaryFg));
-    }
-    if (m_batchManageBtn) {
-        m_batchManageBtn->setIcon(Icons::renderNamed("Batch", 18, secondaryIc));
-        m_batchManageBtn->setIconSize(QSize(18, 18));
-        m_batchManageBtn->setStyleSheet(QStringLiteral(
-            "QPushButton {"
-            "  background: %1;"
-            "  color: %2;"
-            "  border: none;"
-            "  border-radius: 20px;"
-            "  font-size: 14px;"
-            "  font-weight: 500;"
-            "  padding: 0 20px;"
-            "}"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }"
-            "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
-                                            .arg(secondaryBg, secondaryFg));
-    }
-    if (m_addAllToQueueBtn) {
-        m_addAllToQueueBtn->setIcon(Icons::renderNamed("MusicList", 18, secondaryIc));
-        m_addAllToQueueBtn->setIconSize(QSize(18, 18));
-        m_addAllToQueueBtn->setStyleSheet(QStringLiteral(
-            "QPushButton {"
-            "  background: %1;"
-            "  color: %2;"
-            "  border: none;"
-            "  border-radius: 20px;"
-            "  font-size: 14px;"
-            "  font-weight: 500;"
-            "  padding: 0 20px;"
-            "}"
-            "QPushButton:hover:enabled { background: rgba(230,57,80,0.15); }"
-            "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
-                                              .arg(secondaryBg, secondaryFg));
+    if (m_moreBtn) {
+        const QColor moreIc = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
+        m_moreBtn->setIcon(Icons::renderNamed("More", 20, moreIc));
+        m_moreBtn->setIconSize(QSize(20, 20));
+        m_moreBtn->setStyleSheet(QStringLiteral(
+            "QPushButton { background: %1; border: none; border-radius: 20px; }"
+            "QPushButton:hover { background: rgba(230,57,80,0.15); }").arg(secondaryBg));
     }
     if (m_batchBar)
         m_batchBar->applyTheme();
@@ -515,12 +493,8 @@ void DownloadPage::retranslate()
         m_titleLbl->setText(I18n::instance().tr(QStringLiteral("downloadManage")));
     if (m_playBtn)
         m_playBtn->setText(I18n::instance().tr(QStringLiteral("play")));
-    if (m_clearBtn)
-        m_clearBtn->setText(I18n::instance().tr(QStringLiteral("clearDownloads")));
-    if (m_batchManageBtn)
-        m_batchManageBtn->setText(I18n::instance().tr(QStringLiteral("batchManage")));
-    if (m_addAllToQueueBtn)
-        m_addAllToQueueBtn->setText(I18n::instance().tr(QStringLiteral("addAllToQueue")));
+    if (m_moreBtn)
+        m_moreBtn->setToolTip(I18n::instance().tr(QStringLiteral("moreActions")));
     if (m_batchBar)
         m_batchBar->retranslate();
     if (m_songList)
@@ -597,21 +571,6 @@ void DownloadPage::updateHeaderMeta()
     if (m_playBtn) {
         m_playBtn->setVisible(isCompletedTab);
         m_playBtn->setEnabled(isCompletedTab && !m_completedDownloads.isEmpty());
-    }
-    if (m_clearBtn) {
-        m_clearBtn->setVisible(isCompletedTab);
-        m_clearBtn->setEnabled(isCompletedTab && !m_completedDownloads.isEmpty());
-    }
-    // 批量管理只在「已完成」分区出现（正在下载那栏是进度行，没有可批量的动作）；
-    // 批量模式进行中时这排按钮整体隐藏，别和批量操作条抢同一行
-    if (m_batchManageBtn) {
-        m_batchManageBtn->setVisible(isCompletedTab && !batchActive);
-        m_batchManageBtn->setEnabled(isCompletedTab && !m_completedDownloads.isEmpty());
-    }
-    // 「全部加入队列」只在已完成分区有意义（正在下载的歌还没落地）
-    if (m_addAllToQueueBtn) {
-        m_addAllToQueueBtn->setVisible(isCompletedTab);
-        m_addAllToQueueBtn->setEnabled(isCompletedTab && !m_completedDownloads.isEmpty());
     }
     if (!isCompletedTab && batchActive)
         exitBatchMode();

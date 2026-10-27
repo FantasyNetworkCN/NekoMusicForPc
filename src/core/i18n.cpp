@@ -40,6 +40,7 @@ static QMap<QString, QString> zhCN()
     m["create"] = QStringLiteral("创建");
     m["rename"] = QStringLiteral("重命名");
     m["actions"] = QStringLiteral("操作");
+    m["moreActions"] = QStringLiteral("更多操作");
     m["none"] = QStringLiteral("无");
     m["unknown"] = QStringLiteral("未知");
     m["defaultMusicPlayerTitle"] = QStringLiteral("默认音乐播放器");
@@ -760,6 +761,7 @@ static QMap<QString, QString> nyaCN()
     m["create"] = QStringLiteral("变出一个新的喵~");
     m["rename"] = QStringLiteral("换个称呼喵~");
     m["play"] = QStringLiteral("让节奏响起来喵~");
+    m["moreActions"] = QStringLiteral("更多小动作喵~");
     m["pause"] = QStringLiteral("稍微休息一下喵~");
     m["previous"] = QStringLiteral("前一首的说~");
     m["next"] = QStringLiteral("下一首的说~");
@@ -1230,6 +1232,7 @@ static QMap<QString, QString> enUS()
     m["create"] = "Create";
     m["rename"] = "Rename";
     m["actions"] = "Actions";
+    m["moreActions"] = "More actions";
     m["none"] = "None";
     m["unknown"] = "Unknown";
     m["defaultMusicPlayerTitle"] = "Default music player";
