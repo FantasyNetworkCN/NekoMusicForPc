@@ -339,6 +339,7 @@ void PlaylistDetailPage::setupBatchBar()
     m_batchBar = new BatchActionBar(m_menuRow->parentWidget());
     // 歌单详情页多一个「移出歌单」，但该页不提供取消收藏（收藏入口在菜单里是切换语义）
     m_batchBar->setCapabilities(true, true, true, false, true);
+    m_batchBar->setActionMenuMode(true);
     m_batchBar->hide();
     if (auto *lay = qobject_cast<QBoxLayout *>(m_menuRow->parentWidget()->layout()))
         lay->insertWidget(lay->indexOf(m_menuRow), m_batchBar);

@@ -232,6 +232,7 @@ void DownloadPage::setupBatchBar()
     m_batchBar = new BatchActionBar(m_menuRow->parentWidget());
     // 「正在下载」分区的批量意义不同（那边是取消下载），这里只对已完成的下好歌开放
     m_batchBar->setCapabilities(true, true, false, true, false);
+    m_batchBar->setActionMenuMode(true);
     m_batchBar->hide();
     if (auto *lay = qobject_cast<QBoxLayout *>(m_menuRow->parentWidget()->layout()))
         lay->insertWidget(lay->indexOf(m_menuRow), m_batchBar);

@@ -434,6 +434,7 @@ void MusicListPage::setupBatchBar()
 
     m_batchBar = new BatchActionBar(m_menuRow->parentWidget());
     m_batchBar->setCapabilities(true, true, true, true, false);
+    m_batchBar->setActionMenuMode(true);
     m_batchBar->hide();
     if (auto *lay = qobject_cast<QBoxLayout *>(m_menuRow->parentWidget()->layout()))
         lay->insertWidget(lay->indexOf(m_menuRow), m_batchBar);

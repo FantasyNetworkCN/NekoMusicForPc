@@ -8,8 +8,10 @@
 #include "core/i18n.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
+#include "ui/headeractionmenu.h"
 #include "ui/svgicon.h"
 
+#include <QAction>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -20,49 +22,33 @@ BatchActionBar::BatchActionBar(QWidget *parent)
     setObjectName(QStringLiteral("batchActionBar"));
     setFixedHeight(40);
 
-    auto *lay = new QHBoxLayout(this);
-    lay->setContentsMargins(0, 0, 0, 0);
-    lay->setSpacing(12);
-
     m_countLbl = new QLabel(this);
     m_countLbl->setObjectName(QStringLiteral("batchCountLabel"));
-    m_countLbl->setMinimumWidth(96);
-    lay->addWidget(m_countLbl);
 
     m_selectAllBtn = makeActionButton("PlaylistAddCheck", "batchSelectAll");
     connect(m_selectAllBtn, &QPushButton::clicked, this, &BatchActionBar::selectAllToggled);
-    lay->addWidget(m_selectAllBtn);
 
     m_addToPlaylistBtn = makeActionButton("PlaylistAdd", "batchAddToPlaylist");
     connect(m_addToPlaylistBtn, &QPushButton::clicked, this, &BatchActionBar::addToPlaylistRequested);
-    lay->addWidget(m_addToPlaylistBtn);
 
     m_addToQueueBtn = makeActionButton("MusicList", "batchAddToQueue");
     connect(m_addToQueueBtn, &QPushButton::clicked, this, &BatchActionBar::addToQueueRequested);
-    lay->addWidget(m_addToQueueBtn);
 
     m_downloadBtn = makeActionButton("Download", "batchDownload");
     connect(m_downloadBtn, &QPushButton::clicked, this, &BatchActionBar::downloadRequested);
-    lay->addWidget(m_downloadBtn);
 
     m_unfavoriteBtn = makeActionButton("HeartBroken", "batchUnfavorite");
     connect(m_unfavoriteBtn, &QPushButton::clicked, this, &BatchActionBar::unfavoriteRequested);
-    lay->addWidget(m_unfavoriteBtn);
 
     m_removeFromPlaylistBtn = makeActionButton("Delete", "batchRemoveFromPlaylist");
     connect(m_removeFromPlaylistBtn, &QPushButton::clicked, this,
             &BatchActionBar::removeFromPlaylistRequested);
-    lay->addWidget(m_removeFromPlaylistBtn);
-
-    lay->addStretch();
 
     m_exitBtn = makeActionButton("Close", "batchExit");
     connect(m_exitBtn, &QPushButton::clicked, this, &BatchActionBar::exitRequested);
-    lay->addWidget(m_exitBtn);
 
     setCapabilities(false, true, true, false, false);
-    retranslate();
-    applyTheme();
+    rebuildLayout();
 }
 
 QPushButton *BatchActionBar::makeActionButton(const char *iconName, const char *textKey)
@@ -78,16 +64,13 @@ QPushButton *BatchActionBar::makeActionButton(const char *iconName, const char *
 void BatchActionBar::setCapabilities(bool canAddToPlaylist, bool canAddToQueue, bool canDownload,
                                      bool canUnfavorite, bool canRemoveFromPlaylist)
 {
-    if (m_addToPlaylistBtn)
-        m_addToPlaylistBtn->setVisible(canAddToPlaylist);
-    if (m_addToQueueBtn)
-        m_addToQueueBtn->setVisible(canAddToQueue);
-    if (m_downloadBtn)
-        m_downloadBtn->setVisible(canDownload);
-    if (m_unfavoriteBtn)
-        m_unfavoriteBtn->setVisible(canUnfavorite);
-    if (m_removeFromPlaylistBtn)
-        m_removeFromPlaylistBtn->setVisible(canRemoveFromPlaylist);
+    m_canAddToPlaylist = canAddToPlaylist;
+    m_canAddToQueue = canAddToQueue;
+    m_canDownload = canDownload;
+    m_canUnfavorite = canUnfavorite;
+    m_canRemoveFromPlaylist = canRemoveFromPlaylist;
+    if (layout())
+        rebuildLayout();
     setSelectedCount(m_selectedCount);
 }
 
@@ -123,84 +106,180 @@ void BatchActionBar::setCompactTrigger(bool compact)
     if (m_compactTrigger == compact)
         return;
     m_compactTrigger = compact;
+    if (compact)
+        m_actionMenuMode = false;
+    rebuildLayout();
+}
 
+void BatchActionBar::setActionMenuMode(bool enabled)
+{
+    if (m_actionMenuMode == enabled)
+        return;
+    m_actionMenuMode = enabled;
+    if (enabled)
+        m_compactTrigger = false;
+    rebuildLayout();
+}
+
+void BatchActionBar::rebuildLayout()
+{
     // 先把所有控件从旧布局摘下来（removeWidget 不删控件），再换布局重新排
-    for (QPushButton *btn : {m_selectAllBtn, m_addToPlaylistBtn, m_addToQueueBtn, m_downloadBtn,
-                             m_unfavoriteBtn, m_removeFromPlaylistBtn, m_exitBtn}) {
-        if (btn && layout())
-            layout()->removeWidget(btn);
+    if (auto *old = layout()) {
+        QWidget *widgets[] = {m_countLbl,       m_selectAllBtn, m_addToPlaylistBtn,
+                              m_addToQueueBtn,  m_downloadBtn,  m_unfavoriteBtn,
+                              m_removeFromPlaylistBtn, m_exitBtn, m_triggerBtn};
+        for (QWidget *widget : widgets) {
+            if (widget)
+                old->removeWidget(widget);
+        }
+        dropLayout(old);
     }
-    if (m_countLbl && layout())
-        layout()->removeWidget(m_countLbl);
-    if (m_actionRow && layout())
-        layout()->removeWidget(m_actionRow);
 
-    dropLayout(layout());
+    const bool needsTrigger = m_compactTrigger || m_actionMenuMode;
+    if (needsTrigger && !m_triggerBtn) {
+        m_triggerBtn = makeActionButton("Menu", "batchActions");
+        connect(m_triggerBtn, &QPushButton::clicked, this, [this]() {
+            if (m_actionMenuMode)
+                showActionMenu();
+            else
+                emit actionsRequested();
+        });
+    } else if (!needsTrigger && m_triggerBtn) {
+        m_triggerBtn->hide();
+        m_triggerBtn->deleteLater();
+        m_triggerBtn = nullptr;
+    }
 
-    if (compact) {
-        // 横向动作按钮全部收起，只留「已选 N 首」计数 + 「批量操作 ▾」触发按钮
-        for (QPushButton *btn : {m_selectAllBtn, m_addToPlaylistBtn, m_addToQueueBtn, m_downloadBtn,
-                                 m_unfavoriteBtn, m_removeFromPlaylistBtn, m_exitBtn}) {
+    auto *lay = new QHBoxLayout(this);
+    lay->setContentsMargins(0, 0, 0, 0);
+    lay->setSpacing(12);
+
+    if (m_countLbl) {
+        m_countLbl->setParent(this);
+        m_countLbl->setMinimumWidth(m_compactTrigger ? 0 : 96);
+        lay->addWidget(m_countLbl);
+        m_countLbl->show();
+    }
+
+    if (m_compactTrigger) {
+        // 窄抽屉：只留计数 + 触发按钮，具体动作由调用方弹竖排浮层
+        for (QPushButton *btn : {m_selectAllBtn, m_addToPlaylistBtn, m_addToQueueBtn,
+                                 m_downloadBtn, m_unfavoriteBtn, m_removeFromPlaylistBtn,
+                                 m_exitBtn}) {
             if (btn)
                 btn->hide();
         }
-
-        m_actionRow = new QWidget(this);
-        auto *row = new QHBoxLayout(m_actionRow);
-        row->setContentsMargins(0, 0, 0, 0);
-        row->setSpacing(10);
-
-        m_countLbl->setParent(m_actionRow);
-        m_countLbl->setMinimumWidth(0);
-        row->addWidget(m_countLbl);
-
-        m_triggerBtn = makeActionButton("Menu", "batchActions");
-        m_triggerBtn->setFixedHeight(32);
-        connect(m_triggerBtn, &QPushButton::clicked, this, &BatchActionBar::actionsRequested);
-        row->addWidget(m_triggerBtn);
-        row->addStretch();
-
-        auto *lay = new QHBoxLayout(this);
-        lay->setContentsMargins(0, 0, 0, 0);
-        lay->setSpacing(0);
-        lay->addWidget(m_actionRow);
-        lay->addStretch();
-    } else {
         if (m_triggerBtn) {
-            m_triggerBtn->hide();
-            m_triggerBtn->deleteLater();
-            m_triggerBtn = nullptr;
+            m_triggerBtn->setParent(this);
+            m_triggerBtn->setFixedHeight(32);
+            lay->addWidget(m_triggerBtn);
+            m_triggerBtn->show();
         }
-        if (m_actionRow) {
-            m_actionRow->hide();
-            m_actionRow->deleteLater();
-            m_actionRow = nullptr;
+    } else {
+        if (m_selectAllBtn) {
+            m_selectAllBtn->setParent(this);
+            lay->addWidget(m_selectAllBtn);
+            m_selectAllBtn->show();
         }
 
-        auto *lay = new QHBoxLayout(this);
-        lay->setContentsMargins(0, 0, 0, 0);
-        lay->setSpacing(12);
-        m_countLbl->setParent(this);
-        m_countLbl->setMinimumWidth(96);
-        lay->addWidget(m_countLbl);
-        for (QPushButton *btn : {m_selectAllBtn, m_addToPlaylistBtn, m_addToQueueBtn, m_downloadBtn,
-                                 m_unfavoriteBtn, m_removeFromPlaylistBtn}) {
-            if (btn) {
-                btn->setParent(this);
-                lay->addWidget(btn);
-                btn->show();
+        if (m_actionMenuMode) {
+            // 普通列表页：横排动作收进「批量操作」浮层，避免一排七个按钮挤在一起
+            for (QPushButton *btn : {m_addToPlaylistBtn, m_addToQueueBtn, m_downloadBtn,
+                                     m_unfavoriteBtn, m_removeFromPlaylistBtn}) {
+                if (btn)
+                    btn->hide();
             }
+            if (m_triggerBtn) {
+                m_triggerBtn->setParent(this);
+                m_triggerBtn->setFixedHeight(40);
+                lay->addWidget(m_triggerBtn);
+                m_triggerBtn->show();
+            }
+        } else {
+            auto placeAction = [lay, this](QPushButton *btn, bool visible) {
+                if (!btn)
+                    return;
+                btn->setParent(this);
+                if (visible) {
+                    lay->addWidget(btn);
+                    btn->show();
+                } else {
+                    btn->hide();
+                }
+            };
+            placeAction(m_addToPlaylistBtn, m_canAddToPlaylist);
+            placeAction(m_addToQueueBtn, m_canAddToQueue);
+            placeAction(m_downloadBtn, m_canDownload);
+            placeAction(m_unfavoriteBtn, m_canUnfavorite);
+            placeAction(m_removeFromPlaylistBtn, m_canRemoveFromPlaylist);
         }
-        lay->addStretch();
-        if (m_exitBtn) {
-            m_exitBtn->setParent(this);
-            lay->addWidget(m_exitBtn);
-            m_exitBtn->show();
-        }
+    }
+
+    lay->addStretch();
+
+    if (!m_compactTrigger && m_exitBtn) {
+        m_exitBtn->setParent(this);
+        lay->addWidget(m_exitBtn);
+        m_exitBtn->show();
+    } else if (m_exitBtn) {
+        m_exitBtn->hide();
     }
 
     retranslate();
     applyTheme();
+}
+
+void BatchActionBar::showActionMenu()
+{
+    if (!m_triggerBtn)
+        return;
+
+    auto *menu = new HeaderActionMenu(this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->setMinimumWidth(m_triggerBtn->width());
+
+    const bool hasSelection = m_selectedCount > 0;
+    auto actionText = [this](const char *key) {
+        const QString textKey = QString::fromUtf8(key);
+        const auto overridden = m_textOverrides.constFind(textKey);
+        return overridden != m_textOverrides.constEnd() ? overridden.value()
+                                                        : I18n::instance().tr(textKey);
+    };
+
+    if (m_canAddToPlaylist) {
+        QAction *action = menu->addHeaderAction(actionText("batchAddToPlaylist"), "PlaylistAdd",
+                                                hasSelection);
+        connect(action, &QAction::triggered, this, [this]() { emit addToPlaylistRequested(); });
+    }
+    if (m_canAddToQueue) {
+        QAction *action = menu->addHeaderAction(actionText("batchAddToQueue"), "MusicList",
+                                                hasSelection);
+        connect(action, &QAction::triggered, this, [this]() { emit addToQueueRequested(); });
+    }
+    if (m_canDownload) {
+        QAction *action = menu->addHeaderAction(actionText("batchDownload"), "Download",
+                                                hasSelection);
+        connect(action, &QAction::triggered, this, [this]() { emit downloadRequested(); });
+    }
+    if (m_canUnfavorite) {
+        QAction *action = menu->addHeaderAction(actionText("batchUnfavorite"), "HeartBroken",
+                                                hasSelection);
+        connect(action, &QAction::triggered, this, [this]() { emit unfavoriteRequested(); });
+    }
+    if (m_canRemoveFromPlaylist) {
+        if (!menu->isEmpty())
+            menu->addSeparator();
+        QAction *action = menu->addHeaderAction(actionText("batchRemoveFromPlaylist"), "Delete",
+                                                hasSelection);
+        connect(action, &QAction::triggered, this,
+                [this]() { emit removeFromPlaylistRequested(); });
+    }
+
+    if (menu->isEmpty()) {
+        delete menu;
+        return;
+    }
+    menu->popup(m_triggerBtn->mapToGlobal(QPoint(0, m_triggerBtn->height() + 4)));
 }
 
 void BatchActionBar::setSelectedCount(int count)
@@ -227,8 +306,13 @@ void BatchActionBar::updateCountLabels()
     if (m_countLbl) {
         m_countLbl->setText(i18n.tr(QStringLiteral("batchSelected")).arg(m_selectedCount));
     }
-    if (m_triggerBtn && m_compactTrigger) {
-        m_triggerBtn->setText(i18n.tr(QStringLiteral("batchActionsCount")).arg(m_selectedCount));
+    if (m_triggerBtn) {
+        if (m_compactTrigger) {
+            m_triggerBtn->setText(i18n.tr(QStringLiteral("batchActionsCount")).arg(m_selectedCount));
+        } else if (m_actionMenuMode) {
+            // 计数已经在左侧标签里，触发按钮不用再重复一遍
+            m_triggerBtn->setText(i18n.tr(QStringLiteral("batchActions")));
+        }
     }
 }
 
@@ -317,21 +401,27 @@ void BatchActionBar::applyTheme()
         btn->setIconSize(QSize(18, 18));
     }
 
-    // 紧凑模式的触发按钮：窄抽屉里的次级胶囊（文案长，不能再用 20px 大内边距）
+    // 「批量操作」触发按钮：窄抽屉用短胶囊，普通列表页与横排按钮同样高
     if (m_triggerBtn) {
-        m_triggerBtn->setStyleSheet(QStringLiteral(
-            "QPushButton {"
-            "  background: %1;"
-            "  color: %2;"
-            "  border: none;"
-            "  border-radius: 16px;"
-            "  font-size: 13px;"
-            "  font-weight: 500;"
-            "  padding: 0 14px;"
-            "}"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }")
-                                        .arg(secondaryBg, secondaryFg));
-        m_triggerBtn->setIcon(Icons::renderNamed("Menu", 16, secondaryIc));
-        m_triggerBtn->setIconSize(QSize(16, 16));
+        if (m_compactTrigger) {
+            m_triggerBtn->setStyleSheet(QStringLiteral(
+                "QPushButton {"
+                "  background: %1;"
+                "  color: %2;"
+                "  border: none;"
+                "  border-radius: 16px;"
+                "  font-size: 13px;"
+                "  font-weight: 500;"
+                "  padding: 0 14px;"
+                "}"
+                "QPushButton:hover { background: rgba(230,57,80,0.15); }")
+                                            .arg(secondaryBg, secondaryFg));
+            m_triggerBtn->setIcon(Icons::renderNamed("Menu", 16, secondaryIc));
+            m_triggerBtn->setIconSize(QSize(16, 16));
+        } else {
+            m_triggerBtn->setStyleSheet(secondaryStyle);
+            m_triggerBtn->setIcon(Icons::renderNamed("Menu", 18, secondaryIc));
+            m_triggerBtn->setIconSize(QSize(18, 18));
+        }
     }
 }

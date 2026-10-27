@@ -2,7 +2,7 @@
 
 /**
  * @file batchactionbar.h
- * @brief 单曲列表批量编辑模式的操作条（已选 N 首 / 全选 / 批量动作 / 退出）
+ * @brief 单曲列表批量编辑模式的操作条（已选 N 首 / 全选 / 批量操作 / 退出）
  *
  * 设计约定：
  *   - 与页面顶部原有按钮排（播放 / 下载全部 / 更多 ⋯）占同一行位置，
@@ -40,11 +40,17 @@ public:
      * 紧凑触发模式：横向动作按钮全部收起，只留「已选 N 首」计数 + 一个
      * 「批量操作 ▾」触发按钮（点它触发 actionsRequested()，由调用方弹竖排浮层）。
      * 给 400px 宽的播放队列抽屉这类窄容器用，避免横向文案被压扁截断。
-     * 列表页不调用它，保持原来的横向按钮排。
+     * 普通列表页用 setActionMenuMode()，让本组件自己弹菜单。
      */
     void setCompactTrigger(bool compact);
     bool compactTrigger() const { return m_compactTrigger; }
-    /** 紧凑模式下的「批量操作 ▾」触发按钮（非紧凑模式返回 nullptr） */
+    /**
+     * 操作菜单模式：横排动作按钮收进「批量操作」浮层，
+     * 只保留计数、全选、触发按钮和退出。适合普通列表页的批量工具条。
+     */
+    void setActionMenuMode(bool enabled);
+    bool actionMenuMode() const { return m_actionMenuMode; }
+    /** 批量操作浮层的触发按钮（普通模式下为 nullptr） */
     QPushButton *triggerButton() const { return m_triggerBtn; }
 
     /** 已选数量：更新「已选 N 首」文案与各按钮可用状态 */
@@ -76,7 +82,9 @@ signals:
 
 private:
     QPushButton *makeActionButton(const char *iconName, const char *textKey);
-    /** 同步「已选 N 首」的两处显示：横排计数标签 + 紧凑模式的触发按钮 */
+    void rebuildLayout();
+    void showActionMenu();
+    /** 同步「已选 N 首」的两处显示：横排计数标签 + 触发按钮 */
     void updateCountLabels();
 
     QLabel *m_countLbl = nullptr;
@@ -87,14 +95,18 @@ private:
     QPushButton *m_unfavoriteBtn = nullptr;
     QPushButton *m_removeFromPlaylistBtn = nullptr;
     QPushButton *m_exitBtn = nullptr;
-    /** 紧凑模式下的「批量操作 ▾」触发按钮（非紧凑模式下为 nullptr） */
+    /** 批量操作浮层的触发按钮（紧凑/操作菜单模式下存在） */
     QPushButton *m_triggerBtn = nullptr;
-    /** 紧凑模式下承载「计数 + 触发按钮」的那一行容器 */
-    QWidget *m_actionRow = nullptr;
 
     int m_selectedCount = 0;
     bool m_allSelected = false;
     bool m_compactTrigger = false;
+    bool m_actionMenuMode = false;
+    bool m_canAddToPlaylist = false;
+    bool m_canAddToQueue = false;
+    bool m_canDownload = false;
+    bool m_canUnfavorite = false;
+    bool m_canRemoveFromPlaylist = false;
     /** actionKey → 覆盖文案；非空时 retranslate() 不覆盖它（语言切换后仍按调用方给的文案） */
     QHash<QString, QString> m_textOverrides;
 };
