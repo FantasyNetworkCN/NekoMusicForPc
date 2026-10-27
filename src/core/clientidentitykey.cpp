@@ -348,7 +348,7 @@ SecKeyRef findKey(CFDataRef tag, QString *error)
     CFRelease(query);
     if (status != errSecSuccess || !result)
         return nullptr;
-    return static_cast<SecKeyRef>(result);
+    return static_cast<SecKeyRef>(const_cast<void *>(result));
 }
 
 SecKeyRef createKey(CFDataRef tag, QString *error)
