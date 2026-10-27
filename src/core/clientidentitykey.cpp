@@ -303,6 +303,13 @@ NCRYPT_KEY_HANDLE openOrCreateCngKey(QString *error)
 #endif
 
 #if defined(Q_OS_MACOS)
+CFDataRef createKeyTag()
+{
+    return CFDataCreate(nullptr,
+                        reinterpret_cast<const UInt8 *>(kClientIdentityKeyTag),
+                        static_cast<CFIndex>(std::strlen(kClientIdentityKeyTag)));
+}
+
 QByteArray cfDataToByteArray(CFDataRef data)
 {
     if (!data)
@@ -324,7 +331,7 @@ QString macError(CFErrorRef error)
     return text;
 }
 
-SecKeyRef findKey(CFStringRef tag, QString *error)
+SecKeyRef findKey(CFDataRef tag, QString *error)
 {
     Q_UNUSED(error);
     const void *keys[] = {
@@ -344,7 +351,7 @@ SecKeyRef findKey(CFStringRef tag, QString *error)
     return static_cast<SecKeyRef>(result);
 }
 
-SecKeyRef createKey(CFStringRef tag, QString *error)
+SecKeyRef createKey(CFDataRef tag, QString *error)
 {
     int keySizeValue = 256;
     CFNumberRef keySize = CFNumberCreate(nullptr, kCFNumberIntType, &keySizeValue);
@@ -426,8 +433,7 @@ std::shared_ptr<ClientIdentityKey> ClientIdentityKey::loadOrCreate(QString *erro
         return {};
     impl->publicKeySpki = exportCngPublicKey(impl->key, error);
 #elif defined(Q_OS_MACOS)
-    impl->tag = CFStringCreateWithCString(nullptr, kClientIdentityKeyTag,
-                                          kCFStringEncodingUTF8);
+    impl->tag = createKeyTag();
     if (!impl->tag) {
         if (error)
             *error = QStringLiteral("无法创建 Keychain 身份标签");
@@ -514,8 +520,7 @@ bool ClientIdentityKey::reset(QString *error)
     }
     return true;
 #elif defined(Q_OS_MACOS)
-    CFStringRef tag = CFStringCreateWithCString(nullptr, kClientIdentityKeyTag,
-                                                kCFStringEncodingUTF8);
+    CFDataRef tag = createKeyTag();
     if (!tag) {
         if (error)
             *error = QStringLiteral("无法创建 Keychain 身份标签");
