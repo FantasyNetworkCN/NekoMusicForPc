@@ -342,6 +342,26 @@ void ApiClient::verifySliderCaptcha(const QString &captchaToken, int captchaOffs
     });
 }
 
+void ApiClient::fetchPasswordResetUrl(PasswordResetUrlCb cb) {
+    QUrl url(QString::fromUtf8("%1/api/user/sso/password-reset-url").arg(Theme::kApiBase));
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    auto *reply = m_nam.post(req, QByteArrayLiteral("{}"));
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QByteArray raw = reply->readAll();
+        const QJsonObject root = QJsonDocument::fromJson(raw).object();
+        const QString message = root.value("message").toString();
+        const QString resetUrl = root.value("data").toObject().value("url").toString();
+        if (reply->error() != QNetworkReply::NoError) {
+            cb(false, message.isEmpty() ? reply->errorString() : message, {});
+            return;
+        }
+        const bool ok = root.value("success").toBool() && !resetUrl.isEmpty();
+        cb(ok, message, resetUrl);
+    });
+}
+
 void ApiClient::sendResetCode(const QString &email, std::function<void(bool, const QString&)> cb) {
     QUrl url(QString::fromUtf8("%1/api/user/send-reset-code").arg(Theme::kApiBase));
     QNetworkRequest req(url);
@@ -587,6 +607,13 @@ void ApiClient::fetchUserInfo(UserInfoCb cb) {
     auto *reply = m_nam.get(req);
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
         reply->deleteLater();
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (status == 401 || status == 403) {
+            // 令牌由 NekoAuth 统一签发；服务端明确判定失效时清掉本地会话。
+            UserManager::instance().logout();
+            if (cb) cb(false, QStringLiteral("登录状态已失效，请重新登录"), QVariantMap());
+            return;
+        }
         if (reply->error() != QNetworkReply::NoError) {
             if (cb) cb(false, reply->errorString(), QVariantMap());
             return;

@@ -1,6 +1,6 @@
 /**
  * @file forgotpassworddialog.cpp
- * @brief 忘记密码对话框实现
+ * @brief 找回密码对话框实现
  */
 
 #include "forgotpassworddialog.h"
@@ -10,15 +10,15 @@
 #include "theme/theme.h"
 #include "theme/thememanager.h"
 
-#include <QVBoxLayout>
+#include <QDesktopServices>
+#include <QGraphicsDropShadowEffect>
 #include <QHBoxLayout>
-#include <QLineEdit>
 #include <QLabel>
 #include <QPushButton>
-#include <QStackedWidget>
-#include <QGraphicsDropShadowEffect>
-#include <QTimer>
 #include <QStyle>
+#include <QTimer>
+#include <QUrl>
+#include <QVBoxLayout>
 
 ForgotPasswordDialog::ForgotPasswordDialog(QWidget *parent)
     : QDialog(parent)
@@ -52,10 +52,8 @@ void ForgotPasswordDialog::applyDialogTheme()
                                + AuthDialogChrome::controlsStyleSheet(p));
     if (m_titleLabel)
         m_titleLabel->setStyleSheet(AuthDialogChrome::titleStyleSheet(p));
-    if (m_emailHintLabel)
-        m_emailHintLabel->setStyleSheet(AuthDialogChrome::bodyStyleSheet(p));
-    if (m_codeHintLabel)
-        m_codeHintLabel->setStyleSheet(AuthDialogChrome::bodyStyleSheet(p));
+    if (m_hintLabel)
+        m_hintLabel->setStyleSheet(AuthDialogChrome::bodyStyleSheet(p));
     if (m_msgLabel) {
         if (m_msgLabel->text().isEmpty()) {
             m_msgLabel->hide();
@@ -68,17 +66,11 @@ void ForgotPasswordDialog::applyDialogTheme()
 
 void ForgotPasswordDialog::updateDialogSize()
 {
-    if (m_stack && m_stack->currentWidget()) {
-        QWidget *current = m_stack->currentWidget();
-        if (current->layout())
-            current->layout()->activate();
-        current->adjustSize();
-        m_stack->setFixedHeight(current->sizeHint().height());
-    }
+    if (m_card && m_card->layout())
+        m_card->layout()->activate();
     adjustSize();
-    const int h = sizeHint().height();
     setMinimumHeight(0);
-    resize(AuthDialogChrome::kCompactDialogWidth, h);
+    resize(AuthDialogChrome::kCompactDialogWidth, sizeHint().height());
 }
 
 void ForgotPasswordDialog::setupUi()
@@ -113,90 +105,24 @@ void ForgotPasswordDialog::setupUi()
     m_titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     mainLayout->addWidget(m_titleLabel);
 
+    m_hintLabel = new QLabel(I18n::instance().tr(QStringLiteral("forgotPasswordSsoHint")), m_card);
+    m_hintLabel->setWordWrap(true);
+    m_hintLabel->setAlignment(Qt::AlignLeft);
+    m_hintLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    mainLayout->addWidget(m_hintLabel);
+
     m_msgLabel = new QLabel(m_card);
     m_msgLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_msgLabel->setWordWrap(true);
     m_msgLabel->hide();
     mainLayout->addWidget(m_msgLabel);
 
-    m_stack = new QStackedWidget(m_card);
-
-    auto *step1Widget = new QWidget(m_card);
-    auto *step1Layout = new QVBoxLayout(step1Widget);
-    step1Layout->setContentsMargins(0, 0, 0, 0);
-    step1Layout->setSpacing(AuthDialogChrome::kFieldSpacing);
-
-    m_emailHintLabel = new QLabel(I18n::instance().tr(QStringLiteral("forgotPasswordEmailHint")), step1Widget);
-    m_emailHintLabel->setWordWrap(true);
-    m_emailHintLabel->setAlignment(Qt::AlignLeft);
-    step1Layout->addWidget(m_emailHintLabel);
-    step1Layout->addSpacing(4);
-
-    m_emailEdit = new QLineEdit(step1Widget);
-    m_emailEdit->setPlaceholderText(I18n::instance().tr("email"));
-    m_emailEdit->setObjectName("dialogEdit");
-    m_emailEdit->setFixedHeight(AuthDialogChrome::kFieldHeight);
-    m_emailEdit->setClearButtonEnabled(true);
-    m_emailEdit->setMaxLength(254);
-    step1Layout->addWidget(m_emailEdit);
-
-    step1Layout->addSpacing(6);
-
-    m_sendCodeBtn = new QPushButton(I18n::instance().tr("sendCode"), step1Widget);
-    m_sendCodeBtn->setObjectName("dialogBtn");
-    m_sendCodeBtn->setFixedHeight(AuthDialogChrome::kPrimaryBtnHeight);
-    connect(m_sendCodeBtn, &QPushButton::clicked, this, &ForgotPasswordDialog::doSendResetCode);
-    step1Layout->addWidget(m_sendCodeBtn);
-
-    m_stack->addWidget(step1Widget);
-
-    auto *step2Widget = new QWidget(m_card);
-    auto *step2Layout = new QVBoxLayout(step2Widget);
-    step2Layout->setContentsMargins(0, 0, 0, 0);
-    step2Layout->setSpacing(AuthDialogChrome::kFieldSpacing);
-
-    m_codeHintLabel = new QLabel(I18n::instance().tr(QStringLiteral("forgotPasswordCodeHint")), step2Widget);
-    m_codeHintLabel->setWordWrap(true);
-    m_codeHintLabel->setAlignment(Qt::AlignLeft);
-    step2Layout->addWidget(m_codeHintLabel);
-    step2Layout->addSpacing(4);
-
-    m_codeEdit = new QLineEdit(step2Widget);
-    m_codeEdit->setPlaceholderText(I18n::instance().tr("verificationCode"));
-    m_codeEdit->setObjectName("dialogEdit");
-    m_codeEdit->setFixedHeight(AuthDialogChrome::kFieldHeight);
-    m_codeEdit->setMaxLength(16);
-    step2Layout->addWidget(m_codeEdit);
-
-    m_newPassEdit = new QLineEdit(step2Widget);
-    m_newPassEdit->setPlaceholderText(I18n::instance().tr(QStringLiteral("newPassword")));
-    m_newPassEdit->setObjectName("dialogEdit");
-    m_newPassEdit->setFixedHeight(AuthDialogChrome::kFieldHeight);
-    m_newPassEdit->setEchoMode(QLineEdit::Password);
-    m_newPassEdit->setMaxLength(128);
-    step2Layout->addWidget(m_newPassEdit);
-
-    m_confirmPassEdit = new QLineEdit(step2Widget);
-    m_confirmPassEdit->setPlaceholderText(I18n::instance().tr(QStringLiteral("confirmPassword")));
-    m_confirmPassEdit->setObjectName("dialogEdit");
-    m_confirmPassEdit->setFixedHeight(AuthDialogChrome::kFieldHeight);
-    m_confirmPassEdit->setEchoMode(QLineEdit::Password);
-    m_confirmPassEdit->setMaxLength(128);
-    step2Layout->addWidget(m_confirmPassEdit);
-
-    step2Layout->addSpacing(6);
-
-    m_submitBtn = new QPushButton(I18n::instance().tr(QStringLiteral("resetPassword")), step2Widget);
-    m_submitBtn->setObjectName("dialogBtn");
-    m_submitBtn->setFixedHeight(AuthDialogChrome::kPrimaryBtnHeight);
-    connect(m_submitBtn, &QPushButton::clicked, this, &ForgotPasswordDialog::doResetPassword);
-    step2Layout->addWidget(m_submitBtn);
-
-    m_stack->addWidget(step2Widget);
-
-    m_stack->setCurrentIndex(0);
-    m_stack->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    mainLayout->addWidget(m_stack);
+    m_openBtn = new QPushButton(I18n::instance().tr(QStringLiteral("openNekoAuthForgotPassword")), m_card);
+    m_openBtn->setObjectName("dialogBtn");
+    m_openBtn->setFixedHeight(AuthDialogChrome::kPrimaryBtnHeight);
+    m_openBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_openBtn, &QPushButton::clicked, this, &ForgotPasswordDialog::openNekoAuthReset);
+    mainLayout->addWidget(m_openBtn);
 
     auto *backBtn = new QPushButton(I18n::instance().tr(QStringLiteral("backToLogin")), m_card);
     backBtn->setObjectName("dialogLinkBtn");
@@ -222,83 +148,31 @@ void ForgotPasswordDialog::setMsg(const QString &text, const QColor &color)
     updateDialogSize();
 }
 
-void ForgotPasswordDialog::doSendResetCode()
+void ForgotPasswordDialog::openNekoAuthReset()
 {
-    QString email = m_emailEdit->text().trimmed();
-    if (email.isEmpty()) {
-        setMsg(I18n::instance().tr("pleaseEnterEmail"), Theme::kSakura);
-        return;
-    }
+    setMsg(QString(), Qt::transparent);
+    m_openBtn->setEnabled(false);
+    m_openBtn->setText(I18n::instance().tr(QStringLiteral("loadingShort")));
 
-    setMsg("", Qt::transparent);
-    m_sendCodeBtn->setEnabled(false);
+    m_api->fetchPasswordResetUrl([this](bool success, const QString &message, const QString &url) {
+        QTimer::singleShot(0, this, [this, success, message, url]() {
+            m_openBtn->setEnabled(true);
+            m_openBtn->setText(I18n::instance().tr(QStringLiteral("openNekoAuthForgotPassword")));
 
-    m_api->sendResetCode(email, [this](bool success, const QString &message) {
-        QTimer::singleShot(0, this, [this, success, message]() {
-            if (success) {
-                setMsg(message, Theme::kMint);
-                m_stack->setCurrentIndex(1);
-                updateDialogSize();
-                m_countdown = 60;
-                auto *timer = new QTimer(this);
-                connect(timer, &QTimer::timeout, this, [this, timer]() {
-                    m_countdown--;
-                    if (m_countdown > 0) {
-                        m_sendCodeBtn->setText(I18n::instance().tr(QStringLiteral("countdownSeconds"))
-                                                    .arg(m_countdown));
-                    } else {
-                        timer->stop();
-                        timer->deleteLater();
-                        m_sendCodeBtn->setEnabled(true);
-                        m_sendCodeBtn->setText(I18n::instance().tr("sendCode"));
-                    }
-                });
-                timer->start(1000);
-            } else {
-                setMsg(message, Theme::kSakura);
-                m_sendCodeBtn->setEnabled(true);
+            if (!success || url.isEmpty()) {
+                const QString text = message.isEmpty()
+                    ? I18n::instance().tr(QStringLiteral("passwordResetUrlFailed"))
+                    : message;
+                setMsg(text, Theme::kSakura);
+                return;
             }
-        });
-    });
-}
 
-void ForgotPasswordDialog::doResetPassword()
-{
-    QString email = m_emailEdit->text().trimmed();
-    QString code = m_codeEdit->text().trimmed();
-    QString newPass = m_newPassEdit->text();
-    QString confirmPass = m_confirmPassEdit->text();
-
-    if (email.isEmpty() || code.isEmpty() || newPass.isEmpty() || confirmPass.isEmpty()) {
-        setMsg(I18n::instance().tr("fillAllFields"), Theme::kSakura);
-        return;
-    }
-
-    if (newPass.length() < 6 || newPass.length() > 30) {
-        setMsg(I18n::instance().tr(QStringLiteral("passwordLengthError")), Theme::kSakura);
-        return;
-    }
-
-    if (newPass != confirmPass) {
-        setMsg(I18n::instance().tr(QStringLiteral("passwordMismatch")), Theme::kSakura);
-        return;
-    }
-
-    setMsg("", Qt::transparent);
-    m_submitBtn->setEnabled(false);
-    m_submitBtn->setText(I18n::instance().tr(QStringLiteral("loadingShort")));
-
-    m_api->resetPassword(email, code, newPass, [this](bool success, const QString &message) {
-        QTimer::singleShot(0, this, [this, success, message]() {
-            m_submitBtn->setEnabled(true);
-            m_submitBtn->setText(I18n::instance().tr(QStringLiteral("resetPassword")));
-
-            if (success) {
-                setMsg(I18n::instance().tr(QStringLiteral("passwordResetSuccess")), Theme::kMint);
-                QTimer::singleShot(1500, this, &QDialog::accept);
-            } else {
-                setMsg(message, Theme::kSakura);
+            if (!QDesktopServices::openUrl(QUrl(url))) {
+                setMsg(I18n::instance().tr(QStringLiteral("openBrowserFailed")), Theme::kSakura);
+                return;
             }
+
+            setMsg(I18n::instance().tr(QStringLiteral("passwordResetOpened")), Theme::kMint);
         });
     });
 }

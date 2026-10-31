@@ -2,15 +2,14 @@
 
 /**
  * @file forgotpassworddialog.h
- * @brief 忘记密码对话框
+ * @brief 找回密码对话框（统一跳转 NekoAuth）
  */
 
+#include <QColor>
 #include <QDialog>
 
-class QLineEdit;
 class QLabel;
 class QPushButton;
-class QStackedWidget;
 class QWidget;
 class ApiClient;
 
@@ -27,22 +26,12 @@ private:
     void applyDialogTheme();
     void updateDialogSize();
     void setMsg(const QString &text, const QColor &color);
-    void doSendResetCode();
-    void doResetPassword();
+    void openNekoAuthReset();
 
     QWidget *m_card = nullptr;
     QLabel *m_titleLabel = nullptr;
-    QLabel *m_emailHintLabel = nullptr;
-    QLabel *m_codeHintLabel = nullptr;
-    QStackedWidget *m_stack = nullptr;
-    QLineEdit *m_emailEdit = nullptr;
-    QLineEdit *m_codeEdit = nullptr;
-    QLineEdit *m_newPassEdit = nullptr;
-    QLineEdit *m_confirmPassEdit = nullptr;
-    QPushButton *m_submitBtn = nullptr;
-    QPushButton *m_sendCodeBtn = nullptr;
+    QLabel *m_hintLabel = nullptr;
+    QPushButton *m_openBtn = nullptr;
     QLabel *m_msgLabel = nullptr;
     ApiClient *m_api = nullptr;
-
-    int m_countdown = 0;
 };

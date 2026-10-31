@@ -116,6 +116,9 @@ public:
                              const QVariantList &dragTrace, SliderCaptchaVerifyCb cb);
 
     // ─── 忘记密码 ────────────────────────────────────
+    /** 获取 NekoAuth 统一找回密码页面地址（密码与验证码都由 NekoAuth 管理）。 */
+    using PasswordResetUrlCb = std::function<void(bool ok, const QString &message, const QString &url)>;
+    void fetchPasswordResetUrl(PasswordResetUrlCb cb);
     void sendResetCode(const QString &email, std::function<void(bool, const QString&)> cb);
     void resetPassword(const QString &email, const QString &verificationCode,
                        const QString &newPassword, std::function<void(bool, const QString&)> cb);

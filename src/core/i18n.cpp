@@ -293,8 +293,8 @@ static QMap<QString, QString> zhCN()
 
     // --- 账户 & 登录注册 ---
     m["login"] = QStringLiteral("登录");
-    m["loginSubtitle"] = QStringLiteral("登录 NekoMusic，继续享受你的音乐空间");
-    m["registerSubtitle"] = QStringLiteral("创建账号，开启你的专属音乐空间");
+    m["loginSubtitle"] = QStringLiteral("登录 NekoMusic，账号由 NekoAuth 统一管理");
+    m["registerSubtitle"] = QStringLiteral("创建 NekoAuth 账号，开启你的专属音乐空间");
     m["qrLoginSubtitle"] = QStringLiteral("使用手机扫码，快速安全地登录");
     m["qrLogin"] = QStringLiteral("扫码登录");
     m["qrLoginTitle"] = QStringLiteral("扫码登录");
@@ -338,6 +338,11 @@ static QMap<QString, QString> zhCN()
     m["goToLogin"] = QStringLiteral("去登录");
     m["forgotPassword"] = QStringLiteral("忘记密码?");
     m["forgotPasswordTitle"] = QStringLiteral("找回密码");
+    m["forgotPasswordSsoHint"] = QStringLiteral("账号密码与邮箱验证由 NekoAuth 统一管理。点击下方按钮，在系统浏览器中完成找回。");
+    m["openNekoAuthForgotPassword"] = QStringLiteral("在浏览器中打开 NekoAuth 找回密码");
+    m["passwordResetOpened"] = QStringLiteral("已在浏览器中打开 NekoAuth 找回密码页面");
+    m["passwordResetUrlFailed"] = QStringLiteral("获取找回密码地址失败，请稍后重试");
+    m["openBrowserFailed"] = QStringLiteral("无法打开浏览器，请手动访问 NekoAuth");
     m["forgotPasswordEmailHint"] = QStringLiteral("请输入注册时的邮箱地址");
     m["forgotPasswordCodeHint"] = QStringLiteral("请输入邮箱中的验证码");
     m["newPassword"] = QStringLiteral("新密码(6-30位)");
@@ -894,8 +899,8 @@ static QMap<QString, QString> nyaCN()
     m["hot_music"] = QStringLiteral("火热音乐喵~");
     m["latest_music"] = QStringLiteral("新鲜出炉喵~");
     m["login"] = QStringLiteral("指挥官，欢迎回来喵！");
-    m["loginSubtitle"] = QStringLiteral("登录 NekoMusic，继续享受你的音乐空间喵~");
-    m["registerSubtitle"] = QStringLiteral("创建账号，开启你的专属音乐空间喵~");
+    m["loginSubtitle"] = QStringLiteral("登录 NekoMusic 喵~ 账号交给 NekoAuth 统一保管喵！");
+    m["registerSubtitle"] = QStringLiteral("创建 NekoAuth 账号，开启专属音乐空间喵~");
     m["qrLoginSubtitle"] = QStringLiteral("使用手机扫码，快速安全地登录喵~");
     m["qrLogin"] = QStringLiteral("喵码登录喵");
     m["qrLoginTitle"] = QStringLiteral("扫喵码登录喵");
@@ -966,6 +971,11 @@ static QMap<QString, QString> nyaCN()
     m["goToLogin"] = QStringLiteral("快去登录嘛喵~");
     m["forgotPassword"] = QStringLiteral("弄丢暗号了吗喵？");
     m["forgotPasswordTitle"] = QStringLiteral("找回暗号喵~");
+    m["forgotPasswordSsoHint"] = QStringLiteral("账号和暗号都交给 NekoAuth 保管啦喵~ 点下面的按钮，在浏览器里找回喵！");
+    m["openNekoAuthForgotPassword"] = QStringLiteral("在浏览器打开 NekoAuth 找回暗号喵~");
+    m["passwordResetOpened"] = QStringLiteral("已经在浏览器里打开找回暗号的页面啦喵~");
+    m["passwordResetUrlFailed"] = QStringLiteral("拿不到找回暗号的地址喵，等会儿再试试喵~");
+    m["openBrowserFailed"] = QStringLiteral("打不开浏览器喵，请手动访问 NekoAuth 喵~");
     m["forgotPasswordEmailHint"] = QStringLiteral("请输入注册时的邮箱地址喵~");
     m["forgotPasswordCodeHint"] = QStringLiteral("请输入邮箱中的验证码喵~");
     m["newPassword"] = QStringLiteral("新暗号(6-30位)喵~");
@@ -1493,8 +1503,8 @@ static QMap<QString, QString> enUS()
 
     // --- Account & Auth ---
     m["login"] = "Login";
-    m["loginSubtitle"] = "Log in to NekoMusic to continue listening";
-    m["registerSubtitle"] = "Create an account for your personal music space";
+    m["loginSubtitle"] = "Log in to NekoMusic — accounts are managed by NekoAuth";
+    m["registerSubtitle"] = "Create a NekoAuth account for your personal music space";
     m["qrLoginSubtitle"] = "Scan with your phone to log in securely";
     m["qrLogin"] = "Scan QR Code";
     m["qrLoginTitle"] = "Scan QR to Log In";
@@ -1542,6 +1552,11 @@ static QMap<QString, QString> enUS()
     m["goToLogin"] = "Go to Login";
     m["forgotPassword"] = "Forgot Password?";
     m["forgotPasswordTitle"] = "Reset your password";
+    m["forgotPasswordSsoHint"] = "Your account and password are managed by NekoAuth. Open the reset page in your system browser.";
+    m["openNekoAuthForgotPassword"] = "Open NekoAuth password reset in browser";
+    m["passwordResetOpened"] = "NekoAuth password reset opened in your browser";
+    m["passwordResetUrlFailed"] = "Failed to get the password reset URL. Please try again later.";
+    m["openBrowserFailed"] = "Unable to open the browser. Please visit NekoAuth manually.";
     m["forgotPasswordEmailHint"] = "Enter the email address used to register";
     m["forgotPasswordCodeHint"] = "Enter the verification code from your email";
     m["newPassword"] = "New password (6-30 characters)";
