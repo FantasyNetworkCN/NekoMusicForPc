@@ -16,6 +16,12 @@ namespace {
 constexpr int kReadTimeoutMs = 20000;
 constexpr int kSizeWaitMs = 4000;
 constexpr int kThreadStopWaitMs = 3000;
+/** 首次读取前先攒这么多数据（约 8–16 秒 standard 音频），吸收开播瞬间的网络抖动。 */
+constexpr qint64 kPrebufferBytes = 256 * 1024;
+/** 预缓冲最多等这么久，避免慢网络把打开过程拖死。 */
+constexpr int kPrebufferWaitMs = 1500;
+/** 一次读取等了这么久还没数据，就记一条"供给不足"。 */
+constexpr int kStarvationLogMs = 200;
 
 /** Content-Range: bytes 0-123/456 → 456；解析失败返回 -1。 */
 qint64 totalFromContentRange(const QByteArray &value)
@@ -287,12 +293,41 @@ qint64 HttpMediaDevice::readData(char *data, qint64 maxlen)
         return 0;
 
     QMutexLocker locker(&m_mutex);
+
+    // 首次读取前先攒一点数据再放行。原来是拿到首包就开始喂解码器，
+    // 网络只要抖一下，解码队列立刻见底 —— 表现就是开播后频繁"轻微断音"。
+    if (!m_prebuffered) {
+        QElapsedTimer prebufferTimer;
+        prebufferTimer.start();
+        while (!m_failed && !m_finished && m_downloaded < kPrebufferBytes
+               && prebufferTimer.elapsed() < kPrebufferWaitMs) {
+            m_cond.wait(&m_mutex, 50);
+        }
+        m_prebuffered = true;
+        qInfo().noquote() << QStringLiteral("[Stream] 预缓冲 %1KB / 等待%2（%3）")
+                                 .arg(m_downloaded / 1024)
+                                 .arg(AppLog::msText(prebufferTimer.elapsed()),
+                                      AppLog::safeUrl(m_url));
+    }
+
+    QElapsedTimer waitTimer;
+    waitTimer.start();
     while (!m_failed && !m_finished && m_position >= m_downloaded) {
         if (!m_cond.wait(&m_mutex, kReadTimeoutMs)) {
             locker.unlock();
             failFromAnyThread(QStringLiteral("音频流读取超时"));
             return -1;
         }
+    }
+
+    // 供给不足：解码线程没有数据可读。蓝牙断音通常不会出现在这里
+    // （数据是够的，只是声卡侧接不住），可据此区分两类问题。
+    const qint64 starvedMs = waitTimer.elapsed();
+    if (starvedMs >= kStarvationLogMs) {
+        qWarning().noquote() << QStringLiteral("[Stream] 等数据 %1（缓冲%2KB）（%3）")
+                                    .arg(AppLog::msText(starvedMs))
+                                    .arg((m_downloaded - m_position) / 1024)
+                                    .arg(AppLog::safeUrl(m_url));
     }
 
     if (m_position >= m_downloaded) {

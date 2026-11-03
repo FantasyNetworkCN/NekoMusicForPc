@@ -124,7 +124,9 @@ void PlayerEngine::cancelFade()
 {
     if (m_fadeTimer) {
         m_fadeTimer->stop();
-        delete m_fadeTimer;
+        // 不能 delete：cancelFade 可能在 fade 的 timeout 回调链里被调用，
+        // 直接析构正在发信号的定时器是未定义行为。
+        m_fadeTimer->deleteLater();
         m_fadeTimer = nullptr;
     }
     m_fadingIn = false;
@@ -509,7 +511,7 @@ void PlayerEngine::onFadeTick()
             vol = m_targetVolume;
             m_fadingIn = false;
             m_fadeTimer->stop();
-            delete m_fadeTimer;
+            m_fadeTimer->deleteLater();
             m_fadeTimer = nullptr;
             emit fadeComplete();
         }
@@ -522,7 +524,7 @@ void PlayerEngine::onFadeTick()
             m_player->pause();
             m_fadingOut = false;
             m_fadeTimer->stop();
-            delete m_fadeTimer;
+            m_fadeTimer->deleteLater();
             m_fadeTimer = nullptr;
             emit fadeComplete();
         } else {
@@ -605,6 +607,13 @@ void PlayerEngine::connectPlayerSignals(QMediaPlayer *player)
             });
     connect(player, &QMediaPlayer::mediaStatusChanged,
             this, [this](QMediaPlayer::MediaStatus status) {
+                // 记录"数据供给中断"：BufferingMedia / StalledMedia 出现时，
+                // 用户听到的就是断音。蓝牙链路抖动通常不触发这两个状态，
+                // 因此这份日志也用来区分"是数据没来"还是"声卡侧吞不下"。
+                if (status == QMediaPlayer::StalledMedia)
+                    qWarning().noquote() << QStringLiteral("[Player] 媒体停滞(StalledMedia)：音频数据供给中断");
+                else if (status == QMediaPlayer::BufferingMedia)
+                    qInfo().noquote() << QStringLiteral("[Player] 缓冲中(BufferingMedia)");
                 if (status == QMediaPlayer::EndOfMedia)
                     emit playbackFinished();
             });

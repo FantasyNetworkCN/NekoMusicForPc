@@ -126,6 +126,8 @@ private:
     bool m_failed = false;
     bool m_errorEmitted = false;
     bool m_shutdown = false;
+    /** 首次读取前是否已经攒够预缓冲（只在第一次 readData 时等）。 */
+    bool m_prebuffered = false;
     QString m_error;
     /** 从 start() 起算的首包到达耗时，用于判断“打开慢”还是“网络慢”。 */
     QElapsedTimer m_started;
