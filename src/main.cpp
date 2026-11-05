@@ -30,6 +30,10 @@
 #include "core/localmusicmeta.h"
 #include "version.h"
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
 // 单实例服务器名称
 static const QString kServerName = QStringLiteral("NekoMusicSingleInstance");
 
@@ -195,23 +199,45 @@ int main(int argc, char *argv[])
     // 或保持默认 FFmpeg。PipeWire 日志中的 spaVisitChoice 解析告警一般可忽略。
 #endif
 
+    // 单实例互斥量：QLocalSocket 探测只等 350ms，已有实例主线程繁忙时会超时，
+    // 结果就是连点两次图标起了两个窗口（两个进程还会抢 7788 MCP 端口 / 播放设备）。
+    // 命名互斥量由内核维护，进程退出（包括崩溃）时自动释放，因此可以放心兜底。
+#ifdef Q_OS_WIN
+    HANDLE singleInstanceMutex =
+            ::CreateMutexW(nullptr, FALSE, L"Local\\NekoMusic-SingleInstance-v1");
+    const bool alreadyRunning =
+            singleInstanceMutex != nullptr && ::GetLastError() == ERROR_ALREADY_EXISTS;
+#else
+    const bool alreadyRunning = false;
+#endif
+
     // 检查是否已有实例在运行
     QLocalSocket socket;
     socket.connectToServer(kServerName);
-    if (socket.waitForConnected(350)) {
-        const QUrl ssoUrl = firstLaunchSsoUrl(argc, argv);
-        const QString audio = firstLaunchAudioPath(argc, argv);
-        if (ssoUrl.isValid()) {
-            QByteArray msg = QByteArrayLiteral("SSO\t") + ssoUrl.toString(QUrl::FullyEncoded).toUtf8() + '\n';
-            socket.write(msg);
-        } else if (!audio.isEmpty()) {
-            QByteArray msg = QByteArrayLiteral("PLAY\t") + audio.toUtf8() + '\n';
-            socket.write(msg);
+    const bool socketConnected = socket.waitForConnected(1500);
+    if (alreadyRunning || socketConnected) {
+        if (socketConnected) {
+            const QUrl ssoUrl = firstLaunchSsoUrl(argc, argv);
+            const QString audio = firstLaunchAudioPath(argc, argv);
+            if (ssoUrl.isValid()) {
+                QByteArray msg = QByteArrayLiteral("SSO\t") + ssoUrl.toString(QUrl::FullyEncoded).toUtf8() + '\n';
+                socket.write(msg);
+            } else if (!audio.isEmpty()) {
+                QByteArray msg = QByteArrayLiteral("PLAY\t") + audio.toUtf8() + '\n';
+                socket.write(msg);
+            } else {
+                socket.write("SHOW\n");
+            }
+            socket.flush();
+            socket.waitForBytesWritten(500);
         } else {
-            socket.write("SHOW\n");
+            // 已有实例存在但无响应：不重复启动，避免两个进程同时占用设备/数据库。
+            qWarning() << "NekoMusic: 检测到已有实例但无法连接单实例服务，本次启动已放弃。";
         }
-        socket.flush();
-        socket.waitForBytesWritten(500);
+#ifdef Q_OS_WIN
+        if (singleInstanceMutex)
+            ::CloseHandle(singleInstanceMutex);
+#endif
         return 0;
     }
 
@@ -364,6 +390,11 @@ int main(int argc, char *argv[])
     LanDeviceManager::instance().stop();
     // 清理数据库
     PlaylistDatabase::instance().close();
+
+#ifdef Q_OS_WIN
+    if (singleInstanceMutex)
+        ::CloseHandle(singleInstanceMutex);
+#endif
 
     return result;
 }
