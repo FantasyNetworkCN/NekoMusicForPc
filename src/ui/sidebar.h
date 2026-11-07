@@ -85,6 +85,8 @@ private:
     QList<int> m_pendingPlaylistCoverIds;
     int m_activePlaylistCoverRequests = 0;
     int m_playlistCoverGeneration = 0;
+    /** 正在请求封面的歌单（自己的 + 收藏的共用），用于去重：同一歌单在途只发一次。 */
+    QSet<int> m_coverRequestsInFlight;
 
     // 收藏的歌单区域
     QWidget *m_favPlaylistContainer = nullptr;

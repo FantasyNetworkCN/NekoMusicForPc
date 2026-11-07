@@ -18,6 +18,8 @@
 #include "core/i18n.h"
 #include "core/usermanager.h"
 #include "core/apiclient.h"
+#include <QSettings>
+#include <QSet>
 #include "ui/lineinputdialog.h"
 
 #include <QVBoxLayout>
@@ -31,7 +33,7 @@
 
 namespace {
 
-constexpr int kPlaylistCoverRequestConcurrency = 2;
+constexpr int kPlaylistCoverRequestConcurrency = 5;
 
 QColor navIconNormalColor()
 {
@@ -106,6 +108,23 @@ QString playlistCoverUrlFromMap(const QVariantMap &pl)
             return coverUrlForMusicId(id);
     }
     return {};
+}
+
+/** 封面缓存：playlistId → coverUrl。命中就不必为了取一张封面去拉整张歌单。 */
+QString cachedPlaylistCover(int playlistId)
+{
+    if (playlistId <= 0)
+        return {};
+    QSettings settings;
+    return settings.value(QStringLiteral("playlistCovers/%1").arg(playlistId)).toString();
+}
+
+void rememberPlaylistCover(int playlistId, const QString &coverUrl)
+{
+    if (playlistId <= 0 || coverUrl.isEmpty())
+        return;
+    QSettings settings;
+    settings.setValue(QStringLiteral("playlistCovers/%1").arg(playlistId), coverUrl);
 }
 
 QString coverUrlFromMusicList(const QList<QVariantMap> &musicList)
@@ -404,10 +423,21 @@ void Sidebar::enqueueMissingPlaylistCovers()
     ++m_playlistCoverGeneration;
     m_pendingPlaylistCoverIds.clear();
     m_activePlaylistCoverRequests = 0;
-    for (const auto &pl : m_apiPlaylists) {
-        if (pl.coverUrl.isEmpty() && pl.musicCount > 0)
-            m_pendingPlaylistCoverIds.append(pl.id);
+    bool filledFromCache = false;
+    for (auto &pl : m_apiPlaylists) {
+        if (!pl.coverUrl.isEmpty() || pl.musicCount <= 0)
+            continue;
+        // A：先查封面缓存，命中就完全不用发请求
+        const QString cached = cachedPlaylistCover(pl.id);
+        if (!cached.isEmpty()) {
+            pl.coverUrl = cached;
+            filledFromCache = true;
+            continue;
+        }
+        m_pendingPlaylistCoverIds.append(pl.id);
     }
+    if (filledFromCache)
+        schedulePlaylistListRefresh();
     pumpPlaylistCoverRequests();
 }
 
@@ -419,15 +449,21 @@ void Sidebar::pumpPlaylistCoverRequests()
     while (m_activePlaylistCoverRequests < kPlaylistCoverRequestConcurrency
            && !m_pendingPlaylistCoverIds.isEmpty()) {
         const int playlistId = m_pendingPlaylistCoverIds.takeFirst();
+        // B：同一歌单在途只发一次（自己的歌单和收藏歌单共用这个集合）
+        if (m_coverRequestsInFlight.contains(playlistId))
+            continue;
+        m_coverRequestsInFlight.insert(playlistId);
         ++m_activePlaylistCoverRequests;
         m_apiClient->fetchPlaylistMusic(
             playlistId,
             [this, gen, playlistId](bool ok, int, const QList<QVariantMap> &musicList) {
+                m_coverRequestsInFlight.remove(playlistId);
                 if (gen != m_playlistCoverGeneration)
                     return;
                 m_activePlaylistCoverRequests = qMax(0, m_activePlaylistCoverRequests - 1);
                 const QString coverUrl = ok ? coverUrlFromMusicList(musicList) : QString();
                 if (!coverUrl.isEmpty()) {
+                    rememberPlaylistCover(playlistId, coverUrl);
                     for (auto &info : m_apiPlaylists) {
                         if (info.id == playlistId) {
                             info.coverUrl = coverUrl;
@@ -598,10 +634,20 @@ void Sidebar::enqueueMissingFavPlaylistCovers()
     ++m_favPlaylistCoverGeneration;
     m_pendingFavPlaylistCoverIds.clear();
     m_activeFavPlaylistCoverRequests = 0;
-    for (const auto &pl : m_favPlaylists) {
-        if (pl.coverUrl.isEmpty() && pl.musicCount > 0)
-            m_pendingFavPlaylistCoverIds.append(pl.id);
+    bool filledFromCache = false;
+    for (auto &pl : m_favPlaylists) {
+        if (!pl.coverUrl.isEmpty() || pl.musicCount <= 0)
+            continue;
+        const QString cached = cachedPlaylistCover(pl.id);
+        if (!cached.isEmpty()) {
+            pl.coverUrl = cached;
+            filledFromCache = true;
+            continue;
+        }
+        m_pendingFavPlaylistCoverIds.append(pl.id);
     }
+    if (filledFromCache)
+        scheduleFavPlaylistListRefresh();
     pumpFavPlaylistCoverRequests();
 }
 
@@ -613,15 +659,21 @@ void Sidebar::pumpFavPlaylistCoverRequests()
     while (m_activeFavPlaylistCoverRequests < kPlaylistCoverRequestConcurrency
            && !m_pendingFavPlaylistCoverIds.isEmpty()) {
         const int playlistId = m_pendingFavPlaylistCoverIds.takeFirst();
+        // 与自己的歌单共用去重集合：同一歌单在途只发一次
+        if (m_coverRequestsInFlight.contains(playlistId))
+            continue;
+        m_coverRequestsInFlight.insert(playlistId);
         ++m_activeFavPlaylistCoverRequests;
         m_apiClient->fetchPlaylistMusic(
             playlistId,
             [this, gen, playlistId](bool ok, int, const QList<QVariantMap> &musicList) {
+                m_coverRequestsInFlight.remove(playlistId);
                 if (gen != m_favPlaylistCoverGeneration)
                     return;
                 m_activeFavPlaylistCoverRequests = qMax(0, m_activeFavPlaylistCoverRequests - 1);
                 const QString coverUrl = ok ? coverUrlFromMusicList(musicList) : QString();
                 if (!coverUrl.isEmpty()) {
+                    rememberPlaylistCover(playlistId, coverUrl);
                     for (auto &info : m_favPlaylists) {
                         if (info.id == playlistId) {
                             info.coverUrl = coverUrl;
