@@ -65,6 +65,8 @@ public:
 
     /** 资源管理器「打开方式」或命令行传入的本地音频路径（mp3/flac/wav 等） */
     void openAudioFileFromPath(const QString &path);
+    /** 处理 nekomusic://sso/complete?handoff=... 登录回跳。 */
+    void handleSsoCallback(const QUrl &url);
 
     void paintShellBackdrop(QPainter &p, const QRect &r) const;
     /** 供播放页模糊底图复用，避免再次 render 整窗。 */

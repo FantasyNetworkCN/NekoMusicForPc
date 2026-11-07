@@ -5,8 +5,6 @@
 
 #include "logindialog.h"
 #include "authdialogchrome.h"
-#include "forgotpassworddialog.h"
-#include "slidercaptchadialog.h"
 #include "legaldialog.h"
 #include "core/apiclient.h"
 #include "core/usermanager.h"
@@ -16,10 +14,8 @@
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QLineEdit>
 #include <QLabel>
 #include <QPushButton>
-#include <QStackedWidget>
 #include <QGraphicsDropShadowEffect>
 #include <QTimer>
 #include <QNetworkReply>
@@ -30,6 +26,7 @@
 #include <QFrame>
 #include <QCheckBox>
 #include <QPalette>
+#include <QDesktopServices>
 
 namespace {
 
@@ -129,11 +126,7 @@ void LoginDialog::applyDialogTheme()
 
 void LoginDialog::updateDialogSize()
 {
-    // 协议勾选行占用固定高度；注册页字段更多，额外留高。
-    int extra = 42;
-    if (m_page == Page::Register)
-        extra += 56;
-    setFixedSize(AuthDialogChrome::kDialogWidth, AuthDialogChrome::kDialogHeight + extra);
+    setFixedSize(AuthDialogChrome::kDialogWidth, AuthDialogChrome::kDialogHeight + 42);
 }
 
 void LoginDialog::setupUi()
@@ -202,86 +195,30 @@ void LoginDialog::setupUi()
     m_subtitleLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_subtitleLabel->setWordWrap(true);
     formLayout->addWidget(m_subtitleLabel);
+    m_ssoBtn = new QPushButton(
+            I18n::instance().tr(QStringLiteral("nekoAuthSsoLogin")), formPane);
+    m_ssoBtn->setObjectName("dialogBtn");
+    m_ssoBtn->setFixedHeight(AuthDialogChrome::kPrimaryBtnHeight);
+    connect(m_ssoBtn, &QPushButton::clicked, this, &LoginDialog::doSsoLogin);
+    formLayout->addWidget(m_ssoBtn);
     m_msgLabel = new QLabel(formPane);
     m_msgLabel->setWordWrap(true);
     m_msgLabel->hide();
     formLayout->addWidget(m_msgLabel);
 
-    auto *loginWidget = new QWidget(formPane);
-    auto *loginLayout = new QVBoxLayout(loginWidget);
-    loginLayout->setContentsMargins(0, 8, 0, 0);
-    loginLayout->setSpacing(8);
-    m_loginUserEdit = new QLineEdit(loginWidget);
-    m_loginUserEdit->setPlaceholderText(I18n::instance().tr("email"));
-    m_loginUserEdit->setObjectName("dialogEdit");
-    m_loginUserEdit->setFixedHeight(AuthDialogChrome::kFieldHeight);
-    m_loginUserEdit->setClearButtonEnabled(true);
-    loginLayout->addWidget(m_loginUserEdit);
-    m_loginPassEdit = new QLineEdit(loginWidget);
-    m_loginPassEdit->setPlaceholderText(I18n::instance().tr("password"));
-    m_loginPassEdit->setObjectName("dialogEdit");
-    m_loginPassEdit->setFixedHeight(AuthDialogChrome::kFieldHeight);
-    m_loginPassEdit->setEchoMode(QLineEdit::Password);
-    m_loginPassEdit->setClearButtonEnabled(true);
-    loginLayout->addWidget(m_loginPassEdit);
-
-    auto *regWidget = new QWidget(formPane);
-    auto *regLayout = new QVBoxLayout(regWidget);
-    regLayout->setContentsMargins(0, 8, 0, 0);
-    regLayout->setSpacing(8);
-    m_regUserEdit = new QLineEdit(regWidget);
-    m_regUserEdit->setPlaceholderText(I18n::instance().tr("nickname"));
-    m_regUserEdit->setObjectName("dialogEdit");
-    m_regUserEdit->setFixedHeight(AuthDialogChrome::kFieldHeight);
-    regLayout->addWidget(m_regUserEdit);
-    m_regPassEdit = new QLineEdit(regWidget);
-    m_regPassEdit->setPlaceholderText(I18n::instance().tr("password"));
-    m_regPassEdit->setObjectName("dialogEdit");
-    m_regPassEdit->setFixedHeight(AuthDialogChrome::kFieldHeight);
-    m_regPassEdit->setEchoMode(QLineEdit::Password);
-    regLayout->addWidget(m_regPassEdit);
-    auto *emailRow = new QHBoxLayout();
-    emailRow->setContentsMargins(0, 0, 0, 0);
-    emailRow->setSpacing(8);
-    m_regEmailEdit = new QLineEdit(regWidget);
-    m_regEmailEdit->setPlaceholderText(I18n::instance().tr("email"));
-    m_regEmailEdit->setObjectName("dialogEdit");
-    m_regEmailEdit->setFixedHeight(AuthDialogChrome::kFieldHeight);
-    emailRow->addWidget(m_regEmailEdit, 1);
-    m_sendCodeBtn = new QPushButton(I18n::instance().tr("sendCode"), regWidget);
-    m_sendCodeBtn->setObjectName("dialogBtn");
-    m_sendCodeBtn->setFixedHeight(AuthDialogChrome::kFieldHeight);
-    m_sendCodeBtn->setMinimumWidth(94);
-    connect(m_sendCodeBtn, &QPushButton::clicked, this, &LoginDialog::doSendVerificationCode);
-    emailRow->addWidget(m_sendCodeBtn);
-    regLayout->addLayout(emailRow);
-    m_regCodeEdit = new QLineEdit(regWidget);
-    m_regCodeEdit->setPlaceholderText(I18n::instance().tr("verificationCode"));
-    m_regCodeEdit->setObjectName("dialogEdit");
-    m_regCodeEdit->setFixedHeight(AuthDialogChrome::kFieldHeight);
-    regLayout->addWidget(m_regCodeEdit);
-
-    m_stack = new QStackedWidget(formPane);
-    m_stack->addWidget(loginWidget);
-    m_stack->addWidget(regWidget);
-    m_stack->setCurrentIndex(0);
-    formLayout->addWidget(m_stack);
     auto *actionRow = new QHBoxLayout();
     actionRow->setContentsMargins(0, 6, 0, 0);
     actionRow->setSpacing(10);
-    m_switchBtn = new QPushButton(I18n::instance().tr("register"), formPane);
+    m_switchBtn = new QPushButton(I18n::instance().tr(QStringLiteral("nekoAuthRegister")), formPane);
     m_switchBtn->setObjectName("dialogSecondaryBtn");
     m_switchBtn->setFixedHeight(AuthDialogChrome::kPrimaryBtnHeight);
-    connect(m_switchBtn, &QPushButton::clicked, this, &LoginDialog::switchMode);
+    connect(m_switchBtn, &QPushButton::clicked, this, &LoginDialog::doOpenRegister);
     actionRow->addWidget(m_switchBtn, 1);
-    m_submitBtn = new QPushButton(I18n::instance().tr("login"), formPane);
-    m_submitBtn->setObjectName("dialogBtn");
-    m_submitBtn->setFixedHeight(AuthDialogChrome::kPrimaryBtnHeight);
-    connect(m_submitBtn, &QPushButton::clicked, this, [this]() {
-        if (m_page == Page::Login) doLogin();
-        else if (m_page == Page::Register) doRegister();
-    });
-    actionRow->addWidget(m_submitBtn, 1);
+    m_forgotBtn = new QPushButton(I18n::instance().tr(QStringLiteral("nekoAuthAccountCenter")), formPane);
+    m_forgotBtn->setObjectName("dialogSecondaryBtn");
+    m_forgotBtn->setFixedHeight(AuthDialogChrome::kPrimaryBtnHeight);
+    connect(m_forgotBtn, &QPushButton::clicked, this, &LoginDialog::doOpenAccountCenter);
+    actionRow->addWidget(m_forgotBtn, 1);
     formLayout->addLayout(actionRow);
 
     // 协议勾选：登录/注册前须阅读并同意用户协议与隐私政策
@@ -308,81 +245,11 @@ void LoginDialog::setupUi()
     consentRow->addWidget(m_consentText, 1);
     formLayout->addLayout(consentRow);
 
-    m_forgotBtn = new QPushButton(I18n::instance().tr("forgotPassword"), formPane);
-    m_forgotBtn->setObjectName("dialogLinkBtn");
-    connect(m_forgotBtn, &QPushButton::clicked, this, &LoginDialog::showForgotPassword);
-    formLayout->addWidget(m_forgotBtn, 0, Qt::AlignLeft);
     body->addWidget(formPane, 1);
     mainLayout->addLayout(body, 1);
     outer->addWidget(m_card);
 
-    setTabOrder(m_loginUserEdit, m_loginPassEdit);
-    setTabOrder(m_loginPassEdit, m_submitBtn);
-    setTabOrder(m_regUserEdit, m_regPassEdit);
-    setTabOrder(m_regPassEdit, m_regEmailEdit);
-    setTabOrder(m_regEmailEdit, m_regCodeEdit);
-    setTabOrder(m_regCodeEdit, m_submitBtn);
-    connect(m_loginUserEdit, &QLineEdit::returnPressed, this, &LoginDialog::doLogin);
-    connect(m_loginPassEdit, &QLineEdit::returnPressed, this, &LoginDialog::doLogin);
-    connect(m_regCodeEdit, &QLineEdit::returnPressed, this, &LoginDialog::doRegister);
-
     refreshSubmitEnabled();
-}
-
-void LoginDialog::applyMode()
-{
-    const bool qr = (m_page == Page::Qr);
-
-    m_stack->setCurrentIndex(m_page == Page::Register ? 1 : 0);
-
-    m_submitBtn->setVisible(!qr);
-    m_forgotBtn->setVisible(m_page == Page::Login);
-    m_switchBtn->setVisible(!qr);
-    if (m_consentCheck)
-        m_consentCheck->setVisible(!qr);
-    if (m_consentText)
-        m_consentText->setVisible(!qr);
-    refreshSubmitEnabled();
-
-    if (m_titleLabel) {
-        if (qr)
-            m_titleLabel->setText(I18n::instance().tr("qrLoginTitle"));
-        else
-            m_titleLabel->setText(I18n::instance().tr(m_page == Page::Login ? "login" : "register"));
-    }
-
-    if (m_subtitleLabel) {
-        if (qr)
-            m_subtitleLabel->setText(I18n::instance().tr(QStringLiteral("qrLoginSubtitle")));
-        else if (m_page == Page::Register)
-            m_subtitleLabel->setText(I18n::instance().tr(QStringLiteral("registerSubtitle")));
-        else
-            m_subtitleLabel->setText(I18n::instance().tr(QStringLiteral("loginSubtitle")));
-    }
-
-    if (m_page == Page::Register) {
-        m_submitBtn->setText(I18n::instance().tr("register"));
-        m_switchBtn->setText(I18n::instance().tr("login"));
-    } else if (m_page == Page::Login) {
-        m_submitBtn->setText(I18n::instance().tr("login"));
-        m_switchBtn->setText(I18n::instance().tr("register"));
-    }
-
-    applyDialogTheme();
-    updateDialogSize();
-}
-
-void LoginDialog::switchMode()
-{
-    m_page = (m_page == Page::Register) ? Page::Login : Page::Register;
-    m_msgLabel->clear();
-    applyMode();
-}
-
-void LoginDialog::showQrMode()
-{
-    m_msgLabel->clear();
-    refreshQrSession();
 }
 
 void LoginDialog::refreshQrSession()
@@ -491,153 +358,77 @@ void LoginDialog::stopQrSession()
         reply->abort();
 }
 
-void LoginDialog::doLogin()
+void LoginDialog::doSsoLogin()
 {
     if (!ensureConsent())
         return;
-
-    QString email = m_loginUserEdit->text().trimmed();
-    QString password = m_loginPassEdit->text();
-
-    if (email.isEmpty() || password.isEmpty()) {
-        setMsg(I18n::instance().tr("fillEmailAndPassword"), Theme::kSakura);
+    if (m_loading)
         return;
-    }
-    if (password.length() > 128) {
-        setMsg(I18n::instance().tr(QStringLiteral("passwordTooLong")), Theme::kSakura);
-        return;
-    }
-
-    setMsg("", Qt::transparent);
     m_loading = true;
-    m_submitBtn->setEnabled(false);
-    m_submitBtn->setText(I18n::instance().tr(QStringLiteral("loadingShort")));
-
-    m_api->login(email, password, [this](bool success, const QString &message,
-                                             const QString &token, const QVariantMap &user) {
-        QTimer::singleShot(0, this, [this, success, message, token, user]() {
-            onLoginResult(success, message, token, user);
-        });
+    m_ssoBtn->setEnabled(false);
+    m_ssoBtn->setText(I18n::instance().tr(QStringLiteral("loadingShort")));
+    setMsg(I18n::instance().tr(QStringLiteral("nekoAuthSsoOpening")), Theme::kSakura);
+    m_api->startSso(QStringLiteral("pc"), QStringLiteral("/"),
+                    [this](bool ok, const QString &message, const QString &url) {
+        m_loading = false;
+        m_ssoBtn->setEnabled(true);
+        m_ssoBtn->setText(I18n::instance().tr(QStringLiteral("nekoAuthSsoLogin")));
+        if (!ok || url.isEmpty()) {
+            setMsg(message.isEmpty()
+                           ? I18n::instance().tr(QStringLiteral("nekoAuthSsoFailed"))
+                           : message,
+                   Theme::kSakura);
+            return;
+        }
+        if (!QDesktopServices::openUrl(QUrl(url))) {
+            setMsg(I18n::instance().tr(QStringLiteral("nekoAuthSsoFailed")), Theme::kSakura);
+            return;
+        }
+        setMsg(I18n::instance().tr(QStringLiteral("nekoAuthSsoWaiting")), Theme::kSakura);
     });
 }
 
-void LoginDialog::doRegister()
+void LoginDialog::doOpenRegister()
 {
-    if (!ensureConsent())
+    if (!m_api)
         return;
-
-    QString nickname = m_regUserEdit->text().trimmed();
-    QString password = m_regPassEdit->text();
-    QString email = m_regEmailEdit->text().trimmed();
-    QString code = m_regCodeEdit->text().trimmed();
-
-    if (nickname.isEmpty() || password.isEmpty() || email.isEmpty() || code.isEmpty()) {
-        setMsg(I18n::instance().tr("fillAllFields"), Theme::kSakura);
-        return;
-    }
-    if (nickname.length() > 64 || password.length() > 128 || email.length() > 254) {
-        setMsg(I18n::instance().tr(QStringLiteral("inputTooLong")), Theme::kSakura);
-        return;
-    }
-
-    setMsg("", Qt::transparent);
-    m_loading = true;
-    m_submitBtn->setEnabled(false);
-    m_submitBtn->setText(I18n::instance().tr(QStringLiteral("loadingShort")));
-
-    m_api->registerUser(nickname, password, email, code,
-                        [this](bool success, const QString &message,
-                               const QString &token, const QVariantMap &user) {
-        QTimer::singleShot(0, this, [this, success, message, token, user]() {
-            onLoginResult(success, message, token, user);
-        });
+    setMsg(I18n::instance().tr(QStringLiteral("nekoAuthSsoOpening")), Theme::kSakura);
+    m_api->fetchPortalUrl(QStringLiteral("register"),
+                          [this](bool ok, const QString &message, const QString &url) {
+        if (!ok || url.isEmpty()) {
+            setMsg(message.isEmpty()
+                           ? I18n::instance().tr(QStringLiteral("nekoAuthSsoFailed"))
+                           : message,
+                   Theme::kSakura);
+            return;
+        }
+        if (!QDesktopServices::openUrl(QUrl(url))) {
+            setMsg(I18n::instance().tr(QStringLiteral("nekoAuthSsoFailed")), Theme::kSakura);
+            return;
+        }
+        setMsg(I18n::instance().tr(QStringLiteral("nekoAuthRegisterOpened")), Theme::kSakura);
     });
 }
 
-void LoginDialog::doSendVerificationCode()
+void LoginDialog::doOpenAccountCenter()
 {
-    if (!ensureConsent())
+    if (!m_api)
         return;
-
-    QString email = m_regEmailEdit->text().trimmed();
-    if (email.isEmpty()) {
-        setMsg(I18n::instance().tr("pleaseEnterEmail"), Theme::kSakura);
-        return;
-    }
-    const QString nickname = m_regUserEdit->text().trimmed();
-    if (nickname.isEmpty()) {
-        setMsg(I18n::instance().tr(QStringLiteral("registerNeedNicknameForCode")), Theme::kSakura);
-        return;
-    }
-
-    m_sendCodeBtn->setEnabled(false);
-
-    SliderCaptchaDialog captchaDlg(m_api, this);
-    const int captchaResult = captchaDlg.exec();
-    if (captchaResult != QDialog::Accepted) {
-        m_sendCodeBtn->setEnabled(true);
-        return;
-    }
-    const QString passToken = captchaDlg.captchaPassToken();
-    if (passToken.isEmpty()) {
-        m_sendCodeBtn->setEnabled(true);
-        return;
-    }
-
-    m_api->sendVerificationCode(email, nickname, passToken, [this](bool success, const QString &message) {
-        QTimer::singleShot(0, this, [this, success, message]() {
-            if (success) {
-                setMsg(message, Theme::kMint);
-                if (m_countdownTimer) {
-                    m_countdownTimer->stop();
-                    m_countdownTimer->deleteLater();
-                }
-                m_countdown = 60;
-                m_countdownTimer = new QTimer(this);
-                connect(m_countdownTimer, &QTimer::timeout, this, [this]() {
-                    m_countdown--;
-                    m_sendCodeBtn->setText(I18n::instance().tr(QStringLiteral("countdownSeconds"))
-                                                .arg(m_countdown));
-                    if (m_countdown <= 0) {
-                        m_countdownTimer->stop();
-                        m_countdownTimer->deleteLater();
-                        m_countdownTimer = nullptr;
-                        m_sendCodeBtn->setEnabled(true);
-                        m_sendCodeBtn->setText(I18n::instance().tr("sendCode"));
-                    }
-                });
-                m_countdownTimer->start(1000);
-            } else {
-                setMsg(message, Theme::kSakura);
-                m_sendCodeBtn->setEnabled(true);
-            }
-        });
+    m_api->fetchPortalUrl(QStringLiteral("account"),
+                          [this](bool ok, const QString &message, const QString &url) {
+        if (!ok || url.isEmpty()) {
+            setMsg(message.isEmpty()
+                           ? I18n::instance().tr(QStringLiteral("nekoAuthSsoFailed"))
+                           : message,
+                   Theme::kSakura);
+            return;
+        }
+        if (!QDesktopServices::openUrl(QUrl(url))) {
+            setMsg(I18n::instance().tr(QStringLiteral("nekoAuthSsoFailed")), Theme::kSakura);
+            return;
+        }
+        setMsg(I18n::instance().tr(QStringLiteral("nekoAuthAccountOpened")), Theme::kSakura);
     });
-}
-
-void LoginDialog::onLoginResult(bool success, const QString &message,
-                                 const QString &token, const QVariantMap &user)
-{
-    m_loading = false;
-    refreshSubmitEnabled();
-    if (m_page == Page::Register) {
-        m_submitBtn->setText(I18n::instance().tr("register"));
-    } else {
-        m_submitBtn->setText(I18n::instance().tr("login"));
-    }
-
-    if (success) {
-        UserManager::instance().setLoginInfo(token, user);
-        accept();
-    } else {
-        setMsg(message, Theme::kSakura);
-    }
-}
-
-void LoginDialog::showForgotPassword()
-{
-    ForgotPasswordDialog dlg(this);
-    dlg.exec();
 }
 
 bool LoginDialog::ensureConsent()
@@ -651,10 +442,8 @@ bool LoginDialog::ensureConsent()
 void LoginDialog::refreshSubmitEnabled()
 {
     const bool agreed = m_consentCheck ? m_consentCheck->isChecked() : true;
-    if (m_submitBtn && !m_loading)
-        m_submitBtn->setEnabled(agreed);
-    if (m_sendCodeBtn && !m_loading && m_countdown == 0)
-        m_sendCodeBtn->setEnabled(agreed);
+    if (m_ssoBtn && !m_loading)
+        m_ssoBtn->setEnabled(agreed);
 }
 
 void LoginDialog::setMsg(const QString &text, const QColor &color)

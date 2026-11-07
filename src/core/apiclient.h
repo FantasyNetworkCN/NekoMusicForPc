@@ -101,6 +101,9 @@ public:
     void login(const QString &email, const QString &password, AuthCb cb);
     void registerUser(const QString &nickname, const QString &password,
                       const QString &email, const QString &verificationCode, AuthCb cb);
+    using SsoStartCb = std::function<void(bool ok, const QString &message, const QString &url)>;
+    void startSso(const QString &client, const QString &returnTo, SsoStartCb cb);
+    void claimSso(const QString &handoff, AuthCb cb);
     /** 注册发邮箱验证码前：须先完成滑块并取得 captchaPassToken */
     void sendVerificationCode(const QString &email, const QString &nickname,
                               const QString &captchaPassToken,
@@ -119,6 +122,7 @@ public:
     /** 获取 NekoAuth 统一找回密码页面地址（密码与验证码都由 NekoAuth 管理）。 */
     using PasswordResetUrlCb = std::function<void(bool ok, const QString &message, const QString &url)>;
     void fetchPasswordResetUrl(PasswordResetUrlCb cb);
+    void fetchPortalUrl(const QString &target, PasswordResetUrlCb cb);
     void sendResetCode(const QString &email, std::function<void(bool, const QString&)> cb);
     void resetPassword(const QString &email, const QString &verificationCode,
                        const QString &newPassword, std::function<void(bool, const QString&)> cb);

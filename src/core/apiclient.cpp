@@ -231,6 +231,54 @@ void ApiClient::login(const QString &email, const QString &password, AuthCb cb) 
     });
 }
 
+void ApiClient::startSso(const QString &client, const QString &returnTo, SsoStartCb cb) {
+    QUrl url(QString::fromUtf8("%1/api/user/sso/start").arg(Theme::kApiBase));
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QJsonObject body;
+    body["client"] = client;
+    body["returnTo"] = returnTo;
+    auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            cb(false, reply->errorString(), {});
+            return;
+        }
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const QString url = root.value(QStringLiteral("data")).toObject()
+                                .value(QStringLiteral("url")).toString();
+        const bool ok = root.value(QStringLiteral("success")).toBool() && !url.isEmpty();
+        cb(ok, root.value(QStringLiteral("message")).toString(), url);
+    });
+}
+
+void ApiClient::claimSso(const QString &handoff, AuthCb cb) {
+    QUrl url(QString::fromUtf8("%1/api/user/sso/claim").arg(Theme::kApiBase));
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QJsonObject body;
+    body["handoff"] = handoff;
+    auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            cb(false, reply->errorString(), {}, {});
+            return;
+        }
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = root.value(QStringLiteral("success")).toBool();
+        QString token;
+        QVariantMap user;
+        if (ok) {
+            const QJsonObject data = root.value(QStringLiteral("data")).toObject();
+            token = data.value(QStringLiteral("token")).toString();
+            user = data.value(QStringLiteral("user")).toObject().toVariantMap();
+        }
+        cb(ok, root.value(QStringLiteral("message")).toString(), token, user);
+    });
+}
+
 void ApiClient::registerUser(const QString &nickname, const QString &password,
                               const QString &email, const QString &verificationCode, AuthCb cb) {
     QUrl url(QString::fromUtf8("%1/api/user/register").arg(Theme::kApiBase));
@@ -359,6 +407,27 @@ void ApiClient::fetchPasswordResetUrl(PasswordResetUrlCb cb) {
         }
         const bool ok = root.value("success").toBool() && !resetUrl.isEmpty();
         cb(ok, message, resetUrl);
+    });
+}
+
+void ApiClient::fetchPortalUrl(const QString &target, PasswordResetUrlCb cb) {
+    QUrl url(QString::fromUtf8("%1/api/user/sso/portal-url").arg(Theme::kApiBase));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("target"), target);
+    url.setQuery(query);
+    QNetworkRequest req(url);
+    auto *reply = m_nam.get(req);
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const QString url = root.value(QStringLiteral("data")).toObject()
+                                .value(QStringLiteral("url")).toString();
+        const bool ok = reply->error() == QNetworkReply::NoError
+                && root.value(QStringLiteral("success")).toBool() && !url.isEmpty();
+        QString message = root.value(QStringLiteral("message")).toString();
+        if (message.isEmpty())
+            message = ok ? QString() : reply->errorString();
+        cb(ok, message, url);
     });
 }
 

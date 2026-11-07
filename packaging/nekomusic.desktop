@@ -10,8 +10,8 @@ Comment=高品质无损音乐播放器 (Qt6 + C++)
 Comment[en]=High-quality Lossless Music Player
 
 # --- 执行与路径 ---
-# %F = 本地文件路径（推荐）；%U = file:/// URL（程序内两种均支持）
-Exec=/opt/Neko歌姬计划/NekoMusic %F
+# %U = 文件 URL / nekomusic:// SSO 回跳
+Exec=/opt/Neko歌姬计划/NekoMusic %U
 Icon=nekomusic
 Terminal=false
 StartupNotify=true
@@ -21,7 +21,7 @@ StartupWMClass=NekoMusic
 # 增加更多专业标签，方便在应用商店和聚合搜索中被搜到
 Categories=AudioVideo;Audio;Player;Qt;Music;
 Keywords=Music;Player;Neko;Flac;Lossless;
-MimeType=audio/flac;audio/mpeg;audio/ogg;audio/x-wav;audio/aac;audio/mp4;audio/mpegurl;audio/vnd.rn-realaudio;audio/x-mpegurl;audio/x-ms-wma;audio/x-musepack;audio/x-pn-realaudio;audio/x-scpls;audio/x-speex;
+MimeType=audio/flac;audio/mpeg;audio/ogg;audio/x-wav;audio/aac;audio/mp4;audio/mpegurl;audio/vnd.rn-realaudio;audio/x-mpegurl;audio/x-ms-wma;audio/x-musepack;audio/x-pn-realaudio;audio/x-scpls;audio/x-speex;x-scheme-handler/nekomusic;
 
 # --- 高大上的特性：右键快捷菜单 (Desktop Actions) ---
 # 这会让用户在图标上点右键时，直接出现功能菜单喵！

@@ -268,50 +268,15 @@ void SettingsPage::setupUi()
     m_accountNicknameValue->setTextInteractionFlags(Qt::TextSelectableByMouse);
     nicknameRow->addWidget(m_accountNicknameValue, 1);
 
-    m_accountNicknameEdit = new QLineEdit(m_accountContent);
-    m_accountNicknameEdit->setObjectName("settingsInput");
-    m_accountNicknameEdit->setPlaceholderText(
-        I18n::instance().tr(QStringLiteral("nicknamePlaceholder")));
-    m_accountNicknameEdit->setMaxLength(20);
-    m_accountNicknameEdit->setFixedHeight(34);
-    m_accountNicknameEdit->setMinimumWidth(160);
-    m_accountNicknameEdit->hide();
-    connect(m_accountNicknameEdit, &QLineEdit::returnPressed, this, &SettingsPage::submitNickname);
-    connect(m_accountNicknameEdit, &QLineEdit::textChanged, this, [this]() {
-        if (m_accountNicknameError && m_accountNicknameError->isVisible())
-            m_accountNicknameError->hide();
-    });
-    nicknameRow->addWidget(m_accountNicknameEdit, 1);
-
-    m_accountEditBtn = new QPushButton(I18n::instance().tr(QStringLiteral("edit")), m_accountContent);
+    m_accountEditBtn = new QPushButton(
+            I18n::instance().tr(QStringLiteral("nekoAuthAccountCenter")), m_accountContent);
     m_accountEditBtn->setObjectName("settingsLinkBtn");
     m_accountEditBtn->setCursor(Qt::PointingHandCursor);
     m_accountEditBtn->setFlat(true);
-    connect(m_accountEditBtn, &QPushButton::clicked, this, &SettingsPage::startEditNickname);
+    connect(m_accountEditBtn, &QPushButton::clicked, this, &SettingsPage::openNekoAuthAccountCenter);
     nicknameRow->addWidget(m_accountEditBtn);
 
-    m_accountSaveBtn = new QPushButton(I18n::instance().tr(QStringLiteral("save")), m_accountContent);
-    m_accountSaveBtn->setObjectName("settingsPrimaryBtn");
-    m_accountSaveBtn->setCursor(Qt::PointingHandCursor);
-    m_accountSaveBtn->hide();
-    connect(m_accountSaveBtn, &QPushButton::clicked, this, &SettingsPage::submitNickname);
-    nicknameRow->addWidget(m_accountSaveBtn);
-
-    m_accountCancelBtn = new QPushButton(I18n::instance().tr(QStringLiteral("cancel")), m_accountContent);
-    m_accountCancelBtn->setObjectName("settingsLinkBtn");
-    m_accountCancelBtn->setCursor(Qt::PointingHandCursor);
-    m_accountCancelBtn->setFlat(true);
-    m_accountCancelBtn->hide();
-    connect(m_accountCancelBtn, &QPushButton::clicked, this, &SettingsPage::cancelEditNickname);
-    nicknameRow->addWidget(m_accountCancelBtn);
-
     accountInfoCol->addLayout(nicknameRow);
-
-    m_accountNicknameError = new QLabel(m_accountContent);
-    m_accountNicknameError->setObjectName("settingsInfo");
-    m_accountNicknameError->setWordWrap(true);
-    m_accountNicknameError->hide();
-    accountInfoCol->addWidget(m_accountNicknameError);
 
     auto addAccountRow = [&](QLabel *&caption, QLabel *&value) {
         auto *row = new QHBoxLayout();
@@ -981,14 +946,7 @@ void SettingsPage::retranslate()
         m_accountCreatedCaption->setText(I18n::instance().tr(QStringLiteral("registerTime")));
     updateAccountCaptionWidth();
     if (m_accountEditBtn)
-        m_accountEditBtn->setText(I18n::instance().tr(QStringLiteral("edit")));
-    if (m_accountSaveBtn)
-        m_accountSaveBtn->setText(I18n::instance().tr(QStringLiteral("save")));
-    if (m_accountCancelBtn)
-        m_accountCancelBtn->setText(I18n::instance().tr(QStringLiteral("cancel")));
-    if (m_accountNicknameEdit)
-        m_accountNicknameEdit->setPlaceholderText(
-            I18n::instance().tr(QStringLiteral("nicknamePlaceholder")));
+        m_accountEditBtn->setText(I18n::instance().tr(QStringLiteral("nekoAuthAccountCenter")));
     if (m_accountGuestHint)
         m_accountGuestHint->setText(I18n::instance().tr(QStringLiteral("loginRequired")));
     if (m_accountLoginBtn)
@@ -1134,8 +1092,6 @@ void SettingsPage::refreshAccountSection()
     if (m_accountGuestWrap)
         m_accountGuestWrap->setVisible(!loggedIn);
 
-    cancelEditNickname();
-
     if (!loggedIn) {
         setAccountAvatar(QPixmap(QStringLiteral(":/icons/app.png")));
         return;
@@ -1168,97 +1124,27 @@ void SettingsPage::refreshAccountSection()
     loadAccountAvatar(info.value(QStringLiteral("id")).toInt());
 }
 
-void SettingsPage::startEditNickname()
+void SettingsPage::openNekoAuthAccountCenter()
 {
-    if (!UserManager::instance().isLoggedIn())
+    if (!m_apiClient)
         return;
-
-    if (m_accountNicknameValue)
-        m_accountNicknameValue->hide();
-    if (m_accountNicknameEdit) {
-        m_accountNicknameEdit->setText(
-            UserManager::instance().userInfo().value(QStringLiteral("nickname")).toString());
-        m_accountNicknameEdit->show();
-        m_accountNicknameEdit->setFocus();
-        m_accountNicknameEdit->selectAll();
-    }
-    if (m_accountEditBtn)
-        m_accountEditBtn->hide();
-    if (m_accountSaveBtn)
-        m_accountSaveBtn->show();
-    if (m_accountCancelBtn)
-        m_accountCancelBtn->show();
-    if (m_accountNicknameError)
-        m_accountNicknameError->hide();
-}
-
-void SettingsPage::cancelEditNickname()
-{
-    if (m_accountNicknameValue)
-        m_accountNicknameValue->show();
-    if (m_accountNicknameEdit) {
-        m_accountNicknameEdit->clear();
-        m_accountNicknameEdit->hide();
-    }
-    if (m_accountEditBtn)
-        m_accountEditBtn->show();
-    if (m_accountSaveBtn)
-        m_accountSaveBtn->hide();
-    if (m_accountCancelBtn)
-        m_accountCancelBtn->hide();
-    if (m_accountNicknameError)
-        m_accountNicknameError->hide();
-}
-
-void SettingsPage::submitNickname()
-{
-    if (m_accountSaving || !m_accountNicknameEdit || !m_apiClient)
-        return;
-
-    const QString nickname = m_accountNicknameEdit->text().trimmed();
-    const QString current =
-        UserManager::instance().userInfo().value(QStringLiteral("nickname")).toString();
-
-    if (nickname.isEmpty()) {
-        if (m_accountNicknameError) {
-            m_accountNicknameError->setText(I18n::instance().tr(QStringLiteral("nicknameEmpty")));
-            m_accountNicknameError->show();
+    m_apiClient->fetchPortalUrl(QStringLiteral("account"),
+                                [this](bool ok, const QString &message, const QString &url) {
+        if (!ok || url.isEmpty()) {
+            Toast::show(window(),
+                        message.isEmpty() ? I18n::instance().tr(QStringLiteral("nekoAuthSsoFailed"))
+                                          : message,
+                        Toast::Error);
+            return;
         }
-        return;
-    }
-    if (nickname == current) {
-        cancelEditNickname();
-        return;
-    }
-
-    m_accountSaving = true;
-    if (m_accountSaveBtn)
-        m_accountSaveBtn->setEnabled(false);
-    if (m_accountNicknameError)
-        m_accountNicknameError->hide();
-
-    m_apiClient->changeNickname(
-        nickname, [this, nickname](bool ok, const QString &message, const QString &savedNickname) {
-            m_accountSaving = false;
-            if (m_accountSaveBtn)
-                m_accountSaveBtn->setEnabled(true);
-
-            if (ok) {
-                UserManager::instance().setNickname(savedNickname.isEmpty() ? nickname : savedNickname);
-                cancelEditNickname();
-                Toast::show(window(), I18n::instance().tr(QStringLiteral("nicknameUpdated")),
-                            Toast::Success);
-            } else {
-                const QString error =
-                    message.isEmpty() ? I18n::instance().tr(QStringLiteral("nicknameUpdateFailed"))
-                                      : message;
-                if (m_accountNicknameError) {
-                    m_accountNicknameError->setText(error);
-                    m_accountNicknameError->show();
-                }
-                Toast::show(window(), error, Toast::Error);
-            }
-        });
+        if (!QDesktopServices::openUrl(QUrl(url))) {
+            Toast::show(window(), I18n::instance().tr(QStringLiteral("nekoAuthSsoFailed")),
+                        Toast::Error);
+            return;
+        }
+        Toast::show(window(), I18n::instance().tr(QStringLiteral("nekoAuthAccountOpened")),
+                    Toast::Success);
+    });
 }
 
 void SettingsPage::loadAccountAvatar(int userId)

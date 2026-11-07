@@ -70,9 +70,7 @@ private:
     void refreshAccountSection();
     /** 按当前语言的最宽标签重算账号信息标题列宽度，避免硬编码导致文字被裁切。 */
     void updateAccountCaptionWidth();
-    void startEditNickname();
-    void cancelEditNickname();
-    void submitNickname();
+    void openNekoAuthAccountCenter();
     void loadAccountAvatar(int userId);
     void setAccountAvatar(const QPixmap &pixmap);
     void updateBackdropOptionRows();
@@ -127,11 +125,7 @@ private:
     QLabel *m_accountAvatar = nullptr;
     QLabel *m_accountNicknameCaption = nullptr;
     QLabel *m_accountNicknameValue = nullptr;
-    QLineEdit *m_accountNicknameEdit = nullptr;
     QPushButton *m_accountEditBtn = nullptr;
-    QPushButton *m_accountSaveBtn = nullptr;
-    QPushButton *m_accountCancelBtn = nullptr;
-    QLabel *m_accountNicknameError = nullptr;
     QLabel *m_accountEmailCaption = nullptr;
     QLabel *m_accountEmailValue = nullptr;
     QLabel *m_accountVipCaption = nullptr;
@@ -141,7 +135,6 @@ private:
     QWidget *m_accountGuestWrap = nullptr;
     QLabel *m_accountGuestHint = nullptr;
     QPushButton *m_accountLoginBtn = nullptr;
-    bool m_accountSaving = false;
     QLabel *m_langLabel = nullptr;
     QLabel *m_sysNotifyLabel = nullptr;
     QLabel *m_sysNotifyHintLabel = nullptr;

@@ -369,6 +369,8 @@ elseif(APPLE)
         message(WARNING "AppIcon.icns not found at ${APP_ICON_RESOURCE_MACOS}; building without macOS icon")
         add_executable(${PROJECT_NAME} MACOSX_BUNDLE ${SOURCES} ${HEADERS} ${RESOURCES} ${GENERATED_SOURCES})
     endif()
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/Info.plist.in")
 else()
     add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS} ${RESOURCES} ${GENERATED_SOURCES})
 endif()

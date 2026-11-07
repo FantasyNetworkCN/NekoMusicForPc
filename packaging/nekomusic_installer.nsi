@@ -159,6 +159,12 @@ Section "Neko歌姬计划" SecMain
     WriteRegStr HKLM "Software\Classes\Applications\${APP_EXE}\DefaultIcon" "" "$INSTDIR\${APP_EXE},0"
     WriteRegStr HKLM "Software\Classes\Applications\${APP_EXE}\shell\open\command" "" "$\"$INSTDIR\${APP_EXE}$\" $\"%1$\""
 
+    ; NekoAuth SSO 回跳
+    WriteRegStr HKLM "Software\Classes\nekomusic" "" "URL:NekoMusic Single Sign-On"
+    WriteRegStr HKLM "Software\Classes\nekomusic" "URL Protocol" ""
+    WriteRegStr HKLM "Software\Classes\nekomusic\DefaultIcon" "" "$INSTDIR\${APP_EXE},0"
+    WriteRegStr HKLM "Software\Classes\nekomusic\shell\open\command" "" "$\"$INSTDIR\${APP_EXE}$\" $\"%1$\""
+
     !insertmacro RegisterMediaAssociation ".mp3" "audio/mpeg"
     !insertmacro RegisterMediaAssociation ".flac" "audio/flac"
     !insertmacro RegisterMediaAssociation ".wav" "audio/x-wav"
@@ -192,6 +198,7 @@ Section "Uninstall"
     DeleteRegKey HKLM "Software\NekoMusic"
     DeleteRegKey HKLM "Software\Classes\${APP_PROGID}"
     DeleteRegKey HKLM "Software\Classes\Applications\${APP_EXE}"
+    DeleteRegKey HKLM "Software\Classes\nekomusic"
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\App Paths\${APP_EXE}"
     !insertmacro UnregisterMediaAssociation ".mp3"
     !insertmacro UnregisterMediaAssociation ".flac"

@@ -1700,6 +1700,41 @@ void MainWindow::openAudioFileFromPath(const QString &path)
         playLocalMusicInfo(info);
 }
 
+void MainWindow::handleSsoCallback(const QUrl &url)
+{
+    if (url.scheme().compare(QStringLiteral("nekomusic"), Qt::CaseInsensitive) != 0
+        || url.host().compare(QStringLiteral("sso"), Qt::CaseInsensitive) != 0
+        || url.path() != QStringLiteral("/complete")) {
+        return;
+    }
+    const QString handoff = QUrlQuery(url).queryItemValue(QStringLiteral("handoff"), QUrl::FullyDecoded);
+    if (handoff.isEmpty()) {
+        Toast::show(this, QStringLiteral("登录交接参数缺失，请重新登录"), Toast::Error);
+        return;
+    }
+    if (!m_apiClient) {
+        Toast::show(this, QStringLiteral("登录服务暂时不可用"), Toast::Error);
+        return;
+    }
+    m_apiClient->claimSso(handoff, [this](bool ok, const QString &message,
+                                          const QString &token, const QVariantMap &user) {
+        if (!ok || token.isEmpty() || user.isEmpty()) {
+            Toast::show(this, message.isEmpty() ? QStringLiteral("登录交接失败，请重新登录") : message,
+                        Toast::Error);
+            return;
+        }
+        UserManager::instance().setLoginInfo(token, user);
+        for (QWidget *widget : QApplication::topLevelWidgets()) {
+            if (auto *dialog = qobject_cast<LoginDialog *>(widget))
+                dialog->accept();
+        }
+        show();
+        raise();
+        activateWindow();
+        Toast::show(this, QStringLiteral("NekoAuth 登录成功"), Toast::Success);
+    });
+}
+
 void MainWindow::playLocalMusicInfo(const MusicInfo &info)
 {
     if (!info.isLocalFile())

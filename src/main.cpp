@@ -12,6 +12,7 @@
 #include <QLocalServer>
 #include <QTimer>
 #include <QFileInfo>
+#include <QUrl>
 #include <QNetworkProxy>
 #include <QNetworkProxyFactory>
 #include "ui/mainwindow.h"
@@ -46,6 +47,19 @@ static QString firstLaunchAudioPath(int argc, char *argv[])
     return {};
 }
 
+static QUrl firstLaunchSsoUrl(int argc, char *argv[])
+{
+    for (int i = 1; i < argc; ++i) {
+        const QString value = QString::fromUtf8(argv[i]);
+        const QUrl url(value);
+        if (url.isValid() && url.scheme().compare(QStringLiteral("nekomusic"), Qt::CaseInsensitive) == 0
+            && url.host().compare(QStringLiteral("sso"), Qt::CaseInsensitive) == 0) {
+            return url;
+        }
+    }
+    return {};
+}
+
 int main(int argc, char *argv[])
 {
 #ifdef Q_OS_LINUX
@@ -58,8 +72,12 @@ int main(int argc, char *argv[])
     QLocalSocket socket;
     socket.connectToServer(kServerName);
     if (socket.waitForConnected(350)) {
+        const QUrl ssoUrl = firstLaunchSsoUrl(argc, argv);
         const QString audio = firstLaunchAudioPath(argc, argv);
-        if (!audio.isEmpty()) {
+        if (ssoUrl.isValid()) {
+            QByteArray msg = QByteArrayLiteral("SSO\t") + ssoUrl.toString(QUrl::FullyEncoded).toUtf8() + '\n';
+            socket.write(msg);
+        } else if (!audio.isEmpty()) {
             QByteArray msg = QByteArrayLiteral("PLAY\t") + audio.toUtf8() + '\n';
             socket.write(msg);
         } else {
@@ -150,6 +168,7 @@ int main(int argc, char *argv[])
                 if (line.isEmpty())
                     return;
                 static const QByteArray kPlayPfx = QByteArrayLiteral("PLAY\t");
+                static const QByteArray kSsoPfx = QByteArrayLiteral("SSO\t");
                 if (line.startsWith(kPlayPfx)) {
                     QString path = QString::fromUtf8(line.mid(kPlayPfx.size())).trimmed();
                     path = LocalMusic::normalizeOpenPathArgument(path);
@@ -161,6 +180,14 @@ int main(int argc, char *argv[])
                             window->openAudioFileFromPath(path);
                         });
                     }
+                } else if (line.startsWith(kSsoPfx)) {
+                    const QUrl url(QString::fromUtf8(line.mid(kSsoPfx.size())).trimmed());
+                    window->show();
+                    window->raise();
+                    window->activateWindow();
+                    QTimer::singleShot(0, window, [window, url]() {
+                        window->handleSsoCallback(url);
+                    });
                 } else if (line == "SHOW") {
                     window->show();
                     window->raise();
@@ -193,6 +220,12 @@ int main(int argc, char *argv[])
     const QString launchAudio = firstLaunchAudioPath(argc, argv);
     if (!launchAudio.isEmpty()) {
         QTimer::singleShot(0, window, [window, launchAudio]() { window->openAudioFileFromPath(launchAudio); });
+    }
+    const QUrl launchSsoUrl = firstLaunchSsoUrl(argc, argv);
+    if (launchSsoUrl.isValid()) {
+        QTimer::singleShot(0, window, [window, launchSsoUrl]() {
+            window->handleSsoCallback(launchSsoUrl);
+        });
     }
 
     int result = app.exec();

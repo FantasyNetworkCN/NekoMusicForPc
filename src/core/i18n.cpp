@@ -294,6 +294,14 @@ static QMap<QString, QString> zhCN()
     // --- 账户 & 登录注册 ---
     m["login"] = QStringLiteral("登录");
     m["loginSubtitle"] = QStringLiteral("登录 NekoMusic，账号由 NekoAuth 统一管理");
+    m["nekoAuthSsoLogin"] = QStringLiteral("使用 NekoAuth 单点登录");
+    m["nekoAuthSsoOpening"] = QStringLiteral("正在打开 NekoAuth 登录页…");
+    m["nekoAuthSsoWaiting"] = QStringLiteral("请在浏览器完成登录，完成后会自动返回客户端");
+    m["nekoAuthSsoFailed"] = QStringLiteral("无法打开 NekoAuth 登录页，请稍后重试");
+    m["nekoAuthRegister"] = QStringLiteral("注册账号");
+    m["nekoAuthRegisterOpened"] = QStringLiteral("已在浏览器打开 NekoAuth 注册页");
+    m["nekoAuthAccountCenter"] = QStringLiteral("账号中心");
+    m["nekoAuthAccountOpened"] = QStringLiteral("已在浏览器打开 NekoAuth 账号中心");
     m["registerSubtitle"] = QStringLiteral("创建 NekoAuth 账号，开启你的专属音乐空间");
     m["qrLoginSubtitle"] = QStringLiteral("使用手机扫码，快速安全地登录");
     m["qrLogin"] = QStringLiteral("扫码登录");
@@ -900,6 +908,14 @@ static QMap<QString, QString> nyaCN()
     m["latest_music"] = QStringLiteral("新鲜出炉喵~");
     m["login"] = QStringLiteral("指挥官，欢迎回来喵！");
     m["loginSubtitle"] = QStringLiteral("登录 NekoMusic 喵~ 账号交给 NekoAuth 统一保管喵！");
+    m["nekoAuthSsoLogin"] = QStringLiteral("用 NekoAuth 单点登录喵");
+    m["nekoAuthSsoOpening"] = QStringLiteral("正在打开 NekoAuth 登录页喵…");
+    m["nekoAuthSsoWaiting"] = QStringLiteral("在浏览器登录完就会自动回来喵~");
+    m["nekoAuthSsoFailed"] = QStringLiteral("打不开 NekoAuth 登录页喵，稍后再试喵");
+    m["nekoAuthRegister"] = QStringLiteral("注册账号喵");
+    m["nekoAuthRegisterOpened"] = QStringLiteral("NekoAuth 注册页已经在浏览器打开喵");
+    m["nekoAuthAccountCenter"] = QStringLiteral("账号中心喵");
+    m["nekoAuthAccountOpened"] = QStringLiteral("NekoAuth 账号中心已经在浏览器打开喵");
     m["registerSubtitle"] = QStringLiteral("创建 NekoAuth 账号，开启专属音乐空间喵~");
     m["qrLoginSubtitle"] = QStringLiteral("使用手机扫码，快速安全地登录喵~");
     m["qrLogin"] = QStringLiteral("喵码登录喵");
@@ -1504,6 +1520,14 @@ static QMap<QString, QString> enUS()
     // --- Account & Auth ---
     m["login"] = "Login";
     m["loginSubtitle"] = "Log in to NekoMusic — accounts are managed by NekoAuth";
+    m["nekoAuthSsoLogin"] = "Continue with NekoAuth SSO";
+    m["nekoAuthSsoOpening"] = "Opening NekoAuth sign-in…";
+    m["nekoAuthSsoWaiting"] = "Complete sign-in in your browser; the app will resume automatically.";
+    m["nekoAuthSsoFailed"] = "Could not open NekoAuth sign-in. Please try again.";
+    m["nekoAuthRegister"] = "Create account";
+    m["nekoAuthRegisterOpened"] = "Opened the NekoAuth registration page in your browser.";
+    m["nekoAuthAccountCenter"] = "Account center";
+    m["nekoAuthAccountOpened"] = "Opened the NekoAuth account center in your browser.";
     m["registerSubtitle"] = "Create a NekoAuth account for your personal music space";
     m["qrLoginSubtitle"] = "Scan with your phone to log in securely";
     m["qrLogin"] = "Scan QR Code";
