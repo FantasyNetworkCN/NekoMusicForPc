@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file mainwindow.cpp
  * @brief 主窗口实现 — 浮层玻璃布局
  *
@@ -344,15 +344,27 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     setAutoFillBackground(false);
 
     setWindowIcon(QIcon(QStringLiteral(":/icons/app.png")));
+    QElapsedTimer ctorTimer;
+    ctorTimer.start();
+    auto ctorLog = [&ctorTimer](const char *step) {
+        qInfo().noquote() << QStringLiteral("[Startup] %1 用时 %2")
+                                 .arg(QString::fromLatin1(step), QString::number(ctorTimer.elapsed()));
+        ctorTimer.restart();
+    };
     m_engine = new PlayerEngine(this);
     m_downloader = &MusicDownloader::instance();
     setupUi();
+    ctorLog("setupUi");
     setupMcpServer();
+    ctorLog("setupMcpServer");
     loadStyleSheet();
+    ctorLog("loadStyleSheet");
     AppShortcuts::instance().load();
     GlobalShortcutController::instance().installFallback(this);
+    ctorLog("快捷键");
     setupKeyboardShortcuts();
     createTrayIcon();
+    ctorLog("托盘/键盘");
 
     m_systemMedia = new SystemMediaController(this);
     m_systemMedia->setHostWindow(this);
@@ -519,19 +531,41 @@ void MainWindow::setupUi()
 
     m_stack = new QStackedWidget(contentCol);
     m_stack->setObjectName("pageStack");
+    // 逐页计时：开机慢主要卡在这一段（实测 4.8 秒才建完），先把耗时打出来再决定哪些改懒加载。
+    QElapsedTimer pageTimer;
+    pageTimer.start();
+    auto logPage = [&pageTimer](const char *label) {
+        const qint64 ms = pageTimer.elapsed();
+        pageTimer.restart();
+        if (ms >= 20)
+            qInfo().noquote() << QStringLiteral("[Startup] 建页 %1 用时 %2")
+                                     .arg(QString::fromLatin1(label), QString::number(ms));
+    };
     m_homePage = new HomePage(m_apiClient, this);
+    logPage("HomePage");
     m_settingsPage = new SettingsPage(m_apiClient, this);
+    logPage("SettingsPage");
     m_favoritesPage = new FavoritesPage(m_apiClient, this);
+    logPage("FavoritesPage");
     m_recentPage = new RecentPage(this);
+    logPage("RecentPage");
     m_downloadPage = new DownloadPage(this);
+    logPage("DownloadPage");
     MusicDownloadManager::instance().setApiClient(m_apiClient);
     m_hotMusicPage = new MusicListPage(MusicListPage::Hot, this);
+    logPage("HotMusicPage");
     m_latestMusicPage = new MusicListPage(MusicListPage::Latest, this);
+    logPage("LatestMusicPage");
     m_dailyMusicPage = new MusicListPage(MusicListPage::Daily, this);
+    logPage("DailyMusicPage");
     m_playlistDetailPage = new PlaylistDetailPage(m_apiClient, this);
+    logPage("PlaylistDetailPage");
     m_searchPage = new SearchPage(m_apiClient, this);
+    logPage("SearchPage");
     m_artistDetailPage = new ArtistDetailPage(this);
+    logPage("ArtistDetailPage");
     m_vipPage = new VipPage(m_apiClient, this);
+    logPage("VipPage");
     m_stack->addWidget(m_homePage);
     m_stack->addWidget(m_settingsPage);
     m_stack->addWidget(m_favoritesPage);
@@ -552,10 +586,12 @@ void MainWindow::setupUi()
     // 播放栏（横跨整个窗口底部）
     m_playerBar = new PlayerBar(m_engine, this);
     mainV->addWidget(m_playerBar);
+    logPage("PlayerBar");
 
     // 播放页面 — 全屏覆盖层（覆盖侧边栏和标题栏，不覆盖播放栏）
     m_playerPage = new PlayerPage(m_engine, m_apiClient, m_midWidget);
     m_playerPage->hide();
+    logPage("PlayerPage");
 
     // 播放队列抽屉：贴窗口右缘滑入，层级盖住底栏播放器（对齐 SPlayer n-drawer）
     m_commentPanel = new CommentPanel(m_apiClient, central);
@@ -572,9 +608,11 @@ void MainWindow::setupUi()
 
     m_playlistPanel = new PlaylistPanel(central);
     m_playlistScrim = new PlaylistDrawerScrim(central);
+    logPage("PlaylistPanel/Scrim");
 
     // 消息中心抽屉：铃铛入口在标题栏，实时增量由 SSE 推送（未读数不做轮询）
     m_notificationPanel = new NotificationPanel(m_apiClient, central);
+    logPage("NotificationPanel");
     connect(m_notificationPanel, &NotificationPanel::hideRequested, this,
             &MainWindow::hideNotificationDrawer);
     connect(m_notificationPanel, &NotificationPanel::messageActivated, this,
@@ -711,8 +749,12 @@ void MainWindow::setupUi()
             m_apiClient->fetchUserInfo([](bool, const QString &, const QVariantMap &) {});
         }
     });
-    // 启动时可能错过了信号，手动检查一次
-    if (UserManager::instance().isLoggedIn()) {
+    // 启动时可能错过了信号，手动检查一次。
+    // 注意：这些网络请求 + 歌单/收藏解析会阻塞首帧（实测开机 12.9 秒才出窗口），
+    // 推迟到窗口 show 之后执行，用户先看到界面，数据随后填进来。
+    QTimer::singleShot(0, this, [this]() {
+        if (!UserManager::instance().isLoggedIn())
+            return;
         loadFavoritesCache();
         m_sidebar->loadPlaylists();
         // 昵称等资料不再写进本地配置，启动时用 Token 拉一次最新信息
@@ -723,7 +765,7 @@ void MainWindow::setupUi()
             // 局域网配对按账号标签过滤，资料到位后标签才正确，重启一次广播
             LanDeviceManager::instance().start();
         });
-    }
+    });
     connect(m_recentPage, &RecentPage::playRequested, this, &MainWindow::playMusicFromInfo);
     connect(m_recentPage, &RecentPage::playAllRequested, this, [this](const QList<MusicInfo> &results) {
         PlaylistManager::instance().clearPlaylist();

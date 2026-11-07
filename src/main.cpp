@@ -1,9 +1,10 @@
-/**
+﻿/**
  * @file main.cpp
  * @brief NekoMusic 日系动漫风入口
  */
 
 #include <QApplication>
+#include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QDebug>
 #include <QSettings>
@@ -270,17 +271,28 @@ int main(int argc, char *argv[])
         Legal::acceptConsent();
     }
 
+    // 启动阶段计时：定位首屏到底慢在哪一步
+    QElapsedTimer bootTimer;
+    bootTimer.start();
+    auto bootLog = [&bootTimer](const char *step) {
+        qInfo().noquote() << QStringLiteral("[Startup] %1 累计 %2")
+                                 .arg(QString::fromLatin1(step), QString::number(bootTimer.elapsed()));
+    };
+
     // 初始化播放列表数据库
     PlaylistDatabase::instance().init();
+    bootLog("DB init");
 
     QFont font(QStringLiteral("Segoe UI Variable"), 14);
     font.setStyleHint(QFont::SansSerif);
     app.setFont(font);
     app.setWindowIcon(QIcon(QStringLiteral(":/icons/app.png")));
+    bootLog("字体/图标");
 
     QApplication::setQuitOnLastWindowClosed(false);
 
     MainWindow *window = new MainWindow;
+    bootLog("MainWindow 构造");
 
     // 创建单实例服务器
     QLocalServer::removeServer(kServerName);
