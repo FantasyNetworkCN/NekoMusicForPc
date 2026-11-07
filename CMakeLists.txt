@@ -9,9 +9,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# ── 客户端标识标头守卫 ────────────────────────────────────────────────
-# 所有 HTTP 请求都必须经 NekoNetworkAccessManager 统一注入
-# X-Neko-Client / User-Agent。这里在配置阶段扫描源码，一旦发现直接使用
+# ── 请求标头守卫 ────────────────────────────────────────────────
+# 所有 HTTP 请求都必须经 NekoNetworkAccessManager 统一注入 User-Agent。
+# 这里在配置阶段扫描源码，一旦发现直接使用
 # QNetworkAccessManager 就让配置失败，避免以后新增请求漏掉标头。
 file(GLOB_RECURSE NEKO_NET_SOURCES
         "${CMAKE_SOURCE_DIR}/src/*.h"
@@ -22,7 +22,7 @@ foreach(neko_net_src ${NEKO_NET_SOURCES})
         string(FIND "${neko_net_content}" "QNetworkAccessManager" neko_net_hit)
         if(NOT neko_net_hit EQUAL -1)
             message(FATAL_ERROR
-                    "禁止直接使用 QNetworkAccessManager（会漏掉 X-Neko-Client / User-Agent）：\n"
+                    "禁止直接使用 QNetworkAccessManager（会漏掉 User-Agent）：\n"
                     "  ${neko_net_src}\n"
                     "请改用 src/core/nekonetworkaccessmanager.h 里的 NekoNetworkAccessManager。")
         endif()
@@ -39,10 +39,6 @@ else()
     set(NEKO_TARGET_UNIX TRUE)
 endif()
 message(STATUS "NEKO target: WINDOWS=${NEKO_TARGET_WINDOWS} APPLE=${NEKO_TARGET_APPLE} UNIX=${NEKO_TARGET_UNIX} SYSTEM=${CMAKE_SYSTEM_NAME}")
-
-if(NEKO_TARGET_UNIX)
-    find_package(OpenSSL REQUIRED COMPONENTS Crypto)
-endif()
 
 # Qt6
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Multimedia Network SvgWidgets Sql Concurrent)
@@ -194,10 +190,7 @@ set(SOURCES
         src/core/mcpserver.cpp
         src/core/mcpbridge.cpp
         src/core/apiclient.cpp
-        src/core/clientidentity.cpp
-        src/core/clientidentitykey.cpp
         src/core/nekonetworkaccessmanager.cpp
-        src/core/replaynonce.cpp
         src/core/notificationcenter.cpp
         src/core/musicurlresolver.cpp
         src/core/i18n.cpp
@@ -286,10 +279,7 @@ set(HEADERS
         src/core/mcpserver.h
         src/core/mcpbridge.h
         src/core/apiclient.h
-        src/core/clientidentity.h
-        src/core/clientidentitykey.h
         src/core/nekonetworkaccessmanager.h
-        src/core/replaynonce.h
         src/core/notificationcenter.h
         src/core/systemnotifier.h
         src/core/musicurlresolver.h
@@ -403,7 +393,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         Qt6::Concurrent
 )
 if(NEKO_TARGET_UNIX)
-    target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::DBus OpenSSL::Crypto)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::DBus)
     find_package(X11)
     if(X11_FOUND)
         target_link_libraries(${PROJECT_NAME} PRIVATE X11::X11)

@@ -4,12 +4,12 @@
  * @file musicurlresolver.h
  * @brief 音质解析：`/api/music/file/{id}?quality=` → 站内固定媒体地址
  *
- * 后端该接口已由 `302` 重定向改为 `200` + JSON `data.url`（并受防重放保护），因此播放 /
- * 下载都不能再把接口地址直接交给播放器或下载器：必须先用带 nonce 的普通请求换取真实媒体
+ * 后端该接口已由 `302` 重定向改为 `200` + JSON `data.url`，因此播放 /
+ * 下载都不能再把接口地址直接交给播放器或下载器：必须先用普通请求换取真实媒体
  * 地址。真实媒体地址固定且可被 CDN 缓存，解析结果在进程内缓存一段时间，避免每次 seek /
  * 重试都回源。
  *
- * 所有请求都走 [NekoNetworkAccessManager]，因此客户端标识与一次性 nonce 由网络层统一注入。
+ * 所有请求都走 [NekoNetworkAccessManager]，User-Agent 由网络层统一注入。
  */
 
 #include <QHash>

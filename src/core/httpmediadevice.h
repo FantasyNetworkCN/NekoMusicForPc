@@ -6,11 +6,11 @@
  *
  * Qt 的 FFmpeg 后端在播放 QUrl 形式的 http(s) 源时，会绕过 Qt Network 直接由
  * libavformat 发起请求，默认 User-Agent 为 `Lavf/<版本>`：这不带客户端的
- * `User-Agent` / `X-Neko-Client`，会被后端防爬过滤器当成命令行工具而 302 到
+ * `User-Agent`，避免落到库默认值。
  * SEO 页面，最终报 “Invalid data found when processing input”。
  *
  * 把本设备通过 QMediaPlayer::setSourceDevice() 交给播放器后，所有媒体字节都从
- * NekoNetworkAccessManager 取，客户端标识与其它接口严格一致；同时保持边下边播
+ * NekoNetworkAccessManager 取，User-Agent 与其它接口严格一致；同时保持边下边播
  * 与随机 seek 能力（FFmpeg 需要回退 seek 做探测）。
  *
  * ## 线程模型（务必保留）

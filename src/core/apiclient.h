@@ -318,7 +318,7 @@ public:
      *
      * 连上先回调 `onReady(unread, latestId)`，此后每来一条新消息回调 `onMessage(item)`
      * （结构与列表里的单条一致）。连接由服务端到点主动关闭，调用方负责重连；
-     * 该路径不需要 nonce（浏览器 EventSource 无法带请求头，服务端同样豁免）。
+     * 该路径为 SSE 长连接（浏览器 EventSource 无法附加自定义请求头）。
      * 返回底层请求，可用于取消。
      */
     using NotificationsReadyCb = std::function<void(int unread, int latestId)>;
