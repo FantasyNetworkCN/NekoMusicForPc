@@ -28,6 +28,7 @@ public:
 
     /// 获取当前 Token
     QString token() const { return m_token; }
+    QString idToken() const { return m_idToken; }
 
     /// 获取用户信息
     QVariantMap userInfo() const { return m_userInfo; }
@@ -38,7 +39,8 @@ public:
     void updateVipStatus(bool isVip, const QString &vipExpiresAt = QString());
 
     /// 设置登录信息
-    void setLoginInfo(const QString &token, const QVariantMap &userInfo);
+    void setLoginInfo(const QString &token, const QVariantMap &userInfo,
+                      const QString &idToken = QString());
 
     /// 更新内存中的昵称（服务端已修改成功后调用；不写本地配置）
     void setNickname(const QString &nickname);
@@ -60,6 +62,7 @@ private:
     void loadFromSettings();
 
     QString m_token;
+    QString m_idToken;
     QVariantMap m_userInfo;
     bool m_isVip = false;
     QString m_vipExpiresAt;

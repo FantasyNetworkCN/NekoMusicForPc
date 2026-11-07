@@ -19,9 +19,11 @@ UserManager &UserManager::instance()
     return inst;
 }
 
-void UserManager::setLoginInfo(const QString &token, const QVariantMap &userInfo)
+void UserManager::setLoginInfo(const QString &token, const QVariantMap &userInfo,
+                               const QString &idToken)
 {
     m_token = token;
+    m_idToken = idToken;
     m_userInfo = userInfo;
     m_isVip = userInfo.value(QStringLiteral("isVip")).toBool();
     m_vipExpiresAt = userInfo.value(QStringLiteral("vipExpiresAt")).toString();
@@ -84,6 +86,7 @@ void UserManager::updateVipStatus(bool isVip, const QString &vipExpiresAt)
 void UserManager::logout()
 {
     m_token.clear();
+    m_idToken.clear();
     m_userInfo.clear();
     m_isVip = false;
     m_vipExpiresAt.clear();
@@ -97,6 +100,7 @@ void UserManager::saveToSettings()
     // 只持久化 Token；昵称等资料不落地（启动时用 /api/user/info 拉最新值），
     // 顺便清掉旧版本残留的 userInfo 缓存。
     m_settings->setValue("auth/token", m_token);
+    m_settings->setValue("auth/idToken", m_idToken);
     m_settings->remove("auth/userInfo");
     m_settings->sync();
 }
@@ -104,6 +108,7 @@ void UserManager::saveToSettings()
 void UserManager::loadFromSettings()
 {
     m_token = m_settings->value("auth/token").toString();
+    m_idToken = m_settings->value("auth/idToken").toString();
     m_userInfo.clear();
     m_isVip = false;
     m_vipExpiresAt.clear();

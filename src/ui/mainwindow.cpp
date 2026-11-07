@@ -69,6 +69,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QGuiApplication>
+#include <QDesktopServices>
 #include <QMouseEvent>
 #include <QWindow>
 #include <QPainter>
@@ -949,8 +950,20 @@ void MainWindow::setupUi()
             auto *logoutAction =
                 menu->addAction(I18n::instance().tr(QStringLiteral("logout")));
             connect(logoutAction, &QAction::triggered, this, [this, menu]() {
-                UserManager::instance().logout();
-                menu->close();
+                const QString token = UserManager::instance().token();
+                const QString idToken = UserManager::instance().idToken();
+                if (!m_apiClient || token.isEmpty()) {
+                    UserManager::instance().logout();
+                    menu->close();
+                    return;
+                }
+                m_apiClient->logoutAndGetAuthUrl(
+                    token, idToken, [menu](const QString &url) {
+                        UserManager::instance().logout();
+                        menu->close();
+                        if (!url.isEmpty())
+                            QDesktopServices::openUrl(QUrl(url));
+                    });
             });
 
             menu->popup(m_titleBar->avatarPos());
@@ -1723,13 +1736,14 @@ void MainWindow::handleSsoCallback(const QUrl &url)
         return;
     }
     m_apiClient->claimSso(handoff, [this](bool ok, const QString &message,
-                                          const QString &token, const QVariantMap &user) {
+                                          const QString &token, const QVariantMap &user,
+                                          const QString &idToken) {
         if (!ok || token.isEmpty() || user.isEmpty()) {
             Toast::show(this, message.isEmpty() ? QStringLiteral("登录交接失败，请重新登录") : message,
                         Toast::Error);
             return;
         }
-        UserManager::instance().setLoginInfo(token, user);
+        UserManager::instance().setLoginInfo(token, user, idToken);
         for (QWidget *widget : QApplication::topLevelWidgets()) {
             if (auto *dialog = qobject_cast<LoginDialog *>(widget))
                 dialog->accept();

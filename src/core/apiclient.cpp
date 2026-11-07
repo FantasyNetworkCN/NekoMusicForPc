@@ -235,19 +235,48 @@ void ApiClient::claimSso(const QString &handoff, AuthCb cb) {
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            cb(false, reply->errorString(), {}, {});
+            cb(false, reply->errorString(), {}, {}, {});
             return;
         }
         const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
         const bool ok = root.value(QStringLiteral("success")).toBool();
         QString token;
         QVariantMap user;
+        QString idToken;
         if (ok) {
             const QJsonObject data = root.value(QStringLiteral("data")).toObject();
             token = data.value(QStringLiteral("token")).toString();
+            idToken = data.value(QStringLiteral("idToken")).toString();
             user = data.value(QStringLiteral("user")).toObject().toVariantMap();
         }
-        cb(ok, root.value(QStringLiteral("message")).toString(), token, user);
+        cb(ok, root.value(QStringLiteral("message")).toString(), token, user, idToken);
+    });
+}
+
+void ApiClient::logoutAndGetAuthUrl(const QString &accessToken, const QString &idToken,
+                                    LogoutCb cb) {
+    QUrl logoutUrl(QString::fromUtf8("%1/api/user/logout").arg(Theme::kApiBase));
+    QNetworkRequest logoutRequest(logoutUrl);
+    logoutRequest.setRawHeader("Authorization", QString("Bearer %1").arg(accessToken).toUtf8());
+    auto *logoutReply = m_nam.post(logoutRequest, QByteArray());
+    connect(logoutReply, &QNetworkReply::finished, this, [this, logoutReply, idToken, cb]() {
+        logoutReply->deleteLater();
+        if (idToken.isEmpty()) {
+            if (cb) cb({});
+            return;
+        }
+        QUrl url(QString::fromUtf8("%1/api/user/sso/logout-url").arg(Theme::kApiBase));
+        QNetworkRequest req(url);
+        req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+        QJsonObject body{{QStringLiteral("idToken"), idToken}};
+        auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
+        connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+            reply->deleteLater();
+            const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+            const QString url = root.value(QStringLiteral("data")).toObject()
+                                    .value(QStringLiteral("url")).toString();
+            if (cb) cb(root.value(QStringLiteral("success")).toBool() ? url : QString());
+        });
     });
 }
 
