@@ -704,6 +704,12 @@ void MainWindow::setupUi()
         loadFavoritesCache();
         m_sidebar->loadPlaylists();
     });
+    connect(qApp, &QGuiApplication::applicationStateChanged, this,
+            [this](Qt::ApplicationState state) {
+        if (state == Qt::ApplicationActive && UserManager::instance().isLoggedIn()) {
+            m_apiClient->fetchUserInfo([](bool, const QString &, const QVariantMap &) {});
+        }
+    });
     // 启动时可能错过了信号，手动检查一次
     if (UserManager::instance().isLoggedIn()) {
         loadFavoritesCache();
