@@ -44,26 +44,27 @@ static QString desktopExecutable(const QString &path)
 
 static QString linuxDesktopEntry(const QString &appPath)
 {
-    return QStringLiteral(
-            "[Desktop Entry]\n"
-            "Type=Application\n"
-            "Version=1.5\n"
-            "Name=Neko歌姬计划\n"
-            "Name[en]=Neko Music\n"
-            "Comment=高品质无损音乐播放器 (Qt6 + C++)\n"
-            "Comment[en]=High-quality Lossless Music Player\n"
-            "Exec=%1 %%U\n"
-            "Icon=nekomusic\n"
-            "Terminal=false\n"
-            "StartupNotify=true\n"
-            "StartupWMClass=NekoMusic\n"
-            "Categories=AudioVideo;Audio;Player;Qt;Music;\n"
-            "Keywords=Music;Player;Neko;Flac;Lossless;\n"
-            "MimeType=audio/flac;audio/mpeg;audio/ogg;audio/x-wav;audio/aac;audio/mp4;"
-            "audio/mpegurl;audio/vnd.rn-realaudio;audio/x-mpegurl;audio/x-ms-wma;"
-            "audio/x-musepack;audio/x-pn-realaudio;audio/x-scpls;audio/x-speex;"
-            "x-scheme-handler/nekomusic;\n")
-            .arg(desktopExecutable(appPath));
+    return QStringLiteral("[Desktop Entry]\n"
+                          "Type=Application\n"
+                          "Version=1.5\n"
+                          "Name=Neko歌姬计划\n"
+                          "Name[en]=Neko Music\n"
+                          "Comment=高品质无损音乐播放器 (Qt6 + C++)\n"
+                          "Comment[en]=High-quality Lossless Music Player\n"
+                          "Exec=")
+            + desktopExecutable(appPath)
+            + QStringLiteral(
+                    " %U\n"
+                    "Icon=nekomusic\n"
+                    "Terminal=false\n"
+                    "StartupNotify=true\n"
+                    "StartupWMClass=NekoMusic\n"
+                    "Categories=AudioVideo;Audio;Player;Qt;Music;\n"
+                    "Keywords=Music;Player;Neko;Flac;Lossless;\n"
+                    "MimeType=audio/flac;audio/mpeg;audio/ogg;audio/x-wav;audio/aac;audio/mp4;"
+                    "audio/mpegurl;audio/vnd.rn-realaudio;audio/x-mpegurl;audio/x-ms-wma;"
+                    "audio/x-musepack;audio/x-pn-realaudio;audio/x-scpls;audio/x-speex;"
+                    "x-scheme-handler/nekomusic;\n");
 }
 
 static QString runAndCapture(const QString &program, const QStringList &arguments, int timeoutMs = 1500)
