@@ -12,6 +12,11 @@
 #include <QLocalServer>
 #include <QTimer>
 #include <QFileInfo>
+#include <QDir>
+#include <QFile>
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <QProcess>
 #include <QUrl>
 #include <QNetworkProxy>
 #include <QNetworkProxyFactory>
@@ -27,6 +32,127 @@
 
 // 单实例服务器名称
 static const QString kServerName = QStringLiteral("NekoMusicSingleInstance");
+
+#ifdef Q_OS_LINUX
+static QString desktopExecutable(const QString &path)
+{
+    QString escaped = path;
+    escaped.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
+    escaped.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+    return QStringLiteral("\"%1\"").arg(escaped);
+}
+
+static QString linuxDesktopEntry(const QString &appPath)
+{
+    return QStringLiteral(
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Version=1.5\n"
+            "Name=Neko歌姬计划\n"
+            "Name[en]=Neko Music\n"
+            "Comment=高品质无损音乐播放器 (Qt6 + C++)\n"
+            "Comment[en]=High-quality Lossless Music Player\n"
+            "Exec=%1 %%U\n"
+            "Icon=nekomusic\n"
+            "Terminal=false\n"
+            "StartupNotify=true\n"
+            "StartupWMClass=NekoMusic\n"
+            "Categories=AudioVideo;Audio;Player;Qt;Music;\n"
+            "Keywords=Music;Player;Neko;Flac;Lossless;\n"
+            "MimeType=audio/flac;audio/mpeg;audio/ogg;audio/x-wav;audio/aac;audio/mp4;"
+            "audio/mpegurl;audio/vnd.rn-realaudio;audio/x-mpegurl;audio/x-ms-wma;"
+            "audio/x-musepack;audio/x-pn-realaudio;audio/x-scpls;audio/x-speex;"
+            "x-scheme-handler/nekomusic;\n")
+            .arg(desktopExecutable(appPath));
+}
+
+static QString runAndCapture(const QString &program, const QStringList &arguments, int timeoutMs = 1500)
+{
+    QProcess process;
+    process.start(program, arguments);
+    if (!process.waitForFinished(timeoutMs))
+        return {};
+    return QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+}
+
+/**
+ * 保证 Linux 当前用户能接管 nekomusic://。
+ *
+ * <p>系统包里的 desktop 文件可能来自旧版本；这里同时刷新用户级 desktop 文件、MIME 数据库和默认
+ * 协议关联。只在没有默认处理器时设置默认值，避免覆盖用户自行选择的处理器。</p>
+ */
+static void ensureLinuxUrlHandler()
+{
+    const QString appPath = QCoreApplication::applicationFilePath();
+    const bool installedLocation = appPath == QStringLiteral("/opt/Neko歌姬计划/NekoMusic")
+            || appPath.startsWith(QStringLiteral("/usr/bin/"))
+            || appPath.startsWith(QStringLiteral("/usr/local/bin/"));
+    if (!installedLocation || !QFileInfo(appPath).isExecutable())
+        return;
+
+    const QString appsDir = QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation);
+    if (appsDir.isEmpty() || !QDir().mkpath(appsDir)) {
+        qWarning() << "NekoMusic: cannot create user applications directory for URL handler";
+        return;
+    }
+
+    const QString desktopPath = QDir(appsDir).filePath(QStringLiteral("nekomusic.desktop"));
+    const QByteArray expected = linuxDesktopEntry(appPath).toUtf8();
+    bool writeDesktop = true;
+    QFile existing(desktopPath);
+    if (existing.open(QIODevice::ReadOnly))
+        writeDesktop = existing.readAll() != expected;
+    if (writeDesktop) {
+        QSaveFile desktop(desktopPath);
+        if (desktop.open(QIODevice::WriteOnly)
+            && desktop.write(expected) == expected.size()
+            && desktop.commit()) {
+            QFile::setPermissions(desktopPath,
+                                  QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                          | QFileDevice::ReadGroup | QFileDevice::ReadOther);
+        } else {
+            qWarning() << "NekoMusic: cannot write URL handler desktop entry:" << desktopPath;
+            return;
+        }
+    }
+
+    const QString updateDatabase = QStandardPaths::findExecutable(QStringLiteral("update-desktop-database"));
+    if (!updateDatabase.isEmpty())
+        runAndCapture(updateDatabase, {appsDir});
+
+    const QString xdgMime = QStandardPaths::findExecutable(QStringLiteral("xdg-mime"));
+    const QString current = xdgMime.isEmpty()
+                                ? QString()
+                                : runAndCapture(xdgMime, {
+                                      QStringLiteral("query"), QStringLiteral("default"),
+                                      QStringLiteral("x-scheme-handler/nekomusic")});
+    if (!current.isEmpty())
+        return;
+
+    bool associated = false;
+    if (!xdgMime.isEmpty()) {
+        runAndCapture(xdgMime, {QStringLiteral("default"), QStringLiteral("nekomusic.desktop"),
+                                QStringLiteral("x-scheme-handler/nekomusic")});
+        associated = runAndCapture(xdgMime, {
+                                       QStringLiteral("query"), QStringLiteral("default"),
+                                       QStringLiteral("x-scheme-handler/nekomusic")})
+                             == QStringLiteral("nekomusic.desktop");
+    }
+
+    const QString xdgSettings = QStandardPaths::findExecutable(QStringLiteral("xdg-settings"));
+    if (!xdgSettings.isEmpty()) {
+        runAndCapture(xdgSettings, {
+            QStringLiteral("set"), QStringLiteral("default-url-scheme-handler"),
+            QStringLiteral("nekomusic"), QStringLiteral("nekomusic.desktop")});
+    }
+
+    const QString gio = QStandardPaths::findExecutable(QStringLiteral("gio"));
+    if (!associated && !gio.isEmpty()) {
+        runAndCapture(gio, {QStringLiteral("mime"), QStringLiteral("x-scheme-handler/nekomusic"),
+                            QStringLiteral("nekomusic.desktop")});
+    }
+}
+#endif
 
 static QString firstLaunchAudioPath(int argc, char *argv[])
 {
@@ -118,6 +244,10 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(QStringLiteral(APP_VERSION));
     app.setOrganizationName(QStringLiteral("NekoMusic"));
     app.setOrganizationDomain(QStringLiteral("nekomusic.local"));
+
+#ifdef Q_OS_LINUX
+    ensureLinuxUrlHandler();
+#endif
 
     // 加载用户设置
     QSettings settings;

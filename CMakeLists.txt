@@ -546,8 +546,8 @@ if(LINUX)
     endif()
     list(JOIN _neko_debian_depends ", " CPACK_DEBIAN_PACKAGE_DEPENDS)
     set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "amd64")
-    set(CPACK_DEBIAN_PACKAGE_POSTINST "${CMAKE_SOURCE_DIR}/packaging/debian/postinst")
-    set(CPACK_DEBIAN_PACKAGE_POSTRM "${CMAKE_SOURCE_DIR}/packaging/debian/postrm")
+    set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+            "${CMAKE_SOURCE_DIR}/packaging/debian/postinst;${CMAKE_SOURCE_DIR}/packaging/debian/postrm")
 
     # Output filename format matching the /version URL pattern
     set(CPACK_PACKAGE_FILE_NAME "Neko歌姬计划-${CPACK_PACKAGE_VERSION}-linux-amd64")

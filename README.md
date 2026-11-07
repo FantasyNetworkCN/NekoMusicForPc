@@ -81,6 +81,9 @@ ctest --test-dir build/linux-debug --output-on-failure
 cmake --install build/linux-release --prefix /usr/local
 ```
 
+Debian 安装包会在安装时注册 `x-scheme-handler/nekomusic`；客户端启动后也会为当前用户刷新
+`nekomusic.desktop` 和默认协议关联。从旧版本升级后需要重新启动一次客户端，再重试网页登录回跳。
+
 ---
 
 ## MCP 服务端

@@ -12,6 +12,11 @@ if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database -q /usr/share/applications || true
 fi
 
+# Remove the system-wide scheme association added by postinst.
+if [ -f /etc/xdg/mimeapps.list ]; then
+    sed -i '/^x-scheme-handler\/nekomusic=nekomusic\.desktop;*$/d' /etc/xdg/mimeapps.list || true
+fi
+
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -q /usr/share/icons/hicolor || true
 fi
