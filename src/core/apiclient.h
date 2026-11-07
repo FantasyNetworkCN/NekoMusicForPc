@@ -53,10 +53,6 @@ public:
     using UploadedMusicCb = std::function<void(bool, int, const QList<QVariantMap>&)>;
     void fetchUploadedMusic(UploadedMusicCb cb);
     
-    // 修改用户昵称
-    using NicknameChangeCb = std::function<void(bool ok, const QString &message, const QString &nickname)>;
-    void changeNickname(const QString &nickname, NicknameChangeCb cb);
-
     // 获取当前登录用户信息（昵称等资料不落地，启动时用它刷新）
     using UserInfoCb = std::function<void(bool ok, const QString &message, const QVariantMap &user)>;
     void fetchUserInfo(UserInfoCb cb);

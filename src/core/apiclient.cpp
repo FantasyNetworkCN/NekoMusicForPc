@@ -490,32 +490,6 @@ void ApiClient::fetchUploadedMusic(UploadedMusicCb cb) {
     });
 }
 
-void ApiClient::changeNickname(const QString &nickname, NicknameChangeCb cb) {
-    QUrl url(QString::fromUtf8("%1/api/user/nickname/change").arg(Theme::kApiBase));
-    QNetworkRequest req(url);
-    if (UserManager::instance().isLoggedIn()) {
-        req.setRawHeader("Authorization", QString("Bearer %1").arg(UserManager::instance().token()).toUtf8());
-    }
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    QJsonObject body;
-    body["nickname"] = nickname;
-    auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
-    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            if (cb) cb(false, reply->errorString(), QString());
-            return;
-        }
-        const QJsonObject obj = QJsonDocument::fromJson(reply->readAll()).object();
-        const bool ok = obj.value("success").toBool();
-        const QString message = obj.value("message").toString();
-        QString savedNickname;
-        if (ok)
-            savedNickname = obj.value("data").toObject().value("nickname").toString();
-        if (cb) cb(ok, message, savedNickname);
-    });
-}
-
 void ApiClient::fetchUserInfo(UserInfoCb cb) {
     QUrl url(QString::fromUtf8("%1/api/user/info").arg(Theme::kApiBase));
     QNetworkRequest req(url);

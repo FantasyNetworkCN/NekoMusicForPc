@@ -477,9 +477,6 @@ QJsonArray McpBridge::listTools() const
 
     // ── 账户 / 更新 ────────────────────────────────────
     add(QStringLiteral("logout"), QStringLiteral("退出当前登录账号。"));
-    add(QStringLiteral("change_nickname"), QStringLiteral("修改昵称（需登录）。"),
-        QJsonObject{{QStringLiteral("nickname"), strProp(QStringLiteral("新昵称"))}},
-        QJsonArray{QStringLiteral("nickname")});
     add(QStringLiteral("get_vip_pricing"), QStringLiteral("获取会员套餐与价格（需登录）。"));
     add(QStringLiteral("check_update"), QStringLiteral("检查客户端版本更新。"));
 
@@ -2268,27 +2265,6 @@ void McpBridge::initHandlers()
         }
         UserManager::instance().logout();
         done(true, QStringLiteral("已退出登录"), QJsonObject{{QStringLiteral("logged_in"), false}});
-    });
-
-    m_handlers.insert(QStringLiteral("change_nickname"), [this](const QJsonObject &arguments, Done done) {
-        QString nickname;
-        QString error;
-        if (!readNonEmptyString(arguments, QStringLiteral("nickname"), &nickname, &error)) {
-            done(false, error, QJsonObject());
-            return;
-        }
-        if (!m_api) {
-            done(false, QStringLiteral("接口不可用"), QJsonObject());
-            return;
-        }
-        m_api->changeNickname(nickname, [done](bool ok, const QString &message, const QString &saved) {
-            if (!ok) {
-                done(false, message.isEmpty() ? QStringLiteral("修改昵称失败") : message, QJsonObject());
-                return;
-            }
-            done(true, QStringLiteral("昵称已修改为 %1").arg(saved.isEmpty() ? message : saved),
-                 QJsonObject{{QStringLiteral("nickname"), saved}});
-        });
     });
 
     m_handlers.insert(QStringLiteral("get_vip_pricing"), [this](const QJsonObject &, Done done) {
