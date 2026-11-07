@@ -53,9 +53,6 @@ public:
     using UploadedMusicCb = std::function<void(bool, int, const QList<QVariantMap>&)>;
     void fetchUploadedMusic(UploadedMusicCb cb);
     
-    // 修改用户密码
-    void changePassword(const QString &oldPassword, const QString &newPassword, std::function<void(bool, const QString&)> cb);
-
     // 修改用户昵称
     using NicknameChangeCb = std::function<void(bool ok, const QString &message, const QString &nickname)>;
     void changeNickname(const QString &nickname, NicknameChangeCb cb);
@@ -98,16 +95,9 @@ public:
     // ─── 用户认证 ────────────────────────────────────
     using AuthCb = std::function<void(bool success, const QString &message,
                                        const QString &token, const QVariantMap &user)>;
-    void login(const QString &email, const QString &password, AuthCb cb);
-    void registerUser(const QString &nickname, const QString &password,
-                      const QString &email, const QString &verificationCode, AuthCb cb);
     using SsoStartCb = std::function<void(bool ok, const QString &message, const QString &url)>;
     void startSso(const QString &client, const QString &returnTo, SsoStartCb cb);
     void claimSso(const QString &handoff, AuthCb cb);
-    /** 注册发邮箱验证码前：须先完成滑块并取得 captchaPassToken */
-    void sendVerificationCode(const QString &email, const QString &nickname,
-                              const QString &captchaPassToken,
-                              std::function<void(bool, const QString &)> cb);
 
     using SliderCaptchaChallengeCb =
         std::function<void(bool ok, const QString &message, const QVariantMap &data)>;
@@ -123,10 +113,6 @@ public:
     using PasswordResetUrlCb = std::function<void(bool ok, const QString &message, const QString &url)>;
     void fetchPasswordResetUrl(PasswordResetUrlCb cb);
     void fetchPortalUrl(const QString &target, PasswordResetUrlCb cb);
-    void sendResetCode(const QString &email, std::function<void(bool, const QString&)> cb);
-    void resetPassword(const QString &email, const QString &verificationCode,
-                       const QString &newPassword, std::function<void(bool, const QString&)> cb);
-
     // ─── 会员中心 ────────────────────────────────────
     using VipPricingCb = std::function<void(bool, const QString &, const QList<QVariantMap> &)>;
     void fetchVipPricing(VipPricingCb cb);

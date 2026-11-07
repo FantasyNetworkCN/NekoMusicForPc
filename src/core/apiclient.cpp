@@ -203,34 +203,6 @@ void ApiClient::removeFavorite(int musicId, FavoriteOpCb cb) {
     });
 }
 
-void ApiClient::login(const QString &email, const QString &password, AuthCb cb) {
-    QUrl url(QString::fromUtf8("%1/api/user/login").arg(Theme::kApiBase));
-    QNetworkRequest req(url);
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    QJsonObject body;
-    body["email"] = email;
-    body["password"] = password;
-    auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
-    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            cb(false, reply->errorString(), {}, {});
-            return;
-        }
-        auto doc = QJsonDocument::fromJson(reply->readAll());
-        bool ok = doc.object().value("success").toBool();
-        QString message = doc.object().value("message").toString();
-        QString token;
-        QVariantMap user;
-        if (ok) {
-            auto data = doc.object().value("data").toObject();
-            token = data.value("token").toString();
-            user = data.value("user").toObject().toVariantMap();
-        }
-        cb(ok, message, token, user);
-    });
-}
-
 void ApiClient::startSso(const QString &client, const QString &returnTo, SsoStartCb cb) {
     QUrl url(QString::fromUtf8("%1/api/user/sso/start").arg(Theme::kApiBase));
     QNetworkRequest req(url);
@@ -276,62 +248,6 @@ void ApiClient::claimSso(const QString &handoff, AuthCb cb) {
             user = data.value(QStringLiteral("user")).toObject().toVariantMap();
         }
         cb(ok, root.value(QStringLiteral("message")).toString(), token, user);
-    });
-}
-
-void ApiClient::registerUser(const QString &nickname, const QString &password,
-                              const QString &email, const QString &verificationCode, AuthCb cb) {
-    QUrl url(QString::fromUtf8("%1/api/user/register").arg(Theme::kApiBase));
-    QNetworkRequest req(url);
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    QJsonObject body;
-    body["nickname"] = nickname;
-    body["password"] = password;
-    body["email"] = email;
-    body["verificationCode"] = verificationCode;
-    auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
-    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            cb(false, reply->errorString(), {}, {});
-            return;
-        }
-        auto doc = QJsonDocument::fromJson(reply->readAll());
-        bool ok = doc.object().value("success").toBool();
-        QString message = doc.object().value("message").toString();
-        QString token;
-        QVariantMap user;
-        if (ok) {
-            auto data = doc.object().value("data").toObject();
-            token = data.value("token").toString();
-            user = data.value("user").toObject().toVariantMap();
-        }
-        cb(ok, message, token, user);
-    });
-}
-
-void ApiClient::sendVerificationCode(const QString &email, const QString &nickname,
-                                     const QString &captchaPassToken,
-                                     std::function<void(bool, const QString &)> cb) {
-    QUrl url(QString::fromUtf8("%1/api/user/send-verification").arg(Theme::kApiBase));
-    QNetworkRequest req(url);
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    QJsonObject body;
-    body["email"] = email;
-    body["nickname"] = nickname;
-    body["captchaPassToken"] = captchaPassToken;
-    auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
-    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
-        reply->deleteLater();
-        const QByteArray raw = reply->readAll();
-        auto doc = QJsonDocument::fromJson(raw);
-        const QString message = doc.object().value("message").toString();
-        if (reply->error() != QNetworkReply::NoError) {
-            cb(false, message.isEmpty() ? reply->errorString() : message);
-            return;
-        }
-        const bool ok = doc.object().value("success").toBool();
-        cb(ok, message);
     });
 }
 
@@ -428,49 +344,6 @@ void ApiClient::fetchPortalUrl(const QString &target, PasswordResetUrlCb cb) {
         if (message.isEmpty())
             message = ok ? QString() : reply->errorString();
         cb(ok, message, url);
-    });
-}
-
-void ApiClient::sendResetCode(const QString &email, std::function<void(bool, const QString&)> cb) {
-    QUrl url(QString::fromUtf8("%1/api/user/send-reset-code").arg(Theme::kApiBase));
-    QNetworkRequest req(url);
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    QJsonObject body;
-    body["email"] = email;
-    auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
-    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            cb(false, reply->errorString());
-            return;
-        }
-        auto doc = QJsonDocument::fromJson(reply->readAll());
-        bool ok = doc.object().value("success").toBool();
-        QString message = doc.object().value("message").toString();
-        cb(ok, message);
-    });
-}
-
-void ApiClient::resetPassword(const QString &email, const QString &verificationCode,
-                               const QString &newPassword, std::function<void(bool, const QString&)> cb) {
-    QUrl url(QString::fromUtf8("%1/api/user/reset-password").arg(Theme::kApiBase));
-    QNetworkRequest req(url);
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    QJsonObject body;
-    body["email"] = email;
-    body["verificationCode"] = verificationCode;
-    body["newPassword"] = newPassword;
-    auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
-    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            cb(false, reply->errorString());
-            return;
-        }
-        auto doc = QJsonDocument::fromJson(reply->readAll());
-        bool ok = doc.object().value("success").toBool();
-        QString message = doc.object().value("message").toString();
-        cb(ok, message);
     });
 }
 
@@ -614,30 +487,6 @@ void ApiClient::fetchUploadedMusic(UploadedMusicCb cb) {
             }
         }
         if (cb) cb(ok, total, musicList);
-    });
-}
-
-void ApiClient::changePassword(const QString &oldPassword, const QString &newPassword, std::function<void(bool, const QString&)> cb) {
-    QUrl url(QString::fromUtf8("%1/api/user/password/change").arg(Theme::kApiBase));
-    QNetworkRequest req(url);
-    if (UserManager::instance().isLoggedIn()) {
-        req.setRawHeader("Authorization", QString("Bearer %1").arg(UserManager::instance().token()).toUtf8());
-    }
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    QJsonObject body;
-    body["oldPassword"] = oldPassword;
-    body["newPassword"] = newPassword;
-    auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
-    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            if (cb) cb(false, reply->errorString());
-            return;
-        }
-        auto doc = QJsonDocument::fromJson(reply->readAll());
-        bool ok = doc.object().value("success").toBool();
-        QString message = ok ? doc.object().value("message").toString() : doc.object().value("error").toString();
-        if (cb) cb(ok, message);
     });
 }
 
