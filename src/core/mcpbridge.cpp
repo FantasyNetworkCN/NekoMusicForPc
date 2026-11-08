@@ -248,6 +248,10 @@ QJsonArray McpBridge::listTools() const
     add(QStringLiteral("get_latest_music"), QStringLiteral("获取最新上架的曲目列表。"),
         QJsonObject{{QStringLiteral("limit"), numProp(QStringLiteral("返回数量，默认 30，最大 100"), 1, 100)}});
     add(QStringLiteral("get_daily_recommendations"), QStringLiteral("获取当前登录用户的每日推荐（需登录）。"));
+    add(QStringLiteral("get_recommended_playlists"),
+        QStringLiteral("获取最多 5 个推荐歌单；游客返回热门精选，登录用户返回个性化推荐。"),
+        QJsonObject{{QStringLiteral("refresh"),
+                     prop(QStringLiteral("boolean"), QStringLiteral("true 时更换探索位"))}});
     add(QStringLiteral("get_music_detail"), QStringLiteral("获取指定曲目的详细信息。"), musicIdField());
     add(QStringLiteral("get_lyrics"), QStringLiteral("获取指定曲目的歌词文本。"), musicIdField());
     add(QStringLiteral("get_comments"), QStringLiteral("获取指定曲目的评论列表。"),
@@ -891,6 +895,29 @@ void McpBridge::initHandlers()
             done(true, QStringLiteral("每日推荐共 %1 首").arg(tracks.size()),
                  QJsonObject{{QStringLiteral("tracks"), tracksJson(tracks)}});
         });
+    });
+
+    m_handlers.insert(QStringLiteral("get_recommended_playlists"),
+                      [this](const QJsonObject &arguments, Done done) {
+        if (!m_api) {
+            done(false, QStringLiteral("接口不可用"), QJsonObject());
+            return;
+        }
+        const bool refresh = arguments.value(QStringLiteral("refresh")).toBool(false);
+        m_api->fetchRecommendedPlaylists(
+            refresh,
+            [done](bool ok, bool personalized, const QList<QVariantMap> &playlists) {
+                if (!ok) {
+                    done(false, QStringLiteral("获取推荐歌单失败，请稍后重试"), QJsonObject());
+                    return;
+                }
+                done(true,
+                     personalized
+                         ? QStringLiteral("个性化推荐歌单共 %1 个").arg(playlists.size())
+                         : QStringLiteral("热门推荐歌单共 %1 个").arg(playlists.size()),
+                     QJsonObject{{QStringLiteral("personalized"), personalized},
+                                 {QStringLiteral("playlists"), mapsToJson(playlists)}});
+            });
     });
 
     m_handlers.insert(QStringLiteral("get_music_detail"), [this](const QJsonObject &arguments, Done done) {

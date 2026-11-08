@@ -19,6 +19,10 @@ struct PlaylistInfo {
     QString description;
     int musicCount = 0;
     QString coverUrl;
+    QString creator;
+    QString reason;
+    QString source;
+    bool exploration = false;
 };
 
 class PlaylistCard : public QWidget
@@ -49,6 +53,7 @@ private:
 
     PlaylistInfo m_info;
     QLabel *m_name       = nullptr;
+    QLabel *m_meta       = nullptr;
     QPixmap m_coverPixmap;
     bool m_hovered       = false;
     qreal m_hoverProgress = 0;

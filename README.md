@@ -135,7 +135,7 @@ Debian 安装包会在安装时注册 `x-scheme-handler/nekomusic`；客户端�
 
 ### 工具
 
-共 101 个工具，覆盖播放与音质、队列、内容检索、收藏、歌单、本地库、下载、外部歌单导入、
+共 102 个工具，覆盖播放与音质、队列、内容检索、收藏、歌单、本地库、下载、外部歌单导入、
 分享视频渲染、账户消息、界面偏好与导航。所有工具均返回 `content` 文本；多数还附带
 `structuredContent` 便于程序化处理。
 
@@ -151,7 +151,7 @@ Debian 安装包会在安装时注册 `x-scheme-handler/nekomusic`；客户端�
 **局域网**：`list_lan_devices`、`select_lan_device`、`get_remote_queue`
 
 **搜索与内容**：`search_music`、`play_music`、`play_search_result`、`search_artists`、
-`get_ranking`、`get_latest_music`、`get_daily_recommendations`、`get_music_detail`、
+`get_ranking`、`get_latest_music`、`get_daily_recommendations`、`get_recommended_playlists`、`get_music_detail`、
 `get_lyrics`、`get_comments`
 
 **收藏**：`get_favorites`、`is_favorite`、`add_favorite`、`remove_favorite`、`toggle_favorite`

@@ -108,7 +108,7 @@ static QMap<QString, QString> zhCN()
     m["mcpAllowRemote"] = QStringLiteral("允许局域网/远程设备访问（默认仅本机）");
     m["mcpApply"] = QStringLiteral("应用并重启服务");
     m["mcpCopyConfig"] = QStringLiteral("复制客户端配置");
-    m["mcpHint"] = QStringLiteral("启用后可将本客户端作为 MCP 服务器接入支持 Model Context Protocol 的 AI 客户端（如 Claude Desktop、Cursor 等）。提供播放控制、音质/主题/桌面歌词、队列、搜索、收藏、歌单、本地库、下载、导入、视频渲染、账户消息与界面导航等 101 个工具。");
+    m["mcpHint"] = QStringLiteral("启用后可将本客户端作为 MCP 服务器接入支持 Model Context Protocol 的 AI 客户端（如 Claude Desktop、Cursor 等）。提供播放控制、音质/主题/桌面歌词、队列、搜索、收藏、歌单、本地库、下载、导入、视频渲染、账户消息与界面导航等 102 个工具。");
     m["mcpStatusRunning"] = QStringLiteral("运行中：%1");
     m["mcpStatusStopped"] = QStringLiteral("未启用");
     m["mcpStatusError"] = QStringLiteral("启动失败：%1");
@@ -276,6 +276,8 @@ static QMap<QString, QString> zhCN()
     m["discoverMusic"] = QStringLiteral("去发现音乐");
     m["recommendPlaylists"] = QStringLiteral("推荐歌单");
     m["recommend_playlists"] = QStringLiteral("推荐歌单");
+    m["recommendPlaylistsPersonalized"] = QStringLiteral("根据你的收藏、歌单和最近搜索实时生成");
+    m["recommendPlaylistsPopular"] = QStringLiteral("从社区热门与近期优质歌单中精选");
     m["hot_music"] = QStringLiteral("热门音乐");
     m["latest_music"] = QStringLiteral("最新音乐");
     m["searchMusic"] = QStringLiteral("单曲");
@@ -916,6 +918,8 @@ static QMap<QString, QString> nyaCN()
     m["discoverMusic"] = QStringLiteral("一起去冒险寻歌喵！");
     m["recommendPlaylists"] = QStringLiteral("为您挑选的礼物喵~");
     m["recommend_playlists"] = QStringLiteral("为您挑选的礼物喵~");
+    m["recommendPlaylistsPersonalized"] = QStringLiteral("根据你的收藏、歌单和最近搜索，现场挑给你的喵~");
+    m["recommendPlaylistsPopular"] = QStringLiteral("从热闹又好听的歌单里挑出来的喵~");
     m["hot_music"] = QStringLiteral("火热音乐喵~");
     m["latest_music"] = QStringLiteral("新鲜出炉喵~");
     m["login"] = QStringLiteral("指挥官，欢迎回来喵！");
@@ -970,7 +974,7 @@ static QMap<QString, QString> nyaCN()
     m["mcpAllowRemote"] = QStringLiteral("让外面的设备也能连进来喵（默认只认本机）");
     m["mcpApply"] = QStringLiteral("应用并重启喵");
     m["mcpCopyConfig"] = QStringLiteral("复制客户端配置喵");
-    m["mcpHint"] = QStringLiteral("打开后就能让 AI 客户端把人家当成 MCP 服务器来玩喵~ 播放、音质、队列、搜索、收藏、歌单、下载、导入、消息…有 101 个工具喵。");
+    m["mcpHint"] = QStringLiteral("打开后就能让 AI 客户端把人家当成 MCP 服务器来玩喵~ 播放、音质、队列、搜索、收藏、歌单、下载、导入、消息…有 102 个工具喵。");
     m["mcpStatusRunning"] = QStringLiteral("正在努力服务中喵：%1");
     m["mcpStatusStopped"] = QStringLiteral("还没打开喵");
     m["mcpStatusError"] = QStringLiteral("启动失败了喵：%1");
@@ -1338,7 +1342,7 @@ static QMap<QString, QString> enUS()
     m["mcpAllowRemote"] = "Allow LAN/remote devices (localhost only by default)";
     m["mcpApply"] = "Apply & restart";
     m["mcpCopyConfig"] = "Copy client config";
-    m["mcpHint"] = "When enabled, this client acts as an MCP server for AI clients that support the Model Context Protocol (e.g. Claude Desktop, Cursor). 101 tools cover playback & quality, queue, search, favorites, playlists, local library, downloads, external import, video rendering, account, notifications, preferences, and navigation.";
+    m["mcpHint"] = "When enabled, this client acts as an MCP server for AI clients that support the Model Context Protocol (e.g. Claude Desktop, Cursor). 102 tools cover playback & quality, queue, search, favorites, playlists, local library, downloads, external import, video rendering, account, notifications, preferences, and navigation.";
     m["mcpStatusRunning"] = "Running: %1";
     m["mcpStatusStopped"] = "Disabled";
     m["mcpStatusError"] = "Failed to start: %1";
@@ -1514,6 +1518,8 @@ static QMap<QString, QString> enUS()
     m["discoverMusic"] = "Discover Music";
     m["recommendPlaylists"] = "Recommended Playlists";
     m["recommend_playlists"] = "Recommended Playlists";
+    m["recommendPlaylistsPersonalized"] = "Built live from your favorites, playlists and recent searches";
+    m["recommendPlaylistsPopular"] = "A curated mix of popular and recently updated playlists";
     m["hot_music"] = "Hot Music";
     m["latest_music"] = "Latest Music";
     m["searchMusic"] = "Songs";

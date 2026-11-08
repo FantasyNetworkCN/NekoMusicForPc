@@ -550,6 +550,11 @@ QTextEdit:focus {
     letter-spacing: -0.2px;
 }
 
+#hpSectionStatus {
+    color: rgba(33, 37, 41, 0.58);
+    font-size: 12px;
+}
+
 #hpLoading {
     color: rgba(33, 37, 41, 0.6);
     font-size: 14px;
@@ -793,6 +798,11 @@ QTextEdit:focus {
     font-size: 13px;
     font-weight: 500;
     color: rgba(33, 37, 41, 0.8);
+}
+
+#plMeta {
+    font-size: 11px;
+    color: rgba(33, 37, 41, 0.56);
 }
 
 /* ─── 播放栏（SPlayer MainPlayer 布局）──────────────────── */

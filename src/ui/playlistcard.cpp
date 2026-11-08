@@ -23,11 +23,21 @@
 PlaylistCard::PlaylistCard(const PlaylistInfo &info, QWidget *parent)
     : QWidget(parent), m_info(info)
 {
-    setFixedSize(180, 210);
+    setFixedSize(180, 236);
     setCursor(Qt::PointingHandCursor);
     setFocusPolicy(Qt::StrongFocus);
-    setAccessibleName(info.name);
-    setToolTip(info.description.isEmpty() ? info.name : info.name + QStringLiteral("\n") + info.description);
+    const QString metaText = !info.reason.isEmpty() ? info.reason
+                            : !info.creator.isEmpty() ? info.creator
+                                                      : I18n::instance().tr("unknown");
+    setAccessibleName(info.name + QStringLiteral(" · ") + metaText);
+    QStringList tooltipParts{info.name};
+    if (!info.creator.isEmpty())
+        tooltipParts.append(info.creator);
+    if (!info.reason.isEmpty())
+        tooltipParts.append(info.reason);
+    if (!info.description.isEmpty())
+        tooltipParts.append(info.description);
+    setToolTip(tooltipParts.join(QLatin1Char('\n')));
     setAttribute(Qt::WA_StyledBackground, false);
     m_hoverAnimation = new QPropertyAnimation(this, "hoverProgress", this);
     m_hoverAnimation->setDuration(160);
@@ -50,6 +60,13 @@ PlaylistCard::PlaylistCard(const PlaylistInfo &info, QWidget *parent)
     m_name->setText(fm.elidedText(m_info.name, Qt::ElideRight, 160));
     m_name->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     lay->addWidget(m_name);
+
+    m_meta = new QLabel(this);
+    m_meta->setObjectName("plMeta");
+    m_meta->setFixedWidth(160);
+    m_meta->setText(m_meta->fontMetrics().elidedText(metaText, Qt::ElideRight, 160));
+    m_meta->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    lay->addWidget(m_meta);
     lay->addStretch();
 
     loadCover();
@@ -198,4 +215,10 @@ void PlaylistCard::changeEvent(QEvent *event)
     QWidget::changeEvent(event);
     if (m_name && (event->type() == QEvent::StyleChange || event->type() == QEvent::FontChange))
         m_name->setText(m_name->fontMetrics().elidedText(m_info.name, Qt::ElideRight, 160));
+    if (m_meta && (event->type() == QEvent::StyleChange || event->type() == QEvent::FontChange)) {
+        const QString metaText = !m_info.reason.isEmpty() ? m_info.reason
+                                : !m_info.creator.isEmpty() ? m_info.creator
+                                                            : I18n::instance().tr("unknown");
+        m_meta->setText(m_meta->fontMetrics().elidedText(metaText, Qt::ElideRight, 160));
+    }
 }

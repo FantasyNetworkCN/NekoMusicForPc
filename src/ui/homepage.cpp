@@ -2,12 +2,13 @@
  * @file homepage.cpp
  * @brief 发现页 — 每日推荐、快捷入口与自适应歌单网格
  *
- * 推荐歌单：POST /api/playlists/search
+ * 推荐歌单：GET /api/playlists/recommended
  * 热门音乐：GET /api/music/ranking
  * 最新音乐：GET /api/music/latest
  */
 
 #include "homepage.h"
+#include "core/apiclient.h"
 #include "core/i18n.h"
 #include "core/covercache.h"
 #include "core/usermanager.h"
@@ -34,7 +35,7 @@
 #include <QJsonArray>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QtConcurrent>
+#include <QPointer>
 #include <QTime>
 #include <QResizeEvent>
 #include <QPainterPath>
@@ -118,7 +119,7 @@ protected:
 
 // ─── HomePage ────────────────────────────────────────
 
-HomePage::HomePage(QWidget *parent) : QWidget(parent)
+HomePage::HomePage(ApiClient *apiClient, QWidget *parent) : QWidget(parent), m_apiClient(apiClient)
 {
     setAttribute(Qt::WA_StyledBackground, false);
     setAutoFillBackground(false);
@@ -133,6 +134,8 @@ HomePage::HomePage(QWidget *parent) : QWidget(parent)
     connect(&UserManager::instance(), &UserManager::loginStateChanged, this, [this]() {
         refreshDailyEntry();
         fetchDailyEntryCover();
+        m_playlistRefreshRequested = true;
+        refreshData();
     });
 
     // 延迟加载数据，先显示UI
@@ -180,7 +183,10 @@ void HomePage::setupUi()
     m_refreshBtn->setObjectName("hpRefreshBtn");
     m_refreshBtn->setFixedSize(36, 36);
     m_refreshBtn->setCursor(Qt::PointingHandCursor);
-    connect(m_refreshBtn, &QPushButton::clicked, this, &HomePage::refreshData);
+    connect(m_refreshBtn, &QPushButton::clicked, this, [this]() {
+        m_playlistRefreshRequested = true;
+        refreshData();
+    });
     headingRow->addWidget(m_refreshBtn, 0, Qt::AlignVCenter);
     lay->addLayout(headingRow);
 
@@ -257,9 +263,17 @@ void HomePage::setupUi()
     shortcuts->addWidget(m_latestEntry, 1);
     lay->addLayout(shortcuts);
 
-    auto *title = new QLabel(I18n::instance().tr("recommend_playlists"), container);
-    title->setObjectName("hpSectionTitle");
-    lay->addWidget(title);
+    auto *playlistHead = new QHBoxLayout;
+    auto *playlistHeadings = new QVBoxLayout;
+    playlistHeadings->setSpacing(2);
+    m_playlistTitle = new QLabel(I18n::instance().tr("recommend_playlists"), container);
+    m_playlistTitle->setObjectName("hpSectionTitle");
+    m_playlistStatus = new QLabel(container);
+    m_playlistStatus->setObjectName("hpSectionStatus");
+    playlistHeadings->addWidget(m_playlistTitle);
+    playlistHeadings->addWidget(m_playlistStatus);
+    playlistHead->addLayout(playlistHeadings, 1);
+    lay->addLayout(playlistHead);
     m_cardContainer = new QWidget(container);
     m_cardContainer->setObjectName("hpCardContainer");
     m_cardLayout = new FlowLayout(m_cardContainer, 16);
@@ -285,7 +299,9 @@ void HomePage::refreshData()
     m_playlistReady = false;
     m_playlists.clear();
 
-    fetchPlaylists();
+    const bool refresh = m_playlistRefreshRequested;
+    m_playlistRefreshRequested = false;
+    fetchPlaylists(refresh);
     fetchDailyEntryCover();
 }
 
@@ -302,8 +318,13 @@ void HomePage::retranslate()
     m_latestEntry->setAccessibleName(m_latestCaption->text());
     m_refreshBtn->setToolTip(i18n.tr("refresh"));
     m_refreshBtn->setAccessibleName(i18n.tr("refresh"));
-    if (auto *label = findChild<QLabel *>("hpSectionTitle"))
-        label->setText(i18n.tr("recommend_playlists"));
+    if (m_playlistTitle)
+        m_playlistTitle->setText(i18n.tr("recommend_playlists"));
+    if (m_playlistStatus) {
+        m_playlistStatus->setText(i18n.tr(m_playlistPersonalized
+                                              ? "recommendPlaylistsPersonalized"
+                                              : "recommendPlaylistsPopular"));
+    }
     if (auto *label = findChild<QLabel *>("hpLoading"))
         label->setText(i18n.tr("loading"));
     if (auto *label = findChild<QLabel *>("hpEmpty"))
@@ -426,52 +447,54 @@ void HomePage::applyDailyEntryStyle()
     m_dailyEntry->update();
 }
 
-void HomePage::fetchPlaylists()
+void HomePage::fetchPlaylists(bool refresh)
 {
-    QNetworkRequest req(QUrl(QString::fromUtf8("%1/api/playlists/search").arg(Theme::kApiBase)));
-    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    req.setTransferTimeout(5000);
-    QNetworkReply *reply = m_nam.post(req, QByteArray("{\"query\":\"\"}"));
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            m_playlistReady = true;
-            rebuildRecommendSection();
-            return;
-        }
-        QByteArray rawData = reply->readAll();
-
-        QtConcurrent::run([rawData]() {
-            auto doc = QJsonDocument::fromJson(rawData);
-            if (!doc.object().value("success").toBool()) {
-                return QList<PlaylistInfo>();
-            }
+    if (!m_apiClient) {
+        m_playlistReady = true;
+        rebuildRecommendSection();
+        return;
+    }
+    const QPointer<HomePage> guard(this);
+    m_apiClient->fetchRecommendedPlaylists(
+        refresh,
+        [guard](bool ok, bool personalized, const QList<QVariantMap> &items) {
+            if (!guard)
+                return;
+            HomePage *self = guard.data();
             QList<PlaylistInfo> result;
-            auto arr = doc.object().value("results").toArray();
-            result.reserve(arr.size());
-            for (int i = 0; i < arr.size(); ++i) {
-                auto obj = arr[i].toObject();
-                PlaylistInfo info;
-                info.id = obj.value("id").toInt();
-                info.name = obj.value("name").toString();
-                info.description = obj.value("description").toString();
-                info.musicCount = obj.value("musicCount").toInt();
-                int firstId = obj.value("firstMusicId").toInt(0);
-                if (firstId > 0) {
-                    info.coverUrl = QString::fromUtf8("%1/api/music/cover/%2")
-                                        .arg(Theme::kApiBase).arg(firstId);
-                } else {
-                    info.coverUrl = QString::fromUtf8("%1/api/music/cover/1").arg(Theme::kApiBase);
+            if (ok) {
+                result.reserve(qMin(5, items.size()));
+                for (const QVariantMap &obj : items) {
+                    PlaylistInfo info;
+                    info.id = obj.value(QStringLiteral("id")).toInt();
+                    info.name = obj.value(QStringLiteral("name")).toString();
+                    info.description = obj.value(QStringLiteral("description")).toString();
+                    info.musicCount = obj.value(QStringLiteral("musicCount")).toInt();
+                    info.reason = obj.value(QStringLiteral("reason")).toString();
+                    info.source = obj.value(QStringLiteral("source")).toString();
+                    info.exploration = obj.value(QStringLiteral("exploration")).toBool();
+                    info.creator = obj.value(QStringLiteral("creator")).toMap()
+                                       .value(QStringLiteral("nickname")).toString();
+
+                    QString cover = obj.value(QStringLiteral("firstMusicCover")).toString();
+                    if (cover.isEmpty()) {
+                        const QVariantList covers =
+                            obj.value(QStringLiteral("coverUrls")).toList();
+                        if (!covers.isEmpty())
+                            cover = covers.first().toString();
+                    }
+                    info.coverUrl = CoverCache::resolveCoverUrl(cover);
+                    if (info.id > 0)
+                        result.append(info);
+                    if (result.size() >= 5)
+                        break;
                 }
-                result.append(info);
             }
-            return result;
-        }).then(this, [this](QList<PlaylistInfo> list) {
-            m_playlists = std::move(list);
-            m_playlistReady = true;
-            rebuildRecommendSection();
+            self->m_playlistPersonalized = personalized;
+            self->m_playlists = std::move(result);
+            self->m_playlistReady = true;
+            self->rebuildRecommendSection();
         });
-    });
 }
 
 void HomePage::rebuildRecommendSection()
@@ -479,6 +502,11 @@ void HomePage::rebuildRecommendSection()
     if (!m_playlistReady)
         return;
     m_refreshBtn->setEnabled(true);
+    if (m_playlistStatus) {
+        m_playlistStatus->setText(I18n::instance().tr(m_playlistPersonalized
+                                                          ? "recommendPlaylistsPersonalized"
+                                                          : "recommendPlaylistsPopular"));
+    }
     while (auto *item = m_cardLayout->takeAt(0)) {
         delete item->widget();
         delete item;

@@ -4,7 +4,7 @@
  * @file homepage.h
  * @brief 首页 — 推荐歌单
  *
- * 推荐歌单：POST /api/playlists/search
+ * 推荐歌单：GET /api/playlists/recommended
  * 热门音乐：GET /api/music/ranking
  * 最新音乐：GET /api/music/latest
  */
@@ -20,13 +20,14 @@ class QScrollArea;
 class FlowLayout;
 class QPushButton;
 class QLabel;
+class ApiClient;
 
 class HomePage : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit HomePage(QWidget *parent = nullptr);
+    explicit HomePage(ApiClient *apiClient, QWidget *parent = nullptr);
 
 signals:
     void navigateToPlaylist(int id);
@@ -47,7 +48,7 @@ private:
     void refreshDailyEntry();
     void applyDailyEntryStyle();
 
-    void fetchPlaylists();    // 推荐歌单卡片
+    void fetchPlaylists(bool refresh);    // 推荐歌单卡片
     void fetchDailyEntryCover();
     void setDailyCoverPlaceholder();
     void setDailyCoverByMusicId(int musicId);
@@ -64,16 +65,21 @@ private:
     QLabel *m_heading = nullptr;
     QLabel *m_greeting = nullptr;
     QLabel *m_dailyAction = nullptr;
+    QLabel *m_playlistTitle = nullptr;
+    QLabel *m_playlistStatus = nullptr;
     QPushButton *m_hotEntry = nullptr;
     QPushButton *m_latestEntry = nullptr;
     QLabel *m_hotCaption = nullptr;
     QLabel *m_latestCaption = nullptr;
     QPushButton *m_refreshBtn = nullptr;
     QMetaObject::Connection m_dailyCoverConn;
+    ApiClient *m_apiClient = nullptr;
 
     QList<PlaylistInfo> m_playlists;
 
     bool m_playlistReady = false;
+    bool m_playlistRefreshRequested = false;
+    bool m_playlistPersonalized = false;
 
     NekoNetworkAccessManager m_nam;
 };

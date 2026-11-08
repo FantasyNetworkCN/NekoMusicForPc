@@ -22,6 +22,11 @@ public:
     using PlaylistsCb = std::function<void(bool, const QList<QVariantMap>&)>;
     void fetchPlaylists(const QString &query, PlaylistsCb cb);
 
+    using RecommendedPlaylistsCb =
+        std::function<void(bool ok, bool personalized, const QList<QVariantMap> &playlists)>;
+    /** 获取推荐歌单；refresh=true 时更换探索位。响应不缓存，支持游客与登录用户。 */
+    void fetchRecommendedPlaylists(bool refresh, RecommendedPlaylistsCb cb);
+
     using MusicListCb = std::function<void(bool, const QList<QVariantMap>&)>;
     void fetchRanking(MusicListCb cb);
     void fetchLatest(int limit, MusicListCb cb);

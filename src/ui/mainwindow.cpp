@@ -520,7 +520,7 @@ void MainWindow::setupUi()
 
     m_stack = new QStackedWidget(contentCol);
     m_stack->setObjectName("pageStack");
-    m_homePage = new HomePage(this);
+    m_homePage = new HomePage(m_apiClient, this);
     m_settingsPage = new SettingsPage(m_apiClient, this);
     m_favoritesPage = new FavoritesPage(m_apiClient, this);
     m_recentPage = new RecentPage(this);

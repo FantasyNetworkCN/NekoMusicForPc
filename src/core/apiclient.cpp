@@ -368,6 +368,8 @@ void ApiClient::searchMusic(const QString &query, int page, int pageSize, MusicS
     QUrl url(QString::fromUtf8("%1/api/music/search").arg(Theme::kApiBase));
     QNetworkRequest req(url);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    if (UserManager::instance().isLoggedIn())
+        req.setRawHeader("Authorization", UserManager::instance().token().toUtf8());
     QJsonObject body;
     body["query"] = query;
     auto *reply = m_nam.post(req, QJsonDocument(body).toJson());
@@ -551,6 +553,40 @@ void ApiClient::fetchPlaylists(const QString &query, PlaylistsCb cb) {
         if (ok) for (const auto &v : doc.object().value("results").toArray())
             res.append(v.toObject().toVariantMap());
         cb(ok, res);
+    });
+}
+
+void ApiClient::fetchRecommendedPlaylists(bool refresh, RecommendedPlaylistsCb cb) {
+    QUrl url(QString::fromUtf8("%1/api/playlists/recommended").arg(Theme::kApiBase));
+    if (refresh) {
+        QUrlQuery query;
+        query.addQueryItem(QStringLiteral("refresh"), QStringLiteral("true"));
+        url.setQuery(query);
+    }
+    QNetworkRequest req(url);
+    req.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
+    req.setAttribute(QNetworkRequest::CacheSaveControlAttribute, false);
+    req.setTransferTimeout(8000);
+    if (UserManager::instance().isLoggedIn())
+        req.setRawHeader("Authorization", UserManager::instance().token().toUtf8());
+
+    auto *reply = m_nam.get(req);
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            if (cb) cb(false, false, {});
+            return;
+        }
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = root.value(QStringLiteral("success")).toBool();
+        QList<QVariantMap> playlists;
+        if (ok) {
+            const QJsonArray arr = root.value(QStringLiteral("data")).toArray();
+            playlists.reserve(arr.size());
+            for (const QJsonValue &value : arr)
+                playlists.append(value.toObject().toVariantMap());
+        }
+        if (cb) cb(ok, root.value(QStringLiteral("personalized")).toBool(), playlists);
     });
 }
 

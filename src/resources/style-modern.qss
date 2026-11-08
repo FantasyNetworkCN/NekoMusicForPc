@@ -78,6 +78,7 @@ QMenu::item:selected { background: @SELECTED@; color: @INK@; }
     font-weight: 600;
 }
 #hpSectionTitle { color: @INK@; font-size: 19px; font-weight: 700; }
+#hpSectionStatus { color: @SECONDARY@; font-size: 12px; }
 QPushButton[discoveryTile="true"] {
     background: @SURFACE@;
     border: 1px solid @LINE@;
@@ -95,6 +96,7 @@ QPushButton[discoveryTile="true"]:focus { border-color: @ACCENT@; }
 #hpRefreshBtn:focus { border-color: @ACCENT@; }
 #hpEmpty, #hpLoading { color: @SECONDARY@; font-size: 13px; }
 #plName { color: @INK@; font-size: 13px; font-weight: 600; }
+#plMeta { color: @SECONDARY@; font-size: 11px; }
 
 #pageTitle, #settingsTitle { color: @INK@; font-size: 28px; font-weight: 700; }
 #settingsTabBtn { background: transparent; border: 1px solid transparent; border-radius: 12px; color: @SECONDARY@; }
