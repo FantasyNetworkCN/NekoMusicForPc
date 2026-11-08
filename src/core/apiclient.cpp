@@ -437,7 +437,7 @@ void ApiClient::fetchMusicInfo(int musicId, MusicInfoCb cb) {
     });
 }
 
-void ApiClient::fetchLyrics(int musicId, LyricsCb cb) {
+void ApiClient::fetchLyricsPayload(int musicId, LyricsPayloadCb cb) {
     QUrl url(QString::fromUtf8("%1/api/music/info/%2")
                  .arg(QString::fromUtf8(Theme::kApiBase))
                  .arg(musicId));
@@ -445,16 +445,23 @@ void ApiClient::fetchLyrics(int musicId, LyricsCb cb) {
     connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            if (cb) cb(false, "");
+            if (cb) cb(false, {});
             return;
         }
         auto doc = QJsonDocument::fromJson(reply->readAll());
         bool ok = doc.object().value("success").toBool();
-        QString lyrics = "";
+        QVariantMap data;
         if (ok) {
-            lyrics = doc.object().value("data").toObject().value("lyrics").toString();
+            data = doc.object().value("data").toObject().toVariantMap();
         }
-        if (cb) cb(ok, lyrics);
+        if (cb) cb(ok, data);
+    });
+}
+
+void ApiClient::fetchLyrics(int musicId, LyricsCb cb) {
+    fetchLyricsPayload(musicId, [cb](bool ok, const QVariantMap &data) {
+        if (cb)
+            cb(ok, data.value(QStringLiteral("lyrics")).toString());
     });
 }
 

@@ -16,6 +16,7 @@
 #include <QImage>
 #include <QPixmap>
 #include "../core/audioquality.h"
+#include "../core/lyrics.h"
 #include "../core/musicinfo.h"
 #include "../core/playerengine.h"
 
@@ -23,12 +24,6 @@ class ApiClient;
 class QTimer;
 class QWheelEvent;
 class QSlider;
-
-struct LyricLine {
-    qint64 time;
-    QString text;
-    QString translation;
-};
 
 class PlayerPage : public QWidget
 {
@@ -122,6 +117,7 @@ private:
     void updateQualityBadgeStyle();
     void applyLyricLineStyle(QLabel *textLabel, QLabel *transLabel, bool isCurrent) const;
     void syncLyricLinesVisual(int activeLine, int previousLine = -1);
+    void renderKaraokeLine(int lineIndex, qint64 positionMs);
     /** 视口中心清晰、上下渐模糊（对齐 Apple Music / SPlayer 歌词聚焦） */
     void applyLyricViewportFocusBlur();
     void scheduleLyricFocusBlurUpdate();
@@ -137,6 +133,7 @@ private:
     void parseLrc(const QString &lrc);
     /** 将一段 LRC 或纯文本歌词写入 m_lyrics（无时间轴时整段作为 t=0 一行） */
     void applyLyricsRawText(const QString &raw);
+    bool applyLyricsPayload(const QVariantMap &data);
     void cacheLyricsForKey(int cacheKey);
     void loadEmbeddedLyricsForTrack(const MusicInfo &info);
     void rebuildLyricLabels();
@@ -250,7 +247,9 @@ private:
     QHash<int, QVector<LyricLine>> m_lyricsCache;
     QMetaObject::Connection m_coverConn;
     int m_currentLyricLine = -1;
+    int m_currentLyricWord = -1;
     QVector<QWidget *> m_lyricLineWidgets;
+    QVector<QLabel *> m_lyricTextLabels;
     QWidget *m_lyricIntroCountdown = nullptr;
     QPropertyAnimation *m_scrollAnim = nullptr;
     bool m_lyricUserScrolling = false;

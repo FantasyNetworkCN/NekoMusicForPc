@@ -1064,6 +1064,10 @@ void PlayerPage::syncLyricLinesVisual(int activeLine, int previousLine)
         auto *textLabel = lineWidget->findChild<QLabel *>(QStringLiteral("lyricText"));
         auto *transLabel = lineWidget->findChild<QLabel *>(QStringLiteral("lyricTranslation"));
         applyLyricLineStyle(textLabel, transLabel, on);
+        if (!on && idx == previousLine && idx < m_lyrics.size()) {
+            textLabel->setTextFormat(Qt::PlainText);
+            textLabel->setText(m_lyrics.at(idx).text);
+        }
 
         if (textW > 0 && (on || idx == previousLine))
             relayoutSingleLyricLine(lineWidget, textW);
@@ -1073,6 +1077,30 @@ void PlayerPage::syncLyricLinesVisual(int activeLine, int previousLine)
         m_lyricsContainer->adjustSize();
 
     scheduleLyricFocusBlurUpdate();
+}
+
+void PlayerPage::renderKaraokeLine(int lineIndex, qint64 positionMs)
+{
+    if (lineIndex < 0 || lineIndex >= m_lyrics.size()
+        || lineIndex >= m_lyricTextLabels.size()) {
+        return;
+    }
+    QLabel *label = m_lyricTextLabels.at(lineIndex);
+    const LyricLine &line = m_lyrics.at(lineIndex);
+    if (!label || line.words.isEmpty()) {
+        return;
+    }
+
+    QString html;
+    html.reserve(line.text.size() + line.words.size() * 32);
+    for (const LyricWord &word : line.words) {
+        const bool sung = positionMs >= word.startMs;
+        html += QStringLiteral("<span style=\"color:%1;\">%2</span>")
+                    .arg(sung ? m_clrLyricHi : m_clrLyricHiTrans,
+                         word.text.toHtmlEscaped());
+    }
+    label->setTextFormat(Qt::RichText);
+    label->setText(html);
 }
 
 void PlayerPage::scrollLyricsToActiveLine(int line)
@@ -2930,6 +2958,7 @@ void PlayerPage::loadLyricsForTrack(const MusicInfo &info)
     ++m_lyricsFetchGeneration;
     const int lyricsGen = m_lyricsFetchGeneration;
     m_currentLyricLine = -1;
+    m_currentLyricWord = -1;
 
     if (info.isLocalFile()) {
         const int cacheKey = info.id;
@@ -2951,11 +2980,11 @@ void PlayerPage::loadLyricsForTrack(const MusicInfo &info)
         }
 
         if (info.id > 0 && m_apiClient) {
-            m_apiClient->fetchLyrics(info.id, [this, info, lyricsGen, cacheKey](bool ok, const QString &lrc) {
+            m_apiClient->fetchLyricsPayload(
+                info.id, [this, info, lyricsGen, cacheKey](bool ok, const QVariantMap &data) {
                 if (lyricsGen != m_lyricsFetchGeneration)
                     return;
-                if (ok && !lrc.trimmed().isEmpty()) {
-                    parseLrc(lrc);
+                if (ok && applyLyricsPayload(data) && !m_lyrics.isEmpty()) {
                     rebuildLyricLabels();
                     cacheLyricsForKey(cacheKey);
                     return;
@@ -3007,9 +3036,8 @@ void PlayerPage::loadLyricsForTrack(const MusicInfo &info)
             QJsonObject obj = doc.object();
             bool success = obj.value("success").toBool();
             if (success) {
-                QString lrc = obj.value("data").toObject().value("lyrics").toString();
-                if (!lrc.isEmpty()) {
-                    parseLrc(lrc);
+                const QVariantMap data = obj.value("data").toObject().toVariantMap();
+                if (applyLyricsPayload(data) && !m_lyrics.isEmpty()) {
                     rebuildLyricLabels();
                     cacheLyricsForKey(musicId);
                 } else {
@@ -3036,68 +3064,23 @@ void PlayerPage::applyLyricsRawText(const QString &raw)
     parseLrc(t);
     if (m_lyrics.isEmpty() && !t.trimmed().isEmpty()) {
         static const QRegularExpression hasTime(R"(\[\d+:\d)");
-        if (!t.contains(hasTime))
-            m_lyrics.append({0, t.trimmed(), QString()});
+        if (!t.contains(hasTime)) {
+            LyricLine line;
+            line.text = t.trimmed();
+            m_lyrics.append(line);
+        }
     }
 }
 
 void PlayerPage::parseLrc(const QString &lrc)
 {
-    m_lyrics.clear();
-    // 支持 [m:s]、小数 1～5 位（与后端一致）、一行多时间轴；小数按 F/10^L 秒四舍五入为毫秒
-    static const QRegularExpression timeRe(R"(\[(\d+):(\d{1,2})(?:\.(\d{1,5}))?\])");
-    static const QRegularExpression transRe(R"(^\{["'](.+)["']\}$)");
+    m_lyrics = LyricsParser::parseLrc(lrc);
+}
 
-    auto subsecondToMs = [](const QString &frac) -> int {
-        if (frac.isEmpty())
-            return 0;
-        bool ok = false;
-        const int F = frac.toInt(&ok);
-        if (!ok || F < 0)
-            return 0;
-        const int L = frac.length();
-        if (L < 1 || L > 5)
-            return 0;
-        static const qint64 kPow10[] = {1, 10, 100, 1000, 10000, 100000};
-        const qint64 denom = kPow10[L];
-        return static_cast<int>((qint64{F} * 1000 + denom / 2) / denom);
-    };
-
-    const QStringList lines = lrc.split('\n');
-    for (int i = 0; i < lines.size(); ++i) {
-        const QString line = lines[i].trimmed();
-        if (line.isEmpty())
-            continue;
-
-        QRegularExpressionMatchIterator tagIt = timeRe.globalMatch(line);
-        if (!tagIt.hasNext())
-            continue;
-
-        QString plain = line;
-        plain.remove(timeRe);
-        plain = plain.trimmed();
-
-        QString translation;
-        if (i + 1 < lines.size()) {
-            const QString next = lines[i + 1].trimmed();
-            const auto tMatch = transRe.match(next);
-            if (tMatch.hasMatch())
-                translation = tMatch.captured(1);
-        }
-
-        tagIt = timeRe.globalMatch(line);
-        while (tagIt.hasNext()) {
-            const QRegularExpressionMatch match = tagIt.next();
-            const int min = match.captured(1).toInt();
-            const int sec = match.captured(2).toInt();
-            const int ms = subsecondToMs(match.captured(3));
-            const qint64 timeMs = (static_cast<qint64>(min) * 60 + sec) * 1000 + ms;
-            m_lyrics.append({timeMs, plain, translation});
-        }
-    }
-
-    std::sort(m_lyrics.begin(), m_lyrics.end(),
-              [](const LyricLine &a, const LyricLine &b) { return a.time < b.time; });
+bool PlayerPage::applyLyricsPayload(const QVariantMap &data)
+{
+    m_lyrics = LyricsParser::parsePayload(data);
+    return !m_lyrics.isEmpty();
 }
 
 QColor PlayerPage::lyricCountdownDotColor() const
@@ -3123,6 +3106,8 @@ void PlayerPage::rebuildLyricLabels()
 {
     m_lyricIntroCountdown = nullptr;
     m_lyricLineWidgets.clear();
+    m_lyricTextLabels.clear();
+    m_currentLyricWord = -1;
     QLayoutItem *item;
     while ((item = m_lyricsLayout->takeAt(0)) != nullptr) {
         delete item->widget();
@@ -3194,6 +3179,7 @@ void PlayerPage::rebuildLyricLabels()
         textLabel->setProperty("lyricIndex", i);
         configureLyricLabel(textLabel);
         lineLayout->addWidget(textLabel, 0, Qt::AlignTop);
+        m_lyricTextLabels.append(textLabel);
 
         QLabel *transLabel = nullptr;
         if (!m_lyrics[i].translation.isEmpty()) {
@@ -3278,6 +3264,7 @@ void PlayerPage::updateLyricHighlight(qint64 positionMs)
     if (m_lyrics.isEmpty()) {
         if (m_currentLyricLine != -1) {
             m_currentLyricLine = -1;
+            m_currentLyricWord = -1;
             emitBarLyricUpdate(-1);
         }
         return;
@@ -3291,13 +3278,20 @@ void PlayerPage::updateLyricHighlight(qint64 positionMs)
         }
     }
 
-    if (line == m_currentLyricLine)
+    const int word = line >= 0
+        ? LyricsParser::wordIndexAt(m_lyrics.at(line), positionMs)
+        : -1;
+    if (line == m_currentLyricLine && word == m_currentLyricWord)
         return;
     const int previousLine = m_currentLyricLine;
     m_currentLyricLine = line;
+    m_currentLyricWord = word;
     emitBarLyricUpdate(line);
 
-    syncLyricLinesVisual(line, previousLine);
+    if (line != previousLine)
+        syncLyricLinesVisual(line, previousLine);
+    if (line >= 0)
+        renderKaraokeLine(line, positionMs);
     QTimer::singleShot(0, this, [this, line]() { scrollLyricsToActiveLine(line); });
 }
 

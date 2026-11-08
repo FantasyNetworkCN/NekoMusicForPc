@@ -212,6 +212,7 @@ set(SOURCES
         src/core/localmusicmeta.cpp
         src/core/audioquality.cpp
         src/core/embeddedlyrics.cpp
+        src/core/lyrics.cpp
         src/core/playlistmanager.cpp
         src/core/shufflebag.cpp
         src/core/landevicemanager.cpp
@@ -301,6 +302,7 @@ set(HEADERS
         src/core/localmusicmeta.h
         src/core/audioquality.h
         src/core/embeddedlyrics.h
+        src/core/lyrics.h
         src/core/playlistdb.h
         src/core/musicdownloadmanager.h
         src/core/playlistmanager.h

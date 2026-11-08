@@ -48,6 +48,9 @@ public:
     
     // 获取歌词
     using LyricsCb = std::function<void(bool, const QString&)>;
+    using LyricsPayloadCb = std::function<void(bool, const QVariantMap&)>;
+    /** 获取完整歌词 payload（lyrics + lyricsRich）；fetchLyrics 仅保留旧回调接口。 */
+    void fetchLyricsPayload(int musicId, LyricsPayloadCb cb);
     void fetchLyrics(int musicId, LyricsCb cb);
     
     // 搜索歌手
