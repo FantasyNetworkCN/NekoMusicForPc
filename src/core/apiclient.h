@@ -95,8 +95,8 @@ public:
     using SsoStartCb = std::function<void(bool ok, const QString &message, const QString &url)>;
     void startSso(const QString &client, const QString &returnTo, SsoStartCb cb);
     void claimSso(const QString &handoff, AuthCb cb);
-    using LogoutCb = std::function<void(const QString &authLogoutUrl)>;
-    void logoutAndGetAuthUrl(const QString &accessToken, const QString &idToken, LogoutCb cb);
+    using LogoutCb = std::function<void(bool success)>;
+    void logout(const QString &accessToken, LogoutCb cb);
 
     using SliderCaptchaChallengeCb =
         std::function<void(bool ok, const QString &message, const QVariantMap &data)>;

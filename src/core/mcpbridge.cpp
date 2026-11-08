@@ -2258,13 +2258,22 @@ void McpBridge::initHandlers()
     });
 
     // ── 账户 / 更新 ────────────────────────────────────
-    m_handlers.insert(QStringLiteral("logout"), [](const QJsonObject &, Done done) {
+    m_handlers.insert(QStringLiteral("logout"), [this](const QJsonObject &, Done done) {
         if (!UserManager::instance().isLoggedIn()) {
             done(true, QStringLiteral("当前未登录"), QJsonObject{{QStringLiteral("logged_in"), false}});
             return;
         }
-        UserManager::instance().logout();
-        done(true, QStringLiteral("已退出登录"), QJsonObject{{QStringLiteral("logged_in"), false}});
+        const QString token = UserManager::instance().token();
+        if (!m_api || token.isEmpty()) {
+            UserManager::instance().logout();
+            done(true, QStringLiteral("已退出登录"), QJsonObject{{QStringLiteral("logged_in"), false}});
+            return;
+        }
+        m_api->logout(token, [done](bool) {
+            UserManager::instance().logout();
+            done(true, QStringLiteral("已退出登录"),
+                 QJsonObject{{QStringLiteral("logged_in"), false}});
+        });
     });
 
     m_handlers.insert(QStringLiteral("get_vip_pricing"), [this](const QJsonObject &, Done done) {

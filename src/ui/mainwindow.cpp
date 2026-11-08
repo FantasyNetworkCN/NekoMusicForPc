@@ -69,7 +69,6 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QGuiApplication>
-#include <QDesktopServices>
 #include <QMouseEvent>
 #include <QWindow>
 #include <QPainter>
@@ -951,19 +950,16 @@ void MainWindow::setupUi()
                 menu->addAction(I18n::instance().tr(QStringLiteral("logout")));
             connect(logoutAction, &QAction::triggered, this, [this, menu]() {
                 const QString token = UserManager::instance().token();
-                const QString idToken = UserManager::instance().idToken();
                 if (!m_apiClient || token.isEmpty()) {
                     UserManager::instance().logout();
                     menu->close();
                     return;
                 }
-                m_apiClient->logoutAndGetAuthUrl(
-                    token, idToken, [menu](const QString &url) {
-                        UserManager::instance().logout();
-                        menu->close();
-                        if (!url.isEmpty())
-                            QDesktopServices::openUrl(QUrl(url));
-                    });
+                m_apiClient->logout(token, [menu](bool) {
+                    // 只退出当前客户端。Web 与其它设备由 NekoAuth 独立维护。
+                    UserManager::instance().logout();
+                    menu->close();
+                });
             });
 
             menu->popup(m_titleBar->avatarPos());
