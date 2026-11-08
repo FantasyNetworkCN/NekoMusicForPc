@@ -449,7 +449,7 @@ void AmllLyricsView::paintEvent(QPaintEvent *event)
         const qreal distance = active < 0 ? qreal(i) : qAbs(qreal(i - active));
         const qreal focusOpacity = active >= 0 && i == active
             ? 1.0
-            : std::clamp<qreal>(0.62 - distance * 0.14, 0.24, 0.58);
+            : std::clamp<qreal>(0.86 - distance * 0.10, 0.52, 0.82);
         const qreal opacity = edgeFade * focusOpacity;
 
         painter.save();
@@ -527,8 +527,11 @@ void AmllLyricsView::wheelEvent(QWheelEvent *event)
     const qreal maxScroll = qMax<qreal>(
         0, m_impl->lines.back().top + m_impl->lines.back().height
                + qMax<qreal>(80, height() * (1.0 - kAnchorRatio)) - height());
-    m_impl->scroll = std::clamp(
-        m_impl->scroll - event->angleDelta().y() * 0.65, 0.0, maxScroll);
+    const QPoint pixelDelta = event->pixelDelta();
+    const qreal delta = !pixelDelta.isNull()
+        ? pixelDelta.y()
+        : event->angleDelta().y() * 0.65;
+    m_impl->scroll = std::clamp(m_impl->scroll - delta, 0.0, maxScroll);
     m_impl->scrollVelocity = 0;
     m_impl->userScrollPausedUntilMs =
         QDateTime::currentMSecsSinceEpoch() + kUserScrollPauseMs;
