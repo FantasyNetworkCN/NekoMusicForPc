@@ -11,6 +11,7 @@
 #include "core/nekonetworkaccessmanager.h"
 #include <QNetworkReply>
 #include <QString>
+#include <QStringList>
 
 enum class UpdateInstallKind {
     /** 下载安装包（Windows exe、Linux deb 等） */
@@ -36,6 +37,8 @@ public:
     explicit UpdateChecker(const QString &currentVersion, QObject *parent = nullptr);
 
     void checkForUpdates();
+    /** 为指定版本加载更新日志；依次尝试 GitHub API、Raw 与 jsDelivr 镜像。 */
+    void fetchChangelog(const QString &version);
     void downloadUpdate(const QString &url);
 
     QString currentVersion() const { return m_currentVersion; }
@@ -55,7 +58,8 @@ private:
     QString getPlatformKey() const;
     UpdateInstallKind resolveInstallKind(const QString &platformKey,
                                          const QString &downloadUrl) const;
-    void fetchChangelog(const QString &version);
+    void fetchChangelogSource(const QString &version, const QStringList &sources, int index,
+                              const QStringList &errors);
     static QString extractChangelogSection(const QString &markdown, const QString &version);
 
     QString m_currentVersion;

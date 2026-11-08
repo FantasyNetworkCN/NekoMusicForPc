@@ -3364,6 +3364,7 @@ void MainWindow::checkForUpdates(bool showNoUpdateToast)
                 m_updateDialog, &UpdateDialog::setChangelog);
         connect(m_updateChecker, &UpdateChecker::changelogFailed,
                 m_updateDialog, &UpdateDialog::setChangelogFailed);
+        m_updateChecker->fetchChangelog(info.version);
 
         if (info.installKind == UpdateInstallKind::DownloadInstaller) {
             connect(m_updateDialog, &UpdateDialog::downloadRequested, this, [this](const QString &url) {

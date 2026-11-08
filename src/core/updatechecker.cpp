@@ -18,13 +18,7 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QRegularExpression>
-
-namespace {
-
-constexpr const char *kChangelogUrl =
-        "https://raw.githubusercontent.com/FantasyNetworkCN/NekoMusicForPc/qt6/CHANGELOG.md";
-
-} // namespace
+#include <QDebug>
 
 UpdateChecker::UpdateChecker(const QString &currentVersion, QObject *parent)
     : QObject(parent), m_currentVersion(currentVersion)
@@ -84,7 +78,6 @@ void UpdateChecker::checkForUpdates()
             } else {
                 info.downloadUrl = urlTemplate.replace(QStringLiteral("{pc_ver}"), remoteVersion);
             }
-            fetchChangelog(remoteVersion);
             emit updateAvailable(info);
         } else {
             emit noUpdate();
@@ -94,24 +87,68 @@ void UpdateChecker::checkForUpdates()
 
 void UpdateChecker::fetchChangelog(const QString &version)
 {
-    QNetworkRequest req(QUrl(QString::fromLatin1(kChangelogUrl)));
+    const QStringList sources = {
+        QStringLiteral("https://api.github.com/repos/FantasyNetworkCN/NekoMusicForPc/contents/CHANGELOG.md?ref=qt6"),
+        QStringLiteral("https://raw.githubusercontent.com/FantasyNetworkCN/NekoMusicForPc/qt6/CHANGELOG.md?v=%1")
+            .arg(version),
+        QStringLiteral("https://cdn.jsdelivr.net/gh/FantasyNetworkCN/NekoMusicForPc@qt6/CHANGELOG.md?v=%1")
+            .arg(version)
+    };
+    fetchChangelogSource(version, sources, 0, {});
+}
+
+void UpdateChecker::fetchChangelogSource(const QString &version, const QStringList &sources,
+                                         int index, const QStringList &errors)
+{
+    if (index < 0 || index >= sources.size()) {
+        emit changelogFailed(version, errors.join(QStringLiteral(" | ")));
+        return;
+    }
+
+    const QUrl sourceUrl(sources.at(index));
+    QNetworkRequest req(sourceUrl);
     req.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
+    req.setAttribute(QNetworkRequest::CacheSaveControlAttribute, false);
     req.setRawHeader("Cache-Control", "no-cache");
-    req.setRawHeader("Accept", "text/plain");
+    req.setHeader(QNetworkRequest::UserAgentHeader,
+                  QStringLiteral("NekoMusic-PC/%1").arg(m_currentVersion));
+    const bool githubApi = sourceUrl.host().compare(QStringLiteral("api.github.com"),
+                                                    Qt::CaseInsensitive) == 0;
+    req.setRawHeader("Accept", githubApi ? "application/vnd.github.raw+json" : "text/plain");
     req.setTransferTimeout(10000);
 
     auto *reply = m_nam.get(req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, version]() {
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, version, sourceUrl, sources, index, errors, githubApi]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            emit changelogFailed(version, reply->errorString());
+            const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            QStringList nextErrors = errors;
+            nextErrors.append(QStringLiteral("%1 (%2): %3")
+                                  .arg(sourceUrl.toString())
+                                  .arg(status)
+                                  .arg(reply->errorString()));
+            qWarning() << "[更新日志] 源加载失败:" << sourceUrl << status << reply->errorString();
+            fetchChangelogSource(version, sources, index + 1, nextErrors);
             return;
         }
-        const QString markdown = QString::fromUtf8(reply->readAll()).trimmed();
+        const QByteArray raw = reply->readAll();
+        QString markdown = QString::fromUtf8(raw).trimmed();
+        if (githubApi && markdown.startsWith(QLatin1Char('{'))) {
+            const QJsonObject root = QJsonDocument::fromJson(raw).object();
+            const QString encoded = root.value(QStringLiteral("content")).toString();
+            if (!encoded.isEmpty()) {
+                QByteArray decoded = QByteArray::fromBase64(encoded.toLatin1());
+                markdown = QString::fromUtf8(decoded).trimmed();
+            }
+        }
         if (markdown.isEmpty()) {
-            emit changelogFailed(version, QStringLiteral("empty changelog"));
+            QStringList nextErrors = errors;
+            nextErrors.append(QStringLiteral("%1: empty changelog").arg(sourceUrl.toString()));
+            fetchChangelogSource(version, sources, index + 1, nextErrors);
             return;
         }
+        qInfo() << "[更新日志] 已加载:" << sourceUrl;
         const QString section = extractChangelogSection(markdown, version);
         emit changelogReady(version, section.isEmpty()
                                           ? markdown.left(16000)
