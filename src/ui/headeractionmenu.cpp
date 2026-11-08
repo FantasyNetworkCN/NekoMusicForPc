@@ -11,18 +11,18 @@ HeaderActionMenu::HeaderActionMenu(QWidget *parent)
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
     setStyleSheet(dark
                       ? QStringLiteral(
-                            "QMenu { background: #2a2a2a; border: 1px solid rgba(255,255,255,0.1);"
+                            "QMenu { background: #223149; border: 1px solid rgba(255,255,255,0.1);"
                             " border-radius: 10px; padding: 6px 0; }"
                             "QMenu::item { color: #eee; padding: 9px 20px 9px 14px; }"
-                            "QMenu::item:selected { background: rgba(230,57,80,0.2); }"
+                            "QMenu::item:selected { background: rgba(22, 119, 184,0.2); }"
                             "QMenu::item:disabled { color: rgba(238,238,238,0.38); }"
                             "QMenu::separator { height: 1px; background: rgba(255,255,255,0.1);"
                             " margin: 6px 12px; }")
                       : QStringLiteral(
                             "QMenu { background: #fff; border: 1px solid rgba(33,37,41,0.12);"
                             " border-radius: 10px; padding: 6px 0; }"
-                            "QMenu::item { color: #212529; padding: 9px 20px 9px 14px; }"
-                            "QMenu::item:selected { background: rgba(230,57,80,0.12); }"
+                            "QMenu::item { color: #182B45; padding: 9px 20px 9px 14px; }"
+                            "QMenu::item:selected { background: rgba(22, 119, 184,0.12); }"
                             "QMenu::item:disabled { color: rgba(33,37,41,0.38); }"
                             "QMenu::separator { height: 1px; background: rgba(33,37,41,0.1);"
                             " margin: 6px 12px; }"));

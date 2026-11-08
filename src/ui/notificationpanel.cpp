@@ -38,7 +38,7 @@ constexpr int kListPad = 16;
 constexpr int kCardRadius = 8;
 
 /** 与评论 / 播放队列抽屉同一主色（Theme 未暴露 accent 常量） */
-const QColor kPrimary(230, 57, 80);
+const QColor kPrimary(22, 119, 184);
 
 bool isDark()
 {
@@ -47,7 +47,7 @@ bool isDark()
 
 QString themeTextMain()
 {
-    return isDark() ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    return isDark() ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
 }
 
 QString themeTextSub()
@@ -347,8 +347,8 @@ void NotificationPanel::applyPanelChrome()
         m_scroll->setStyleSheet(QStringLiteral(
             "QScrollArea#ntfScroll { border: none; background: transparent; }"
             "QScrollBar:vertical { width: 5px; background: transparent; margin: 2px 0 4px 0; }"
-            "QScrollBar::handle:vertical { background: rgba(230,57,80,%1); border-radius: 3px; min-height: 40px; }"
-            "QScrollBar::handle:vertical:hover { background: rgba(230,57,80,%2); }"
+            "QScrollBar::handle:vertical { background: rgba(22, 119, 184,%1); border-radius: 3px; min-height: 40px; }"
+            "QScrollBar::handle:vertical:hover { background: rgba(22, 119, 184,%2); }"
             "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
             "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }")
                                     .arg(dark ? 70 : 82)

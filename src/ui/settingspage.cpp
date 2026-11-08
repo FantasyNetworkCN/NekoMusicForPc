@@ -92,7 +92,7 @@ SettingsPage::SettingsPage(ApiClient *apiClient, QWidget *parent)
                 Q_UNUSED(mode);
                 const auto cards = findChildren<GlassWidget *>();
                 for (auto *card : cards)
-                    GlassPaint::applyFlatSurface(card, Theme::ThemeManager::instance().isDarkMode());
+                    GlassPaint::applyFrostedSurface(card, Theme::ThemeManager::instance().isDarkMode());
                 applyScrollbarStyle();
             });
     connect(&UserManager::instance(), &UserManager::loginStateChanged, this,
@@ -106,7 +106,7 @@ QWidget *SettingsPage::createSettingsCard(QWidget *parent, QVBoxLayout **layoutO
 {
     auto *card = new GlassWidget(parent);
     card->setBorderRadius(Theme::kRXl);
-    GlassPaint::applyFlatSurface(card, Theme::ThemeManager::instance().isDarkMode());
+    GlassPaint::applyFrostedSurface(card, Theme::ThemeManager::instance().isDarkMode());
     QWidget *cardBody = card->contentWidget();
 
     auto *cardLay = new QVBoxLayout(cardBody);
@@ -124,7 +124,7 @@ QPushButton *SettingsPage::createTabButton(const QString &text, const char *icon
     btn->setCheckable(true);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setMinimumHeight(38);
-    btn->setIcon(Icons::renderNamed(iconName, 18, QColor(230, 57, 80)));
+    btn->setIcon(Icons::renderNamed(iconName, 18, QColor(22, 119, 184)));
     btn->setIconSize(QSize(18, 18));
     return btn;
 }
@@ -1066,13 +1066,13 @@ void SettingsPage::applyScrollbarStyle()
     const QString sheet = QStringLiteral(
         "QScrollArea { background: transparent; border: none; }"
         "QScrollBar:vertical { width: 6px; background: transparent; margin: 2px 0; }"
-        "QScrollBar::handle:vertical { background: rgba(230,57,80,%1); border-radius: 3px; min-height: 40px; }"
-        "QScrollBar::handle:vertical:hover { background: rgba(230,57,80,%2); }"
+        "QScrollBar::handle:vertical { background: rgba(22, 119, 184,%1); border-radius: 3px; min-height: 40px; }"
+        "QScrollBar::handle:vertical:hover { background: rgba(22, 119, 184,%2); }"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; border: none; }"
         "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }"
         "QScrollBar:horizontal { height: 6px; background: transparent; margin: 0 2px; }"
-        "QScrollBar::handle:horizontal { background: rgba(230,57,80,%1); border-radius: 3px; min-width: 40px; }"
-        "QScrollBar::handle:horizontal:hover { background: rgba(230,57,80,%2); }"
+        "QScrollBar::handle:horizontal { background: rgba(22, 119, 184,%1); border-radius: 3px; min-width: 40px; }"
+        "QScrollBar::handle:horizontal:hover { background: rgba(22, 119, 184,%2); }"
         "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; border: none; }"
         "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }")
                               .arg(dark ? 70 : 82)

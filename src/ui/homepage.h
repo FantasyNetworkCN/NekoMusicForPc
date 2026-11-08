@@ -16,9 +16,8 @@
 #include "playlistcard.h"
 #include "core/musicinfo.h"
 
-class GlassWidget;
 class QScrollArea;
-class QHBoxLayout;
+class FlowLayout;
 class QPushButton;
 class QLabel;
 
@@ -48,9 +47,7 @@ private:
     void refreshDailyEntry();
     void applyDailyEntryStyle();
 
-    void fetchHotMusic();     // 热门音乐卡片
     void fetchPlaylists();    // 推荐歌单卡片
-    void fetchLatestMusic();  // 最新音乐卡片
     void fetchDailyEntryCover();
     void setDailyCoverPlaceholder();
     void setDailyCoverByMusicId(int musicId);
@@ -58,22 +55,25 @@ private:
     void rebuildRecommendSection();
 
     QScrollArea *m_scroll = nullptr;
-    QHBoxLayout *m_cardLayout = nullptr;
+    FlowLayout *m_cardLayout = nullptr;
     QWidget *m_cardContainer = nullptr;
     QPushButton *m_dailyEntry = nullptr;
     QLabel *m_dailyCover = nullptr;
-    QLabel *m_dailyIcon = nullptr;
     QLabel *m_dailyTitle = nullptr;
     QLabel *m_dailyDesc = nullptr;
+    QLabel *m_heading = nullptr;
+    QLabel *m_greeting = nullptr;
+    QLabel *m_dailyAction = nullptr;
+    QPushButton *m_hotEntry = nullptr;
+    QPushButton *m_latestEntry = nullptr;
+    QLabel *m_hotCaption = nullptr;
+    QLabel *m_latestCaption = nullptr;
+    QPushButton *m_refreshBtn = nullptr;
     QMetaObject::Connection m_dailyCoverConn;
 
     QList<PlaylistInfo> m_playlists;
-    QList<MusicInfo> m_hotMusic;
-    QList<MusicInfo> m_latestMusic;
 
-    bool m_hotReady = false;
     bool m_playlistReady = false;
-    bool m_latestReady = false;
 
     NekoNetworkAccessManager m_nam;
 };

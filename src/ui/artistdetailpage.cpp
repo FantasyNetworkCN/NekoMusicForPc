@@ -252,7 +252,7 @@ void ArtistDetailPage::addAllToQueue()
 void ArtistDetailPage::applyPageStyle()
 {
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
     const QString metaFg = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.72)");
 
     if (m_backBtn) {
@@ -266,7 +266,7 @@ void ArtistDetailPage::applyPageStyle()
             "  font-weight: 500;"
             "  padding: 0 12px 0 4px;"
             "}"
-            "QPushButton:hover { color: #D84B63; }")
+            "QPushButton:hover { color: #1677B8; }")
                                      .arg(titleFg));
     }
     if (m_titleLbl) {
@@ -284,7 +284,7 @@ void ArtistDetailPage::applyPageStyle()
         m_playBtn->setText(I18n::instance().tr(QStringLiteral("play")));
         m_playBtn->setStyleSheet(QStringLiteral(
             "QPushButton {"
-            "  background: #D84B63;"
+            "  background: #1677B8;"
             "  color: #ffffff;"
             "  border: none;"
             "  border-radius: 20px;"
@@ -292,10 +292,10 @@ void ArtistDetailPage::applyPageStyle()
             "  font-weight: 500;"
             "  padding: 0 20px;"
             "}"
-            "QPushButton:hover { background: #ff5070; }"
-            "QPushButton:disabled { background: rgba(230,57,80,0.35); color: rgba(255,255,255,0.6); }"));
+            "QPushButton:hover { background: #218CC8; }"
+            "QPushButton:disabled { background: rgba(22, 119, 184,0.35); color: rgba(255,255,255,0.6); }"));
     }
-    const QString secondaryBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
+    const QString secondaryBg = dark ? QStringLiteral("#223149") : QStringLiteral("#E9F0F8");
     const QColor secondaryIc = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
     if (m_batchBar)
         m_batchBar->applyTheme();
@@ -304,7 +304,7 @@ void ArtistDetailPage::applyPageStyle()
         m_moreBtn->setIconSize(QSize(20, 20));
         m_moreBtn->setStyleSheet(QStringLiteral(
             "QPushButton { background: %1; border: none; border-radius: 20px; }"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }").arg(secondaryBg));
+            "QPushButton:hover { background: rgba(22, 119, 184,0.15); }").arg(secondaryBg));
     }
     if (m_songList)
         m_songList->applyTheme();

@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
+        <file>style-modern.qss</file>
         <file>icons/AddList.svg</file>
         <file>icons/Add.svg</file>
         <file>icons/app.png</file>

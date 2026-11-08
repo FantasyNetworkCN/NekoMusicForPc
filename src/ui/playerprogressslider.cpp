@@ -67,7 +67,7 @@ void PlayerProgressSlider::paintEvent(QPaintEvent *event)
 
     if (t > 0.0) {
         QRect filled(groove.left(), groove.top(), qMax(kGrooveH, int(groove.width() * t)), kGrooveH);
-        p.setBrush(dark ? QColor(255, 107, 139) : QColor(230, 57, 80));
+        p.setBrush(dark ? QColor(64, 197, 241) : QColor(22, 119, 184));
         p.drawRoundedRect(filled, 2, 2);
     }
 
@@ -80,8 +80,8 @@ void PlayerProgressSlider::paintEvent(QPaintEvent *event)
     const QRect handleRect(cx - size / 2, cy - size / 2, size, size);
 
     p.setOpacity(m_handleReveal);
-    p.setBrush(dark ? QColor(255, 183, 197) : QColor(255, 183, 197));
-    p.setPen(QPen(dark ? QColor(230, 57, 80, 140) : QColor(240, 94, 122, 90), 1));
+    p.setBrush(dark ? QColor(138, 223, 245) : QColor(138, 223, 245));
+    p.setPen(QPen(dark ? QColor(22, 119, 184, 140) : QColor(64, 197, 241, 90), 1));
     p.drawEllipse(handleRect);
 }
 

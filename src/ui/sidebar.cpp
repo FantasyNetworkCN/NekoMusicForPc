@@ -2,7 +2,7 @@
  * @file sidebar.cpp
  * @brief 侧边栏实现
  *
- * 240px 侧栏，SPlayer 式扁平 surface + 顶栏 Logo。
+ * 224px 雾面侧栏、分组导航与折叠式导入入口。
  * 选中态：主色半透明圆角底。
  */
 
@@ -27,6 +27,7 @@
 #include <QPainter>
 #include <QStyle>
 #include <QTimer>
+#include <QMenu>
 
 namespace {
 
@@ -40,8 +41,8 @@ QColor navIconNormalColor()
 
 QColor navIconActiveColor()
 {
-    return Theme::ThemeManager::instance().isDarkMode() ? QColor(255, 143, 163)
-                                                        : QColor(230, 57, 80);
+    return Theme::ThemeManager::instance().isDarkMode() ? QColor(138, 223, 245)
+                                                        : QColor(22, 119, 184);
 }
 
 const char *navSvgName(const QString &key)
@@ -138,7 +139,7 @@ void Sidebar::setupUi()
 
     auto *logoRow = new QWidget(this);
     logoRow->setObjectName("sbLogoRow");
-    logoRow->setFixedHeight(64);
+    logoRow->setFixedHeight(76);
     auto *logoLay = new QHBoxLayout(logoRow);
     logoLay->setContentsMargins(18, 0, 14, 0);
     logoLay->setSpacing(12);
@@ -165,8 +166,12 @@ void Sidebar::setupUi()
     auto *container = new QWidget(scroll);
     container->setObjectName("sbContainer");
     auto *lay = new QVBoxLayout(container);
-    lay->setContentsMargins(8, 10, 8, 14);
-    lay->setSpacing(4);
+    lay->setContentsMargins(12, 4, 12, 14);
+    lay->setSpacing(6);
+
+    auto *libraryLabel = new QLabel(I18n::instance().tr("musicLibrary"), container);
+    libraryLabel->setObjectName("sbLibraryLabel");
+    lay->addWidget(libraryLabel);
 
     // 主导航（带 PNG 图标）
     lay->addWidget(createNavItem("home", I18n::instance().tr("home"), navIcon("home", true)));
@@ -223,7 +228,7 @@ void Sidebar::setupUi()
     connect(m_importNeteaseBtn, &QPushButton::clicked, this, [this]() {
         emit neteaseImportRequested();
     });
-    lay->addWidget(m_importNeteaseBtn);
+    m_importNeteaseBtn->hide();
 
     m_importQqBtn = new QPushButton(I18n::instance().tr("importQqPlaylist"), container);
     m_importQqBtn->setObjectName("sbCreatePlaylist");
@@ -233,7 +238,7 @@ void Sidebar::setupUi()
     connect(m_importQqBtn, &QPushButton::clicked, this, [this]() {
         emit qqImportRequested();
     });
-    lay->addWidget(m_importQqBtn);
+    m_importQqBtn->hide();
 
     m_importKugouBtn = new QPushButton(I18n::instance().tr("importKugouPlaylist"), container);
     m_importKugouBtn->setObjectName("sbCreatePlaylist");
@@ -243,7 +248,7 @@ void Sidebar::setupUi()
     connect(m_importKugouBtn, &QPushButton::clicked, this, [this]() {
         emit kugouImportRequested();
     });
-    lay->addWidget(m_importKugouBtn);
+    m_importKugouBtn->hide();
 
     m_importQishuiBtn = new QPushButton(I18n::instance().tr("importQishuiPlaylist"), container);
     m_importQishuiBtn->setObjectName("sbCreatePlaylist");
@@ -253,7 +258,20 @@ void Sidebar::setupUi()
     connect(m_importQishuiBtn, &QPushButton::clicked, this, [this]() {
         emit qishuiImportRequested();
     });
-    lay->addWidget(m_importQishuiBtn);
+    m_importQishuiBtn->hide();
+
+    auto *importButton = new QPushButton(I18n::instance().tr("importPlaylist"), container);
+    importButton->setObjectName("sbImportPlaylist");
+    importButton->setFixedHeight(36);
+    importButton->setCursor(Qt::PointingHandCursor);
+    auto *importMenu = new QMenu(importButton);
+    connect(importMenu, &QMenu::aboutToShow, this, [this, importMenu]() {
+        importMenu->clear();
+        for (auto *button : {m_importNeteaseBtn, m_importQqBtn, m_importKugouBtn, m_importQishuiBtn})
+            importMenu->addAction(button->text(), button, &QPushButton::click);
+    });
+    importButton->setMenu(importMenu);
+    lay->addWidget(importButton);
 
     // 收藏歌单分隔线
     auto *favDiv = new QWidget(container);
@@ -282,6 +300,14 @@ void Sidebar::setupUi()
     nekoPolishScrollAreaViewport(scroll);
 
     outer->addWidget(scroll, 1);
+
+    auto *footer = new QWidget(this);
+    auto *footerLayout = new QVBoxLayout(footer);
+    footerLayout->setContentsMargins(12, 8, 12, 14);
+    footerLayout->addWidget(createNavItem("settings", I18n::instance().tr("settings"), navIcon("settings", false)));
+    outer->addWidget(footer);
+    connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged,
+            this, [this](Theme::ThemeMode) { setActiveNav(m_activeKey); });
 
     m_playlistRefreshTimer = new QTimer(this);
     m_playlistRefreshTimer->setSingleShot(true);
@@ -629,7 +655,7 @@ QPushButton *Sidebar::createNavItem(const QString &key, const QString &label, co
 {
     auto *btn = new QPushButton(label, this);
     btn->setObjectName("sbNavItem");
-    btn->setFixedHeight(38);
+    btn->setFixedHeight(44);
     btn->setIcon(icon);
     btn->setIconSize(QSize(18, 18));
     btn->setCursor(Qt::PointingHandCursor);
@@ -657,6 +683,12 @@ void Sidebar::setActiveNav(const QString &key)
 
 void Sidebar::retranslate()
 {
+    if (auto *label = findChild<QLabel *>("sbLibraryLabel"))
+        label->setText(I18n::instance().tr("musicLibrary"));
+    if (auto *button = findChild<QPushButton *>("sbImportPlaylist"))
+        button->setText(I18n::instance().tr("importPlaylist"));
+    if (auto *button = m_navBtns.value("settings"))
+        button->setText(I18n::instance().tr("settings"));
     auto *homeBtn = m_navBtns.value("home");
     if (homeBtn) homeBtn->setText(I18n::instance().tr("home"));
 

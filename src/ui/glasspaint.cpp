@@ -9,6 +9,7 @@
 #include <QPainterPath>
 #include <QPixmap>
 #include <QWidget>
+#include <QVariant>
 #include <QtMath>
 
 #include <cmath>
@@ -46,12 +47,6 @@ void drawNoiseOverlay(QPainter &p, const QRect &r, qreal strength = 1.0)
     p.setOpacity(0.028 * strength);
     p.drawTiledPixmap(r, tile);
     p.restore();
-}
-
-float circleMap(float x)
-{
-    x = qBound(0.f, x, 1.f);
-    return 1.f - std::sqrt(std::max(0.f, 1.f - x * x));
 }
 
 static QSize backdropWorkSize(const QSize &target, int maxSide = 640)
@@ -112,6 +107,29 @@ static QPixmap blurPixmap(const QPixmap &src, const QSize &target, qreal blurRad
 
 namespace GlassPaint {
 
+QPixmap blurredPixmap(const QPixmap &source, const QSize &size, qreal radius)
+{
+    return blurPixmap(source, size, radius);
+}
+
+bool paintCachedBackdrop(QPainter &p, QWidget *widget, const QRect &r)
+{
+    if (!widget)
+        return false;
+    QWidget *host = widget->window();
+    const QPixmap backdrop = host->property("nekoFrostedBackdrop").value<QPixmap>();
+    if (backdrop.isNull() || host->size().isEmpty())
+        return false;
+
+    const QPoint origin = widget->mapTo(host, r.topLeft());
+    const qreal sx = qreal(backdrop.width()) / host->width();
+    const qreal sy = qreal(backdrop.height()) / host->height();
+    const QRectF source(origin.x() * sx, origin.y() * sy, r.width() * sx, r.height() * sy);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    p.drawPixmap(QRectF(r), backdrop, source);
+    return true;
+}
+
 QPixmap grabBlurredBackdrop(QWidget *host, const QList<QWidget *> &excludeWidgets, qreal blurRadius)
 {
     if (!host)
@@ -150,13 +168,24 @@ void paintMainWindowDeepBackdrop(QPainter &p, const QRect &r, bool darkMode)
 
     QLinearGradient bg(r.topLeft(), r.bottomLeft());
     if (darkMode) {
-        bg.setColorAt(0.0, QColor(16, 18, 23));
-        bg.setColorAt(1.0, QColor(12, 14, 18));
+        bg.setColorAt(0.0, QColor(15, 23, 41));
+        bg.setColorAt(1.0, QColor(9, 15, 28));
     } else {
-        bg.setColorAt(0.0, QColor(250, 251, 253));
-        bg.setColorAt(1.0, QColor(240, 243, 247));
+        bg.setColorAt(0.0, QColor(237, 246, 253));
+        bg.setColorAt(1.0, QColor(229, 237, 249));
     }
     p.fillRect(r, bg);
+
+    // 静态环境光，不启动常驻动画，也不影响列表滚动。
+    QRadialGradient cyan(QPointF(r.left() + r.width() * .16, r.top() + r.height() * .08),
+                         r.width() * .7);
+    cyan.setColorAt(0, darkMode ? QColor(36, 136, 163, 42) : QColor(124, 221, 241, 68));
+    cyan.setColorAt(1, Qt::transparent);
+    p.fillRect(r, cyan);
+    QRadialGradient indigo(QPointF(r.right(), r.top() + r.height() * .7), r.width() * .65);
+    indigo.setColorAt(0, darkMode ? QColor(94, 99, 187, 32) : QColor(160, 170, 239, 48));
+    indigo.setColorAt(1, Qt::transparent);
+    p.fillRect(r, indigo);
 }
 
 void paintMainWindowPagesImageBackdrop(QPainter &p, const QRect &r, const QPixmap &image, bool darkMode)
@@ -183,32 +212,37 @@ void paintMainWindowSolidBackdrop(QPainter &p, const QRect &r, const QColor &col
 
 void paintBarGlass(QPainter &p, const QRect &r, BarKind kind, bool darkMode, bool photoShellBackdrop)
 {
-    const QColor surface = photoShellBackdrop
-        ? (darkMode ? QColor(18, 20, 26, 176) : QColor(255, 255, 255, 194))
-        : (darkMode ? QColor(28, 31, 38) : QColor(255, 255, 255));
-    const QColor border = darkMode ? QColor(255, 255, 255, 16) : QColor(0, 0, 0, 18);
-    p.fillRect(r, surface);
-
-    p.setPen(QPen(border, 1));
-    if (kind == BarKind::Sidebar)
-        p.drawLine(r.topRight(), r.bottomRight());
-    else if (kind == BarKind::PlayerBar)
-        p.drawLine(r.topLeft(), r.topRight());
-    else
-        p.drawLine(r.bottomLeft(), r.bottomRight());
+    Q_UNUSED(kind);
+    Q_UNUSED(photoShellBackdrop);
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    QPainterPath shape;
+    shape.addRoundedRect(QRectF(r).adjusted(.5, .5, -.5, -.5), 20, 20);
+    p.setClipPath(shape);
+    paintCachedBackdrop(p, dynamic_cast<QWidget *>(p.device()), r);
+    QLinearGradient surface(r.topLeft(), r.bottomRight());
+    surface.setColorAt(0, darkMode ? QColor(25, 38, 58, 170) : QColor(255, 255, 255, 175));
+    surface.setColorAt(1, darkMode ? QColor(13, 23, 40, 195) : QColor(247, 251, 255, 125));
+    p.fillPath(shape, surface);
+    drawNoiseOverlay(p, r);
+    p.setClipping(false);
+    p.setPen(darkMode ? QColor(196, 223, 255, 28) : QColor(255, 255, 255, 215));
+    p.setBrush(Qt::NoBrush);
+    p.drawPath(shape);
+    p.restore();
 }
 
-void applyFlatSurface(GlassWidget *glass, bool darkMode)
+void applyFrostedSurface(GlassWidget *glass, bool darkMode)
 {
     if (!glass)
         return;
-    glass->setBackdropCaptureEnabled(false);
+    glass->setBackdropCaptureEnabled(true);
     if (darkMode) {
-        glass->setBaseColor(QColor(28, 31, 38));
-        glass->setBorderColor(QColor(255, 255, 255, 16));
+        glass->setBaseColor(QColor(25, 38, 58, 170));
+        glass->setBorderColor(QColor(196, 223, 255, 28));
     } else {
-        glass->setBaseColor(QColor(255, 255, 255));
-        glass->setBorderColor(QColor(0, 0, 0, 18));
+        glass->setBaseColor(QColor(255, 255, 255, 175));
+        glass->setBorderColor(QColor(255, 255, 255, 215));
     }
     glass->setOpacity(1.0);
 }

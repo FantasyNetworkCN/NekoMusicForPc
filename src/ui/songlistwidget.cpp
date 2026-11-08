@@ -401,11 +401,11 @@ void SongListWidget::applyTheme()
     const QString floatBtn = QStringLiteral(
         "QPushButton {"
         "  background: %1;"
-        "  border: 1px solid rgba(230,57,80,0.28);"
+        "  border: 1px solid rgba(22, 119, 184,0.28);"
         "  border-radius: 21px;"
         "}"
         "QPushButton:hover { background: %2; }")
-                                 .arg(dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#ffffff"),
+                                 .arg(dark ? QStringLiteral("#223149") : QStringLiteral("#ffffff"),
                                       dark ? QStringLiteral("#333333") : QStringLiteral("#f5f5f5"));
     const QColor floatIc = dark ? QColor(244, 246, 255, 210) : QColor(33, 37, 41, 210);
     if (m_scrollCurrentBtn) {
@@ -423,8 +423,8 @@ void SongListWidget::applyTheme()
         m_scroll->setStyleSheet(QStringLiteral(
             "QScrollArea#favoritesSongScroll { border: none; background: transparent; }"
             "QScrollBar:vertical { width: 6px; background: transparent; margin: 2px 0; }"
-            "QScrollBar::handle:vertical { background: rgba(230,57,80,%1); border-radius: 3px; min-height: 40px; }"
-            "QScrollBar::handle:vertical:hover { background: rgba(230,57,80,%2); }"
+            "QScrollBar::handle:vertical { background: rgba(22, 119, 184,%1); border-radius: 3px; min-height: 40px; }"
+            "QScrollBar::handle:vertical:hover { background: rgba(22, 119, 184,%2); }"
             "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
             "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }")
                                     .arg(dark ? 70 : 82)

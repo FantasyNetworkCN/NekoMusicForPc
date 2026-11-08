@@ -1,6 +1,7 @@
 #include "toggleswitch.h"
 
 #include "theme/theme.h"
+#include "theme/thememanager.h"
 
 #include <QEasingCurve>
 #include <QPainter>
@@ -73,7 +74,8 @@ void ToggleSwitch::paintEvent(QPaintEvent *)
     const qreal w = width();
     const qreal radius = h / 2.0;
 
-    QColor trackOff(255, 255, 255, 38);
+    const bool dark = Theme::ThemeManager::instance().isDarkMode();
+    QColor trackOff = dark ? QColor(255, 255, 255, 38) : QColor(66, 91, 125, 65);
     QColor trackOn(Theme::kLavender);
     if (!isEnabled()) {
         trackOff.setAlpha(22);
@@ -81,7 +83,7 @@ void ToggleSwitch::paintEvent(QPaintEvent *)
     }
     const QColor track = blendColor(trackOff, trackOn, m_knob);
 
-    painter.setPen(Qt::NoPen);
+    painter.setPen(hasFocus() ? QPen(QColor(Theme::kLavenderDk), 2) : QPen(Qt::NoPen));
     painter.setBrush(track);
     painter.drawRoundedRect(QRectF(0, 0, w, h), radius, radius);
 

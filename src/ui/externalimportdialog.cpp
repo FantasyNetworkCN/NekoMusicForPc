@@ -61,8 +61,8 @@ void ExternalImportDialog::setupUi()
 
     // 颜色定义
     const QString bgColor = dark ? QStringLiteral("rgba(36, 36, 36, 245)") : QStringLiteral("rgba(255, 255, 255, 248)");
-    const QString borderColor = dark ? QString::fromUtf8(Theme::kBorderGlass) : QStringLiteral("rgba(240, 94, 122, 0.22)");
-    const QString textMainColor = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    const QString borderColor = dark ? QString::fromUtf8(Theme::kBorderGlass) : QStringLiteral("rgba(64, 197, 241, 0.22)");
+    const QString textMainColor = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
     const QString textSubColor = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33, 37, 41, 0.65)");
     const QString inputBgColor = dark ? QStringLiteral("rgba(255, 255, 255, 0.08)") : QStringLiteral("rgba(33, 37, 41, 0.05)");
     const QString inputFocusBg = dark ? QStringLiteral("rgba(255, 255, 255, 0.12)") : QStringLiteral("#ffffff");
@@ -133,7 +133,7 @@ void ExternalImportDialog::setupUi()
         "QPushButton:hover { background: %2; }"
         "QPushButton:disabled { background: %3; color: %4; }"
     ).arg(QString::fromUtf8(Theme::kLavender), QString::fromUtf8(Theme::kLavenderLt),
-          dark ? QStringLiteral("rgba(255,255,255,0.2)") : QStringLiteral("rgba(230, 57, 80, 0.45)"),
+          dark ? QStringLiteral("rgba(255,255,255,0.2)") : QStringLiteral("rgba(22, 119, 184, 0.45)"),
           dark ? QStringLiteral("rgba(255,255,255,0.4)") : QStringLiteral("rgba(33, 37, 41, 0.45)")));
     connect(m_fetchBtn, &QPushButton::clicked, this, &ExternalImportDialog::onFetchPlaylist);
     inputLayout->addWidget(m_fetchBtn);
@@ -176,7 +176,7 @@ void ExternalImportDialog::setupUi()
         "}"
     ).arg(inputBgColor, borderColor, textMainColor,
           dark ? QString::fromUtf8(Theme::kBgSurface) : QStringLiteral("#ffffff"),
-          dark ? QStringLiteral("rgba(230, 57, 80, 0.38)") : QStringLiteral("rgba(230, 57, 80, 0.22)")));
+          dark ? QStringLiteral("rgba(22, 119, 184, 0.38)") : QStringLiteral("rgba(22, 119, 184, 0.22)")));
     m_targetPlaylistCombo->hide();
     connect(m_targetPlaylistCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         Q_UNUSED(index);
@@ -261,7 +261,7 @@ void ExternalImportDialog::setupUi()
         "}"
         "QPushButton:hover { background: %4; }"
     ).arg(btnSecondaryBg, textMainColor, borderColor,
-          dark ? QStringLiteral("rgba(255,255,255,0.15)") : QStringLiteral("rgba(230, 57, 80, 0.12)")));
+          dark ? QStringLiteral("rgba(255,255,255,0.15)") : QStringLiteral("rgba(22, 119, 184, 0.12)")));
     connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::reject);
     btnLayout->addWidget(m_closeBtn);
 
@@ -281,7 +281,7 @@ void ExternalImportDialog::setupUi()
         "QPushButton:hover { background: %2; }"
         "QPushButton:disabled { background: %3; color: %4; }"
     ).arg(QString::fromUtf8(Theme::kLavender), QString::fromUtf8(Theme::kLavenderLt),
-          dark ? QStringLiteral("rgba(255,255,255,0.2)") : QStringLiteral("rgba(230, 57, 80, 0.45)"),
+          dark ? QStringLiteral("rgba(255,255,255,0.2)") : QStringLiteral("rgba(22, 119, 184, 0.45)"),
           dark ? QStringLiteral("rgba(255,255,255,0.4)") : QStringLiteral("rgba(33, 37, 41, 0.45)")));
     m_importBtn->setEnabled(false);
     connect(m_importBtn, &QPushButton::clicked, this, &ExternalImportDialog::onStartImport);

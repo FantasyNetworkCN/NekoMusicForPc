@@ -30,9 +30,9 @@
 
 namespace {
 
-constexpr int kRowH = 90;
+constexpr int kRowH = 76;
 constexpr int kCover = 50;
-constexpr QColor kPrimary(240, 94, 122);
+constexpr QColor kPrimary(64, 197, 241);
 
 /** SPlayer SongCard .song-content — surface / play / hover 边框 */
 QColor songFill(bool dark, bool playing, bool hover)
@@ -40,8 +40,8 @@ QColor songFill(bool dark, bool playing, bool hover)
     if (playing)
         return QColor(kPrimary.red(), kPrimary.green(), kPrimary.blue(), 56);
     if (hover)
-        return dark ? QColor(0x22, 0x25, 0x2d) : QColor(0xf4, 0xf5, 0xf7);
-    return dark ? QColor(0x1b, 0x1f, 0x27) : QColor(Qt::white);
+        return dark ? QColor(166, 209, 244, 18) : QColor(255, 255, 255, 190);
+    return dark ? QColor(25, 38, 58, 70) : QColor(255, 255, 255, 85);
 }
 
 QColor songBorder(bool playing, bool hover)
@@ -50,7 +50,7 @@ QColor songBorder(bool playing, bool hover)
         return QColor(kPrimary.red(), kPrimary.green(), kPrimary.blue(), 120);
     if (hover)
         return QColor(kPrimary.red(), kPrimary.green(), kPrimary.blue(), 120);
-    return QColor(kPrimary.red(), kPrimary.green(), kPrimary.blue(), 28);
+    return QColor(128, 166, 205, 14);
 }
 
 /** 批量模式下「已选中」的行底色（播放态以外的一层独立高亮） */
@@ -187,14 +187,14 @@ void SongCardWidget::rebuildLayout()
     m_numCol->setFixedWidth(40);
 
     m_indexLbl = new QLabel(m_numCol);
-    m_indexLbl->setGeometry(0, 0, 40, 74);
+    m_indexLbl->setGeometry(0, 0, 40, kRowH - 16);
     m_indexLbl->setAlignment(Qt::AlignCenter);
     m_indexLbl->setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
     // 批量模式的复选框：与「编号」标签同位置，进入批量模式后顶替它显示。
     // 自己画勾/框（见 updateBatchBox），不依赖平台样式，深浅色主题下都一致。
     m_batchBox = new QPushButton(m_numCol);
-    m_batchBox->setGeometry(0, 0, 40, 74);
+    m_batchBox->setGeometry(0, 0, 40, kRowH - 16);
     m_batchBox->setFlat(true);
     m_batchBox->setCursor(Qt::PointingHandCursor);
     m_batchBox->hide();
@@ -513,7 +513,7 @@ void SongCardWidget::loadCover()
 
     if (cacheKey.isEmpty() || url.isEmpty()) {
         QPixmap pm(kCover, kCover);
-        pm.fill(QColor(230, 57, 80, 40));
+        pm.fill(QColor(22, 119, 184, 40));
         m_coverLbl->setPixmap(pm);
         return;
     }
@@ -524,7 +524,7 @@ void SongCardWidget::loadCover()
     }
 
     QPixmap pm(kCover, kCover);
-    pm.fill(QColor(230, 57, 80, 40));
+    pm.fill(QColor(22, 119, 184, 40));
     m_coverLbl->setPixmap(pm);
 
     m_coverConn = connect(CoverCache::instance(), &CoverCache::coverLoaded, this,
@@ -787,7 +787,7 @@ void SongCardWidget::updateOverlayIcons()
 void SongCardWidget::applyTheme()
 {
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
     const QString subFg = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.62)");
     const QString idxFg = dark ? QString::fromUtf8(Theme::kTextMuted) : QStringLiteral("rgba(33,37,41,0.45)");
 
@@ -804,17 +804,17 @@ void SongCardWidget::applyTheme()
 
     m_heartBtn->setStyleSheet(QStringLiteral(
         "QPushButton { background: transparent; border: none; border-radius: 8px; }"
-        "QPushButton:hover { background: rgba(230,57,80,0.15); }"));
+        "QPushButton:hover { background: rgba(22, 119, 184,0.15); }"));
     if (m_downloadBtn) {
         m_downloadBtn->setStyleSheet(QStringLiteral(
             "QPushButton { background: transparent; border: none; border-radius: 8px; }"
-            "QPushButton:hover:enabled { background: rgba(230,57,80,0.15); }"
+            "QPushButton:hover:enabled { background: rgba(22, 119, 184,0.15); }"
             "QPushButton:disabled { background: transparent; }"));
     }
     if (m_moreBtn) {
         m_moreBtn->setStyleSheet(QStringLiteral(
             "QPushButton { background: transparent; border: none; border-radius: 8px; }"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }"));
+            "QPushButton:hover { background: rgba(22, 119, 184,0.15); }"));
     }
     if (m_progressBar) {
         const QString track = dark ? QStringLiteral("#3a3a3a") : QStringLiteral("#e8e8e8");
@@ -825,7 +825,7 @@ void SongCardWidget::applyTheme()
             "  border-radius: 4px;"
             "}"
             "QProgressBar::chunk {"
-            "  background: #D84B63;"
+            "  background: #1677B8;"
             "  border-radius: 4px;"
             "}").arg(track));
     }
@@ -922,7 +922,7 @@ void SongCardWidget::paintEvent(QPaintEvent *)
         return;
     }
     p.fillPath(path, songFill(dark, m_playing, !m_batchMode && m_hover && !m_playing));
-    p.setPen(QPen(songBorder(m_playing, !m_batchMode && m_hover && !m_playing), 2));
+    p.setPen(QPen(songBorder(m_playing, !m_batchMode && m_hover && !m_playing), 1));
     p.drawPath(path);
 }
 

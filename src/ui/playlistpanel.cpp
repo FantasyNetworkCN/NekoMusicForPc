@@ -46,7 +46,7 @@ constexpr int kListPad = 16;
 // 的缩放/拖动手感区（8px）内，拖滚动条会被系统当成拖窗口边缘。
 constexpr int kScrollbarEdgeInset = 10;
 
-constexpr QColor kPrimary(230, 57, 80);
+constexpr QColor kPrimary(22, 119, 184);
 
 /** 复选框圆角方块里的对勾（自己画，避免依赖字体里是否有 ✓） */
 QPixmap checkMarkPixmap(int size, const QColor &color)
@@ -347,7 +347,7 @@ private:
 
     void applyTitleStyle(bool dark)
     {
-        const QString col = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+        const QString col = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
         m_titleLbl->setStyleSheet(QStringLiteral(
             "QLabel { font-size: 14px; font-weight: 500; color: %1; }").arg(col));
     }
@@ -893,7 +893,7 @@ void PlaylistPanel::setFullPlayerMode(bool on)
 void PlaylistPanel::applyPanelChrome()
 {
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QString textMain = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    const QString textMain = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
     const QString textSub = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.62)");
 
     if (m_titleLabel) {
@@ -942,8 +942,8 @@ void PlaylistPanel::applyPanelChrome()
         m_scroll->setStyleSheet(QStringLiteral(
             "QScrollArea#ppScroll { border: none; background: transparent; }"
             "QScrollBar:vertical { width: 5px; background: transparent; margin: 2px 0 4px 0; }"
-            "QScrollBar::handle:vertical { background: rgba(230,57,80,%1); border-radius: 3px; min-height: 40px; }"
-            "QScrollBar::handle:vertical:hover { background: rgba(230,57,80,%2); }"
+            "QScrollBar::handle:vertical { background: rgba(22, 119, 184,%1); border-radius: 3px; min-height: 40px; }"
+            "QScrollBar::handle:vertical:hover { background: rgba(22, 119, 184,%2); }"
             "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
             "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }")
                                     .arg(dark ? 70 : 82)
@@ -1476,7 +1476,7 @@ void PlaylistPanel::paintEvent(QPaintEvent *event)
     clip.lineTo(r.right(), r.bottom());
     clip.closeSubpath();
 
-    p.fillPath(clip, QColor(QString::fromUtf8(Theme::kBgSurface)));
+    p.fillPath(clip, dark ? QColor(22, 32, 50, 248) : QColor(246, 250, 255, 248));
     p.setPen(QPen(dark ? QColor(255, 255, 255, 22) : QColor(0, 0, 0, 30), 1.0));
     p.drawPath(clip);
 }

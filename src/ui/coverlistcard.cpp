@@ -144,7 +144,7 @@ void CoverListCard::setCellWidth(int width)
 void CoverListCard::applyTheme()
 {
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
     const QString metaFg = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.65)");
 
     if (m_nameLbl) {
@@ -186,7 +186,7 @@ void CoverListCard::loadCover()
     path.addRoundedRect(0, 0, m_coverSide, m_coverSide, 16, 16);
     QLinearGradient g(0, 0, m_coverSide, m_coverSide);
     g.setColorAt(0, QColor(255, 143, 163));
-    g.setColorAt(1, QColor(230, 57, 80));
+    g.setColorAt(1, QColor(22, 119, 184));
     p.fillPath(path, g);
     p.setClipPath(path);
     p.drawPixmap((m_coverSide - 40) / 2, (m_coverSide - 40) / 2,
@@ -297,7 +297,7 @@ void CoverListCard::paintEvent(QPaintEvent *)
     p.setRenderHint(QPainter::Antialiasing, true);
 
     if (m_hovered) {
-        p.fillRect(rect(), QColor(230, 57, 80, 31));
+        p.fillRect(rect(), QColor(22, 119, 184, 31));
     }
 
     const QRect coverRect(0, 0, m_coverSide, m_coverSide);

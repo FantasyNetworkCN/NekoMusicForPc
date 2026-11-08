@@ -8,6 +8,7 @@
 
 #include "playlistcard.h"
 #include "theme/theme.h"
+#include "theme/thememanager.h"
 #include "ui/svgicon.h"
 #include "core/i18n.h"
 #include "core/covercache.h"
@@ -17,16 +18,23 @@
 #include <QPainterPath>
 #include <QEnterEvent>
 #include <QPropertyAnimation>
+#include <QKeyEvent>
 
 PlaylistCard::PlaylistCard(const PlaylistInfo &info, QWidget *parent)
     : QWidget(parent), m_info(info)
 {
-    setFixedSize(182, 236);
+    setFixedSize(180, 210);
     setCursor(Qt::PointingHandCursor);
+    setFocusPolicy(Qt::StrongFocus);
+    setAccessibleName(info.name);
+    setToolTip(info.description.isEmpty() ? info.name : info.name + QStringLiteral("\n") + info.description);
     setAttribute(Qt::WA_StyledBackground, false);
+    m_hoverAnimation = new QPropertyAnimation(this, "hoverProgress", this);
+    m_hoverAnimation->setDuration(160);
+    m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
 
     auto *lay = new QVBoxLayout(this);
-    lay->setContentsMargins(6, 6, 6, 6);
+    lay->setContentsMargins(10, 10, 10, 10);
     lay->setSpacing(8);
 
     // 封面占位（由 paintEvent 绘制实际图片）
@@ -37,11 +45,12 @@ PlaylistCard::PlaylistCard(const PlaylistInfo &info, QWidget *parent)
     // 歌单名
     m_name = new QLabel(this);
     m_name->setObjectName("plName");
-    m_name->setFixedWidth(168);
+    m_name->setFixedWidth(160);
     QFontMetrics fm(m_name->font());
-    m_name->setText(fm.elidedText(m_info.name, Qt::ElideRight, 168));
+    m_name->setText(fm.elidedText(m_info.name, Qt::ElideRight, 160));
     m_name->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     lay->addWidget(m_name);
+    lay->addStretch();
 
     loadCover();
 }
@@ -59,7 +68,7 @@ void PlaylistCard::loadCover()
                       Theme::kCoverRadius, Theme::kCoverRadius);
     QLinearGradient g(0, 0, Theme::kCoverSmall, Theme::kCoverSmall);
     g.setColorAt(0.0, QColor(28, 31, 38));
-    g.setColorAt(1.0, QColor(240, 94, 122));
+    g.setColorAt(1.0, QColor(64, 197, 241));
     p.fillPath(pp, g);
     p.setPen(Qt::NoPen);
     p.drawPixmap(QRect((Theme::kCoverSmall-40)/2, (Theme::kCoverSmall-40)/2, 40, 40),
@@ -100,22 +109,25 @@ void PlaylistCard::loadCover()
 
 void PlaylistCard::animateHover(bool enter)
 {
-    auto *anim = new QPropertyAnimation(this, "pos");
-    anim->setDuration(200);
-    anim->setEasingCurve(QEasingCurve::OutCubic);
-    QPoint cur = pos();
-    anim->setStartValue(cur);
-    anim->setEndValue(enter ? QPoint(cur.x(), cur.y() - 4) : QPoint(cur.x(), cur.y() + 4));
-    anim->start(QAbstractAnimation::DeleteWhenStopped);
+    m_hoverAnimation->stop();
+    m_hoverAnimation->setStartValue(m_hoverProgress);
+    m_hoverAnimation->setEndValue(enter ? 1.0 : 0.0);
+    m_hoverAnimation->start();
 }
 
 void PlaylistCard::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    const bool dark = Theme::ThemeManager::instance().isDarkMode();
+    p.setPen(QPen(hasFocus() ? QColor(Theme::kLavender) : QColor(128, 180, 220, int(45 * m_hoverProgress)), 1));
+    p.setBrush(dark ? QColor(170, 215, 250, int(14 * m_hoverProgress))
+                    : QColor(255, 255, 255, int(150 * m_hoverProgress)));
+    p.drawRoundedRect(QRectF(rect()).adjusted(.5, .5, -.5, -.5), 18, 18);
 
     // 圆角裁剪封面
-    QRect coverRect(6, 6, Theme::kCoverSmall, Theme::kCoverSmall);
+    QRect coverRect(10, 10, Theme::kCoverSmall, Theme::kCoverSmall);
     QPainterPath clip;
     clip.addRoundedRect(coverRect, Theme::kCoverRadius, Theme::kCoverRadius);
     p.setClipPath(clip);
@@ -138,11 +150,14 @@ void PlaylistCard::paintEvent(QPaintEvent *)
                    QString::number(m_info.musicCount) + I18n::instance().tr("musicCount"));
     }
 
-    if (m_hovered) {
-        QPainterPath border;
-        border.addRoundedRect(rect().adjusted(1, 1, -1, -1), Theme::kRMd, Theme::kRMd);
-        p.setPen(QPen(QColor(240, 94, 122, 120), 2));
-        p.drawPath(border);
+    if (m_hoverProgress > 0 || hasFocus()) {
+        p.setOpacity(hasFocus() ? 1 : m_hoverProgress);
+        const QRect button(coverRect.right() - 46, coverRect.bottom() - 46, 36, 36);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(230, 248, 255));
+        p.drawEllipse(button);
+        p.drawPixmap(button.adjusted(9, 9, -9, -9),
+                     Icons::renderNamed("Right", 18, QColor(20, 52, 78)));
     }
 }
 
@@ -166,4 +181,21 @@ void PlaylistCard::mousePressEvent(QMouseEvent *e)
 {
     if (e->button() == Qt::LeftButton) emit clicked(m_info.id);
     QWidget::mousePressEvent(e);
+}
+
+void PlaylistCard::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter || event->key() == Qt::Key_Space) {
+        emit clicked(m_info.id);
+        event->accept();
+        return;
+    }
+    QWidget::keyPressEvent(event);
+}
+
+void PlaylistCard::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+    if (m_name && (event->type() == QEvent::StyleChange || event->type() == QEvent::FontChange))
+        m_name->setText(m_name->fontMetrics().elidedText(m_info.name, Qt::ElideRight, 160));
 }

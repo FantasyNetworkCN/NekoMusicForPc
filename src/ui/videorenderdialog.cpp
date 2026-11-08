@@ -70,7 +70,7 @@ void VideoRenderDialog::setupUi()
         QStringLiteral(
             "QWidget#videoRenderDialogBg { "
             "  background: rgba(30, 30, 50, 0.98); "
-            "  border: 1px solid rgba(230, 57, 80, 0.35); "
+            "  border: 1px solid rgba(22, 119, 184, 0.35); "
             "  border-radius: 16px; "
             "}"));
 
@@ -113,7 +113,7 @@ void VideoRenderDialog::setupUi()
         QStringLiteral(
             "QSlider::groove:horizontal { height: 6px; background: rgba(255,255,255,0.12); border-radius: 3px; }"
             "QSlider::handle:horizontal { width: 14px; margin: -5px 0; background: %1; border-radius: 7px; }"
-            "QSlider::sub-page:horizontal { background: rgba(230,57,80,0.55); border-radius: 3px; }")
+            "QSlider::sub-page:horizontal { background: rgba(22, 119, 184,0.55); border-radius: 3px; }")
             .arg(QString::fromUtf8(Theme::kLavender)));
     connect(m_startSlider, &QSlider::valueChanged, this, [this](int) { refreshRangeLabel(); });
     lay->addWidget(m_startSlider);
@@ -143,8 +143,8 @@ void VideoRenderDialog::setupUi()
     m_submitBtn->setStyleSheet(
         QStringLiteral(
             "QPushButton { padding: 10px 18px; border-radius: 10px; "
-            "background: rgba(230,57,80,0.75); color: white; font-weight: 600; border: none; }"
-            "QPushButton:hover { background: rgba(230,57,80,0.92); }"
+            "background: rgba(22, 119, 184,0.75); color: white; font-weight: 600; border: none; }"
+            "QPushButton:hover { background: rgba(22, 119, 184,0.92); }"
             "QPushButton:disabled { background: rgba(120,120,120,0.4); color: rgba(255,255,255,0.4); }"));
     connect(m_submitBtn, &QPushButton::clicked, this, &QDialog::accept);
 

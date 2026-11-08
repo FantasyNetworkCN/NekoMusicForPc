@@ -66,7 +66,7 @@ QString primaryButtonStyle()
 {
     return QStringLiteral(
         "QPushButton {"
-        "  background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #FF879D, stop:1 #D84B63);"
+        "  background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #8ADFF5, stop:1 #1677B8);"
         "  color: #1a1625; border: none; border-radius: 10px;"
         "  font-size: 14px; font-weight: 700; padding: 0 22px; }"
         "QPushButton:hover { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #D4BFF0, stop:1 #B89AE8); }");

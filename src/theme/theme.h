@@ -2,9 +2,7 @@
 
 /**
  * @file theme.h
- * @brief NekoMusic 桌面端主题常量（参考 SPlayer 简约布局 + 玫红主色）
- *
- * 玫红强调 + 樱花粉描边 + 薄荷/天蓝焦点环；无 emoji。尺寸与动画集中于此。
+ * @brief NekoMusic 桌面端视觉规范：冰蓝强调、雾面玻璃、统一空间节奏。
  */
 
 #include <QColor>
@@ -12,60 +10,60 @@
 namespace Theme
 {
 
-    // ─── 主色：玫红（与 Android Color.kt RoseRed / LightRose 一致）────────
-    constexpr const char *kLavender = "#F05E7A"; // 主强调（沿用旧名以免全工程改名）
-    constexpr const char *kLavenderLt = "#FF879D";
-    constexpr const char *kLavenderDk = "#D84B63";
+    // ─── 主色：冰蓝（旧常量名称保留兼容）────────
+    constexpr const char *kLavender = "#40C5F1"; // 保留旧标识，避免破坏调用方
+    constexpr const char *kLavenderLt = "#8ADFF5";
+    constexpr const char *kLavenderDk = "#1677B8";
 
-    // ─── 辅色：樱花粉（玻璃描边 / 弱高亮）────────────────────────────
-    constexpr const char *kSakura = "#F2B2BF";
-    constexpr const char *kSakuraLt = "#F7CDD6";
-    constexpr const char *kSakuraDk = "#D98E9F";
+    // ─── 辅色：浅靛蓝（玻璃描边 / 弱高亮）────────────────────────────
+    constexpr const char *kSakura = "#91B9EA";
+    constexpr const char *kSakuraLt = "#D1E8FA";
+    constexpr const char *kSakuraDk = "#6B8CFF";
 
     // ─── 点缀：薄荷绿（焦点 / 侧栏选中条）────────────────────────────
     constexpr const char *kMint = "#7D9CA4";
     constexpr const char *kMintLt = "#9FB5BC";
     constexpr const char *kMintDk = "#5F7A81";
 
-    // ─── 背景（SPlayer 式中性深灰 + surface 容器）────────────────────
-    constexpr const char *kBgDeep = "#101217";
-    constexpr const char *kBgMid = "#161A21";
-    constexpr const char *kBgSurface = "#1C212A";
+    // ─── 背景（墨蓝底色 + 分层容器）────────────────────
+    constexpr const char *kBgDeep = "#0B1020";
+    constexpr const char *kBgMid = "#111A2C";
+    constexpr const char *kBgSurface = "#19243A";
 
     // ─── 文字 ────────────────────────────────────────────────────────
     constexpr const char *kTextMain = "#F4F6FF";
     constexpr const char *kTextSub = "rgba(244, 246, 255, 168)";
     constexpr const char *kTextMuted = "rgba(244, 246, 255, 105)";
 
-    // ─── 毛玻璃（基于新 surface）────────────────────────────────────
-    constexpr const char *kGlassBg = "rgba(28, 31, 38, 232)";
-    constexpr const char *kGlassSidebar = "rgba(22, 25, 31, 242)";
-    constexpr const char *kGlassPlayer = "rgba(22, 25, 31, 246)";
-    constexpr const char *kGlassOverlay = "rgba(16, 18, 23, 220)";
+    // ─── 雾面玻璃────────────────────────────────────
+    constexpr const char *kGlassBg = "rgba(24, 35, 55, 168)";
+    constexpr const char *kGlassSidebar = "rgba(15, 24, 42, 178)";
+    constexpr const char *kGlassPlayer = "rgba(24, 35, 55, 210)";
+    constexpr const char *kGlassOverlay = "rgba(11, 16, 32, 220)";
 
-    // ─── 边框（樱花粉半透明，呼应 Android GlassSurface 描边）──────────
-    constexpr const char *kBorderGlass = "rgba(242, 178, 191, 48)";
-    constexpr const char *kBorderFocus = "rgba(240, 94, 122, 120)";
+    // ─── 边框（冷色高光与清晰焦点环）──────────
+    constexpr const char *kBorderGlass = "rgba(180, 210, 255, 32)";
+    constexpr const char *kBorderFocus = "rgba(64, 197, 241, 180)";
 
     // ─── 渐变（QSS）──────────────────────────────────────────────────
     constexpr const char *kGradMain = "qlineargradient(x1:0,y1:0,x2:0.28,y2:1,"
-                                      "stop:0 #FF879D, stop:1 #D84B63)";
+                                      "stop:0 #8ADFF5, stop:1 #40C5F1)";
     constexpr const char *kGradSakura = "qlineargradient(x1:0,y1:0,x2:0.3,y2:1,"
-                                        "stop:0 #F7CDD6, stop:1 #E6AEBB)";
+                                        "stop:0 #D1E8FA, stop:1 #91B9EA)";
     constexpr const char *kGradMint = "qlineargradient(x1:0,y1:0,x2:0.3,y2:1,"
                                       "stop:0 #9FB5BC, stop:1 #7D9CA4)";
     constexpr const char *kGradBg = "qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                                    "stop:0 #101217, stop:1 #0B0D11)";
+                                    "stop:0 #111A2C, stop:1 #0B1020)";
 
-    // ─── 布局尺寸（对齐 SPlayer：侧栏 240 / 顶栏 56 / 底栏 80）────────
-    constexpr int kSidebarW = 240;
-    constexpr int kTitleBarH = 56;
-    /** 底栏可见高度（SPlayer .main-player height: 80px） */
-    constexpr int kPlayerBarBodyH = 80;
-    /** 进度条向上悬出，叠在内容区底边（SPlayer .player-slider top: -8px） */
+    // ─── 布局尺寸（侧栏 224 / 顶栏 72 / 播放栏 92）────────
+    constexpr int kSidebarW = 224;
+    constexpr int kTitleBarH = 72;
+    /** 底栏可见高度 */
+    constexpr int kPlayerBarBodyH = 92;
+    /** 保留旧调用方使用的进度条尺寸常量 */
     constexpr int kPlayerBarSliderOverhang = 8;
     constexpr int kPlayerBarH = kPlayerBarBodyH;
-    constexpr int kCoverSmall = 144;
+    constexpr int kCoverSmall = 160;
     constexpr int kCoverRadius = 14;
 
     // ─── 圆角 ──────────────────────────────────────────────────────

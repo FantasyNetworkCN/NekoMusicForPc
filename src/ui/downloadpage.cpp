@@ -405,10 +405,10 @@ void DownloadPage::loadCompletedDownloads()
 void DownloadPage::applyPageStyle()
 {
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
     const QString metaFg = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.72)");
     const QString statusFg = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.55)");
-    const QString tabBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
+    const QString tabBg = dark ? QStringLiteral("#223149") : QStringLiteral("#E9F0F8");
     const QString tabSelBg = dark ? QStringLiteral("#3a3a3a") : QStringLiteral("#ffffff");
 
     if (m_titleLbl) {
@@ -455,7 +455,7 @@ void DownloadPage::applyPageStyle()
         m_playBtn->setIconSize(QSize(18, 18));
         m_playBtn->setStyleSheet(QStringLiteral(
             "QPushButton {"
-            "  background: #D84B63;"
+            "  background: #1677B8;"
             "  color: #ffffff;"
             "  border: none;"
             "  border-radius: 20px;"
@@ -463,18 +463,18 @@ void DownloadPage::applyPageStyle()
             "  font-weight: 500;"
             "  padding: 0 20px;"
             "}"
-            "QPushButton:hover { background: #ff5070; }"
-            "QPushButton:disabled { background: rgba(230,57,80,0.35); color: rgba(255,255,255,0.6); }"));
+            "QPushButton:hover { background: #218CC8; }"
+            "QPushButton:disabled { background: rgba(22, 119, 184,0.35); color: rgba(255,255,255,0.6); }"));
     }
 
-    const QString secondaryBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
+    const QString secondaryBg = dark ? QStringLiteral("#223149") : QStringLiteral("#E9F0F8");
     if (m_moreBtn) {
         const QColor moreIc = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
         m_moreBtn->setIcon(Icons::renderNamed("More", 20, moreIc));
         m_moreBtn->setIconSize(QSize(20, 20));
         m_moreBtn->setStyleSheet(QStringLiteral(
             "QPushButton { background: %1; border: none; border-radius: 20px; }"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }").arg(secondaryBg));
+            "QPushButton:hover { background: rgba(22, 119, 184,0.15); }").arg(secondaryBg));
     }
     if (m_batchBar)
         m_batchBar->applyTheme();

@@ -70,7 +70,7 @@ constexpr int kVolumePanelExtraLiftPx = 12;
 constexpr int kVolumeLeaveAutoHideMs = 3000;
 const QString kSettingsKeyVolume = QStringLiteral("player/volume");
 
-const QColor kPpIconAccent = QColor(255, 143, 158, 255);
+const QColor kPpIconAccent = QColor(138, 223, 245, 255);
 
 inline QColor blendCoverTint(const QColor &cover, const QColor &fallback, int coverWeight = 72)
 {
@@ -118,7 +118,7 @@ public:
     {
         m_startMs = startMs;
         m_durationMs = qMax<qint64>(1, durationMs);
-        m_dotColor = dotColor.isValid() ? dotColor : QColor(230, 57, 80);
+        m_dotColor = dotColor.isValid() ? dotColor : QColor(22, 119, 184);
         updatePosition(startMs);
     }
 
@@ -182,7 +182,7 @@ private:
 
     qint64 m_startMs = 0;
     qint64 m_durationMs = 1;
-    QColor m_dotColor = QColor(230, 57, 80);
+    QColor m_dotColor = QColor(22, 119, 184);
     qreal m_opacities[3] = {0.0, 0.0, 0.0};
 };
 
@@ -309,7 +309,7 @@ static void toggleFramelessWindowMaximize(QWidget *page)
 static QColor pixmapAverageColor(const QPixmap &src)
 {
     if (src.isNull())
-        return QColor(230, 57, 80);
+        return QColor(22, 119, 184);
     QImage img = src.toImage().scaled(24, 24, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
     qint64 r = 0, g = 0, b = 0;
     const int n = img.width() * img.height();
@@ -323,7 +323,7 @@ static QColor pixmapAverageColor(const QPixmap &src)
         }
     }
     if (n <= 0)
-        return QColor(230, 57, 80);
+        return QColor(22, 119, 184);
     return QColor(int(r / n), int(g / n), int(b / n));
 }
 
@@ -673,7 +673,7 @@ protected:
 PlayerPage::PlayerPage(PlayerEngine *engine, ApiClient *apiClient, QWidget *parent)
     : QWidget(parent), m_engine(engine), m_apiClient(apiClient)
 {
-    m_coverMainColor = QColor(255, 200, 210);
+    m_coverMainColor = QColor(38, 75, 110);
     m_coverSecondColor = QColor(255, 255, 255, 32);
     setAttribute(Qt::WA_StyledBackground, true);
     setAttribute(Qt::WA_OpaquePaintEvent, true);
@@ -736,6 +736,7 @@ PlayerPage::PlayerPage(PlayerEngine *engine, ApiClient *apiClient, QWidget *pare
         m_underlayBlurTarget = target;
         scheduleUnderlayBlur(target);
     });
+    applyCoverUnknownLarge();
 }
 
 PlayerPage::~PlayerPage()
@@ -824,14 +825,10 @@ void PlayerPage::paintEvent(QPaintEvent *event)
     QPainter p(this);
     p.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
-    const bool dark = Theme::ThemeManager::instance().isDarkMode();
-
     // 不透明垫底，避免模糊图边缘 alpha 透出下层
-    QColor opaqueBase(20, 18, 24);
+    QColor opaqueBase(11, 16, 32);
     if (m_coverMainColor.isValid())
         opaqueBase = QColor(m_coverMainColor.red(), m_coverMainColor.green(), m_coverMainColor.blue());
-    else if (!dark)
-        opaqueBase = QColor(241, 243, 246);
     p.fillRect(rect(), opaqueBase);
 
     // 滑入动画期间跳过重型模糊底图，避免与位移动画争抢主线程
@@ -849,13 +846,11 @@ void PlayerPage::paintEvent(QPaintEvent *event)
         drawCoverBlurBackground(p, m_bgBlurPixmap, rect());
     else if (m_coverMainColor.isValid()) {
         QColor fill = m_coverMainColor;
-        if (dark)
-            fill = fill.darker(160);
-        else
-            fill = fill.lighter(140);
+        // 沉浸播放页始终使用深色封面底，保证两种壳层主题下的歌词对比度。
+        fill = fill.darker(180);
         p.fillRect(rect(), fill);
     } else {
-        GlassPaint::paintMainWindowDeepBackdrop(p, rect(), dark);
+        GlassPaint::paintMainWindowDeepBackdrop(p, rect(), true);
     }
 
     // SPlayer .full-player background-color: #00000060
@@ -902,12 +897,12 @@ QColor PlayerPage::idleIconColor() const
 {
     // 播放页背景恒为封面深色，图标固定浅色，不跟随系统主题
     const QColor fb(255, 255, 255, 210);
-    return blendCoverTint(m_coverMainColor, fb, 70);
+    return blendCoverTint(m_coverMainColor, fb, 12);
 }
 
 QColor PlayerPage::accentIconColor() const
 {
-    return blendCoverTint(m_coverMainColor, kPpIconAccent, 82);
+    return blendCoverTint(m_coverMainColor, kPpIconAccent, 20);
 }
 
 void PlayerPage::refreshTintedPalette()
@@ -917,9 +912,9 @@ void PlayerPage::refreshTintedPalette()
     const QColor subBase(245, 240, 255, 178);
     const QColor muteBase(245, 240, 255, 130);
 
-    const QColor titleC = blendCoverTint(m_coverMainColor, titleBase, 78);
-    const QColor subC = blendCoverTint(m_coverMainColor, subBase, 62);
-    const QColor muteC = blendCoverTint(m_coverMainColor, muteBase, 50);
+    const QColor titleC = blendCoverTint(m_coverMainColor, titleBase, 8);
+    const QColor subC = blendCoverTint(m_coverMainColor, subBase, 18);
+    const QColor muteC = blendCoverTint(m_coverMainColor, muteBase, 28);
     m_clrTitle = titleC.name(QColor::HexRgb);
     m_clrArtist = subC.name(QColor::HexArgb);
     m_clrAlbum = muteC.name(QColor::HexArgb);
@@ -1470,10 +1465,10 @@ void PlayerPage::applyPlayerPageStyle()
                       "#playerPage { background: transparent; }"
 
                       "#playerBackBtn { "
-                      "  background: rgba(230,57,80,%5); color: %1; font-size: 20px; "
-                      "  border: 1px solid rgba(230,57,80,%6); border-radius: 22px; }"
+                      "  background: rgba(22, 119, 184,%5); color: %1; font-size: 20px; "
+                      "  border: 1px solid rgba(22, 119, 184,%6); border-radius: 22px; }"
                       "#playerBackBtn:hover { "
-                      "  background: rgba(230,57,80,%7); color: %1; border-color: rgba(230,57,80,%8); }"
+                      "  background: rgba(22, 119, 184,%7); color: %1; border-color: rgba(22, 119, 184,%8); }"
 
                       "#playerLeftPanel, #playerRightPanel { background: transparent; }"
 
@@ -1497,10 +1492,10 @@ void PlayerPage::applyPlayerPageStyle()
                       "  background: transparent; }"
 
                       "#playerVideoRenderBtn, #playerVideoDownloadBtn { "
-                      "  background: rgba(230,57,80,%5); color: %1; font-size: 13px; font-weight: 600; "
-                      "  border: 1px solid rgba(230,57,80,%6); border-radius: 18px; padding: 8px 18px; }"
+                      "  background: rgba(22, 119, 184,%5); color: %1; font-size: 13px; font-weight: 600; "
+                      "  border: 1px solid rgba(22, 119, 184,%6); border-radius: 18px; padding: 8px 18px; }"
                       "#playerVideoRenderBtn:hover, #playerVideoDownloadBtn:hover { "
-                      "  background: rgba(230,57,80,%7); border-color: rgba(230,57,80,%8); }"
+                      "  background: rgba(22, 119, 184,%7); border-color: rgba(22, 119, 184,%8); }"
                       "#playerVideoRenderBtn:disabled { "
                       "  color: rgba(255,255,255,0.35); background: rgba(120,120,120,0.25); border-color: rgba(255,255,255,0.08); }"
 
@@ -1531,7 +1526,7 @@ void PlayerPage::applyPlayerPageStyle()
                       "#ppDesktopLrcBtn:pressed { "
                       "  background: rgba(255,255,255,14); }"
                       "#ppDesktopLrcBtn:checked { "
-                      "  background: rgba(230,57,80,48); color: #FFF5F7; }")
+                      "  background: rgba(22, 119, 184,48); color: #FFF5F7; }")
                       .arg(backFg)
                       .arg(m_clrTitle)
                       .arg(m_clrArtist)
@@ -2643,8 +2638,7 @@ void PlayerPage::setMusicInfo(int id, const QString &title, const QString &artis
     }
 
     if (m_musicId <= 0) {
-        m_coverImage->clear();
-        m_coverRoundedBase = QPixmap();
+        applyCoverUnknownLarge();
         updateVideoRenderUi();
         return;
     }
@@ -2825,7 +2819,6 @@ void PlayerPage::applyCoverPixmap(const QPixmap &sourcePixmap)
 
 void PlayerPage::applyCoverUnknownLarge()
 {
-    const bool dark = Theme::ThemeManager::instance().isDarkMode();
     const int base = coverSideLength();
     if (m_coverFrame)
         m_coverFrame->setFixedSize(base, base);
@@ -2835,18 +2828,25 @@ void PlayerPage::applyCoverUnknownLarge()
     p.setRenderHint(QPainter::Antialiasing, true);
     QPainterPath path;
     path.addRoundedRect(0, 0, base, base, kPlayerCoverRadius, kPlayerCoverRadius);
-    p.fillPath(path, dark ? QColor(52, 44, 72) : QColor(236, 232, 248));
-    p.setPen(dark ? QColor(230, 57, 80, 220) : QColor(240, 94, 122, 200));
-    QFont f = p.font();
-    f.setPixelSize(qBound(28, base / 6, 56));
-    f.setWeight(QFont::DemiBold);
-    p.setFont(f);
-    p.drawText(pm.rect(), Qt::AlignCenter, I18n::instance().tr(QStringLiteral("unknown")));
+    QLinearGradient surface(0, 0, base, base);
+    surface.setColorAt(0, QColor(25, 60, 83));
+    surface.setColorAt(1, QColor(39, 49, 85));
+    p.fillPath(path, surface);
+    p.setPen(QPen(QColor(138, 223, 245, 28), 1));
+    p.setBrush(Qt::NoBrush);
+    for (int radius = base / 5; radius < base / 2; radius += 16)
+        p.drawEllipse(QPointF(base / 2.0, base / 2.0), radius, radius);
+    const int iconSize = qMax(32, base / 5);
+    p.drawPixmap((base - iconSize) / 2, (base - iconSize) / 2,
+                 Icons::renderNamed("Music", iconSize, QColor(138, 223, 245)));
     p.end();
     m_coverRoundedBase = pm;
     applyCoverVisualScale(m_coverVisualScale);
     m_coverBackdropSource = QPixmap();
+    ++m_coverBlurGen;
     m_bgBlurPixmap = QPixmap();
+    m_coverMainColor = QColor(38, 75, 110);
+    applyPlayerPageStyle();
     update();
 }
 
@@ -3104,7 +3104,7 @@ QColor PlayerPage::lyricCountdownDotColor() const
 {
     if (m_coverMainColor.isValid())
         return m_coverMainColor;
-    return QColor(230, 57, 80);
+    return QColor(22, 119, 184);
 }
 
 void PlayerPage::updateLyricCountdown(qint64 positionMs)

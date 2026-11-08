@@ -1,6 +1,6 @@
 /**
  * @file homepage.cpp
- * @brief 首页实现 — 单一推荐歌单板块
+ * @brief 发现页 — 每日推荐、快捷入口与自适应歌单网格
  *
  * 推荐歌单：POST /api/playlists/search
  * 热门音乐：GET /api/music/ranking
@@ -14,14 +14,13 @@
 #include "theme/theme.h"
 #include "theme/thememanager.h"
 #include "ui/playlistcard.h"
-#include "ui/glasswidget.h"
+#include "ui/flowlayout.h"
 #include "ui/glasspaint.h"
 #include "ui/scrollareafix.h"
 #include "ui/svgicon.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QGridLayout>
 #include <QScrollArea>
 #include <QLabel>
 #include <QPushButton>
@@ -36,222 +35,86 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QtConcurrent>
-#include <QDate>
+#include <QTime>
+#include <QResizeEvent>
 #include <QPainterPath>
 
 namespace {
 
-void applyAggregateGlass(GlassWidget *glass)
-{
-    GlassPaint::applyFlatSurface(glass, Theme::ThemeManager::instance().isDarkMode());
-}
-
-} // namespace
-
-// ─── 单曲封面标签（圆角 6px + 异步加载）─────────────────
-class CoverLabel : public QLabel
+// 原生按钮保留键盘与无障碍语义，装饰与子标签不截获点击。
+class DailyMixButton final : public QPushButton
 {
 public:
-    explicit CoverLabel(int size, QWidget *parent = nullptr) : QLabel(parent), m_size(size)
-    {
-        setFixedSize(size, size);
-        setScaledContents(false);
-        setPlaceholder();
-    }
-
-    void setPlaceholder()
+    explicit DailyMixButton(QWidget *parent) : QPushButton(parent) {}
+protected:
+    void paintEvent(QPaintEvent *) override
     {
         const bool dark = Theme::ThemeManager::instance().isDarkMode();
-        m_pixmap = QPixmap(m_size, m_size);
-        m_pixmap.fill(Qt::transparent);
-        QPainter p(&m_pixmap);
-        QPainterPath pp;
-        pp.addRoundedRect(0, 0, m_size, m_size, 6, 6);
-        p.fillPath(pp, dark ? QColor(128, 128, 128, 40) : QColor(240, 94, 122, 38));
-        p.setClipPath(pp);
-        const QColor iconColor = dark ? QColor(255, 255, 255, 100) : QColor(240, 94, 122, 140);
-        auto iconPx = Icons::renderNamed("Music", 28, iconColor);
-        p.drawPixmap((m_size - 28) / 2, (m_size - 28) / 2, iconPx);
-        update();
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        QPainterPath shape;
+        shape.addRoundedRect(QRectF(rect()).adjusted(.5, .5, -.5, -.5), 24, 24);
+        p.setClipPath(shape);
+        GlassPaint::paintCachedBackdrop(p, this, rect());
+        QLinearGradient wash(rect().topLeft(), rect().bottomRight());
+        wash.setColorAt(0, dark ? QColor(33, 76, 99, 220) : QColor(210, 241, 249, 230));
+        wash.setColorAt(1, dark ? QColor(37, 43, 76, 220) : QColor(226, 230, 251, 210));
+        p.fillPath(shape, wash);
+        if (underMouse() || isDown())
+            p.fillPath(shape, QColor(255, 255, 255, isDown() ? 5 : 14));
+        p.setPen(QPen(dark ? QColor(160, 220, 249, 20) : QColor(255, 255, 255, 100), 1));
+        p.setBrush(Qt::NoBrush);
+        const QPointF orbit(width() - 100, height() / 2.0);
+        p.drawEllipse(orbit, 155, 155);
+        p.drawEllipse(orbit, 185, 185);
+        p.setClipping(false);
+        p.setPen(QPen(hasFocus() ? QColor(Theme::kLavender)
+                                : (dark ? QColor(182, 221, 250, 45) : QColor(255, 255, 255, 210)),
+                      hasFocus() ? 2 : 1));
+        p.drawPath(shape);
     }
-
-    void loadCover(const QString &url)
+    void resizeEvent(QResizeEvent *event) override
     {
-        if (url.isEmpty()) { setPlaceholder(); return; }
-        const QString musicId = CoverCache::musicIdFromCoverUrl(url);
-        if (musicId.isEmpty()) { setPlaceholder(); return; }
-
-        QPixmap cached = CoverCache::instance()->get(musicId);
-        if (!cached.isNull()) {
-            disconnect(m_coverConn);
-            m_coverConn = {};
-            applyPixmap(cached);
-            return;
-        }
-
-        disconnect(m_coverConn);
-        m_coverConn = connect(CoverCache::instance(), &CoverCache::coverLoaded, this,
-                [this, musicId](const QString &id, const QPixmap &pix) {
-            if (id == musicId) applyPixmap(pix);
-        });
-        CoverCache::instance()->fetchCover(musicId, url);
+        QPushButton::resizeEvent(event);
+        if (auto *art = findChild<QLabel *>(QStringLiteral("hpDailyCover")))
+            art->setVisible(width() >= 650);
     }
+};
 
+class DailyArtwork final : public QLabel
+{
+public:
+    explicit DailyArtwork(QWidget *parent) : QLabel(parent) {}
 protected:
     void paintEvent(QPaintEvent *) override
     {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
-        QPainterPath pp;
-        pp.addRoundedRect(0, 0, m_size, m_size, 6, 6);
-        p.setClipPath(pp);
-        p.drawPixmap(0, 0, m_pixmap);
+        p.scale(width() / 176.0, height() / 160.0);
+        const QPointF c(88, 80);
+        QRadialGradient vinyl(c, 78);
+        vinyl.setColorAt(0, QColor(37, 53, 70));
+        vinyl.setColorAt(.5, QColor(17, 27, 43));
+        vinyl.setColorAt(1, QColor(30, 46, 65));
+        p.setPen(QPen(QColor(197, 230, 255, 65), 1));
+        p.setBrush(vinyl);
+        p.drawEllipse(c, 78, 78);
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(QColor(200, 230, 255, 18), 1));
+        for (int radius = 44; radius < 76; radius += 6)
+            p.drawEllipse(c, radius, radius);
+        QPainterPath clip;
+        clip.addEllipse(c, 34, 34);
+        p.setClipPath(clip);
+        p.drawPixmap(QRectF(c.x() - 34, c.y() - 34, 68, 68).toRect(), pixmap());
+        p.setClipping(false);
+        p.setBrush(QColor(213, 243, 252));
+        p.setPen(Qt::NoPen);
+        p.drawEllipse(c, 4, 4);
     }
-
-private:
-    void applyPixmap(const QPixmap &pix)
-    {
-        disconnect(m_coverConn);
-        m_coverConn = {};
-        int s = qMin(pix.width(), pix.height());
-        m_pixmap = pix.copy((pix.width()-s)/2, (pix.height()-s)/2, s, s)
-            .scaled(m_size, m_size, Qt::KeepAspectRatioByExpanding, Qt::FastTransformation);
-        update();
-    }
-
-    QPixmap m_pixmap;
-    int m_size;
-    QMetaObject::Connection m_coverConn;
 };
 
-// ─── 聚合卡片（热门/最新音乐）───────────────────────
-class MusicAggregateCard : public QWidget
-{
-public:
-    enum Type { Hot, Latest };
-
-    MusicAggregateCard(Type type, int firstId, int totalCount, QWidget *parent = nullptr)
-        : QWidget(parent), m_firstId(firstId), m_type(type), m_totalCount(totalCount)
-    {
-        setFixedSize(212, 266);
-        setCursor(Qt::PointingHandCursor);
-        setAttribute(Qt::WA_StyledBackground, false);
-
-        m_glass = new GlassWidget(this);
-        m_glass->setBorderRadius(Theme::kRXl);
-        m_glass->setObjectName(type == Hot ? "hpHotMusicCard" : "hpLatestMusicCard");
-        applyAggregateGlass(m_glass);
-
-        QWidget *glassBody = m_glass->contentWidget();
-
-        auto *vlay = new QVBoxLayout(glassBody);
-        vlay->setContentsMargins(12, 12, 12, 12);
-        vlay->setSpacing(8);
-
-        // 2x2 封面马赛克
-        auto *grid = new QGridLayout();
-        grid->setContentsMargins(0, 0, 0, 0);
-        grid->setSpacing(3);
-        int coverSize = 88;
-        for (int i = 0; i < 4; ++i) {
-            auto *lbl = new CoverLabel(coverSize, this);
-            lbl->setPlaceholder();
-            m_covers.append(lbl);
-            grid->addWidget(lbl, i / 2, i % 2);
-        }
-        vlay->addLayout(grid);
-
-        // 标题 & 数量
-        m_titleLbl = new QLabel(
-            type == Hot ? I18n::instance().tr("hot_music") : I18n::instance().tr("latest_music"), glassBody);
-        m_titleLbl->setObjectName(type == Hot ? "hpHotTitle" : "hpLatestTitle");
-        vlay->addWidget(m_titleLbl);
-
-        m_countLbl = new QLabel(
-            QString::number(totalCount) + I18n::instance().tr("songs"), glassBody);
-        m_countLbl->setObjectName(type == Hot ? "hpHotCount" : "hpLatestCount");
-        vlay->addWidget(m_countLbl);
-
-        vlay->addStretch();
-
-        auto *outer = new QVBoxLayout(this);
-        outer->setContentsMargins(0, 0, 0, 0);
-        outer->addWidget(m_glass);
-        applyTheme();
-    }
-
-    void applyTheme()
-    {
-        applyAggregateGlass(m_glass);
-        for (auto *cover : m_covers)
-            cover->setPlaceholder();
-        const bool dark = Theme::ThemeManager::instance().isDarkMode();
-        if (m_titleLbl) {
-            m_titleLbl->setStyleSheet(QStringLiteral(
-                "QLabel { font-size: 15px; font-weight: 700; color: %1; }")
-                                          .arg(dark ? QStringLiteral("rgba(244,246,255,0.95)")
-                                                    : QStringLiteral("rgba(33,37,41,0.95)")));
-        }
-        if (m_countLbl) {
-            m_countLbl->setStyleSheet(QStringLiteral(
-                "QLabel { font-size: 12px; font-weight: 500; color: %1; }")
-                                          .arg(dark ? QStringLiteral("rgba(244,246,255,0.62)")
-                                                    : QStringLiteral("rgba(33,37,41,0.56)")));
-        }
-    }
-
-    void retranslate() {
-        auto *titleLbl = findChild<QLabel *>(m_type == Hot ? "hpHotTitle" : "hpLatestTitle");
-        if (titleLbl) titleLbl->setText(m_type == Hot ? I18n::instance().tr("hot_music") : I18n::instance().tr("latest_music"));
-        auto *countLbl = findChild<QLabel *>(m_type == Hot ? "hpHotCount" : "hpLatestCount");
-        if (countLbl) countLbl->setText(QString::number(m_totalCount) + I18n::instance().tr("songs"));
-    }
-
-    void setCover(int index, const QString &url)
-    {
-        if (index >= 0 && index < m_covers.size())
-            m_covers[index]->loadCover(url);
-    }
-
-    int firstMusicId() const { return m_firstId; }
-
-protected:
-    void mousePressEvent(QMouseEvent *e) override
-    {
-        if (e->button() == Qt::LeftButton) emitClicked();
-        QWidget::mousePressEvent(e);
-    }
-
-private:
-    void emitClicked()
-    {
-        if (auto *hp = findParentHomePage()) {
-            // 导航到完整列表页面而不是直接播放
-            emit hp->navigateToMusicList(m_type == Hot);
-        }
-    }
-
-    HomePage *findParentHomePage() const
-    {
-        QObject *p = parent();
-        while (p) {
-            if (auto *hp = qobject_cast<HomePage *>(p)) return hp;
-            p = p->parent();
-        }
-        return nullptr;
-    }
-
-    int m_type;
-    int m_firstId;
-    int m_totalCount;
-    GlassWidget *m_glass = nullptr;
-    QList<CoverLabel *> m_covers;
-    QLabel *m_titleLbl = nullptr;
-    QLabel *m_countLbl = nullptr;
-};
-
-// Store for retranslate
-static QList<MusicAggregateCard *> m_aggCards;
+} // namespace
 
 // ─── HomePage ────────────────────────────────────────
 
@@ -263,10 +126,14 @@ HomePage::HomePage(QWidget *parent) : QWidget(parent)
 
     connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged, this,
             [this](Theme::ThemeMode) {
-                for (auto *card : m_aggCards)
-                    card->applyTheme();
                 applyDailyEntryStyle();
+                update();
             });
+
+    connect(&UserManager::instance(), &UserManager::loginStateChanged, this, [this]() {
+        refreshDailyEntry();
+        fetchDailyEntryCover();
+    });
 
     // 延迟加载数据，先显示UI
     QTimer::singleShot(100, this, &HomePage::refreshData);
@@ -293,149 +160,164 @@ void HomePage::setupUi()
     m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_scroll->setFrameShape(QFrame::NoFrame);
     m_scroll->setObjectName("hpScroll");
-
     auto *container = new QWidget(m_scroll);
     container->setObjectName("hpContainer");
     auto *lay = new QVBoxLayout(container);
-    lay->setContentsMargins(28, 16, 28, 32);
-    lay->setSpacing(20);
+    lay->setContentsMargins(24, 12, 24, 28);
+    lay->setSpacing(14);
 
-    m_dailyEntry = new QPushButton(container);
+    auto *headingRow = new QHBoxLayout;
+    auto *headings = new QVBoxLayout;
+    headings->setSpacing(6);
+    m_heading = new QLabel(container);
+    m_heading->setObjectName("hpHeading");
+    m_greeting = new QLabel(container);
+    m_greeting->setObjectName("hpSubtitle");
+    headings->addWidget(m_heading);
+    headings->addWidget(m_greeting);
+    headingRow->addLayout(headings, 1);
+    m_refreshBtn = new QPushButton(container);
+    m_refreshBtn->setObjectName("hpRefreshBtn");
+    m_refreshBtn->setFixedSize(36, 36);
+    m_refreshBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_refreshBtn, &QPushButton::clicked, this, &HomePage::refreshData);
+    headingRow->addWidget(m_refreshBtn, 0, Qt::AlignVCenter);
+    lay->addLayout(headingRow);
+
+    m_dailyEntry = new DailyMixButton(container);
     m_dailyEntry->setObjectName("hpDailyRecommendEntry");
     m_dailyEntry->setCursor(Qt::PointingHandCursor);
-    m_dailyEntry->setMinimumHeight(92);
+    m_dailyEntry->setMinimumHeight(164);
     m_dailyEntry->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    m_dailyEntry->setFlat(true);
     auto *dailyLay = new QHBoxLayout(m_dailyEntry);
-    dailyLay->setContentsMargins(12, 10, 12, 10);
+    dailyLay->setContentsMargins(24, 16, 20, 16);
     dailyLay->setSpacing(12);
-
-    m_dailyCover = new QLabel(m_dailyEntry);
-    m_dailyCover->setFixedSize(70, 70);
-    m_dailyCover->setObjectName("hpDailyCover");
-    dailyLay->addWidget(m_dailyCover, 0, Qt::AlignVCenter);
-
     auto *dailyTextWrap = new QWidget(m_dailyEntry);
-    auto *dailyTextLay = new QVBoxLayout(dailyTextWrap);
-    dailyTextLay->setContentsMargins(0, 2, 0, 2);
-    dailyTextLay->setSpacing(6);
-
-    auto *dailyTopRow = new QWidget(dailyTextWrap);
-    auto *dailyTopLay = new QHBoxLayout(dailyTopRow);
-    dailyTopLay->setContentsMargins(0, 0, 0, 0);
-    dailyTopLay->setSpacing(6);
-
-    m_dailyIcon = new QLabel(dailyTopRow);
-    m_dailyIcon->setFixedSize(16, 16);
-    dailyTopLay->addWidget(m_dailyIcon, 0, Qt::AlignVCenter);
-
-    m_dailyTitle = new QLabel(dailyTopRow);
-    dailyTopLay->addWidget(m_dailyTitle, 0, Qt::AlignVCenter);
-    dailyTopLay->addStretch();
-
+    dailyTextWrap->setAttribute(Qt::WA_TransparentForMouseEvents);
+    auto *text = new QVBoxLayout(dailyTextWrap);
+    text->setContentsMargins(0, 0, 0, 0);
+    text->setSpacing(5);
+    auto *eyebrow = new QLabel(QStringLiteral("MADE FOR YOU / DAILY MIX"), dailyTextWrap);
+    eyebrow->setObjectName("hpEyebrow");
+    m_dailyTitle = new QLabel(dailyTextWrap);
+    m_dailyTitle->setObjectName("hpDailyTitle");
     m_dailyDesc = new QLabel(dailyTextWrap);
-    m_dailyDesc->setWordWrap(false);
-
-    dailyTextLay->addWidget(dailyTopRow);
-    dailyTextLay->addWidget(m_dailyDesc);
-    dailyLay->addWidget(dailyTextWrap, 1, Qt::AlignVCenter);
-
-    connect(m_dailyEntry, &QPushButton::clicked, this, [this]() {
-        emit navigateToDailyRecommendations();
-    });
+    m_dailyDesc->setObjectName("hpSubtitle");
+    m_dailyDesc->setWordWrap(true);
+    m_dailyAction = new QLabel(dailyTextWrap);
+    m_dailyAction->setObjectName("hpDailyAction");
+    m_dailyAction->setAlignment(Qt::AlignCenter);
+    m_dailyAction->setMinimumHeight(34);
+    text->addWidget(eyebrow);
+    text->addWidget(m_dailyTitle);
+    text->addWidget(m_dailyDesc);
+    text->addSpacing(4);
+    text->addWidget(m_dailyAction, 0, Qt::AlignLeft);
+    dailyLay->addWidget(dailyTextWrap, 1);
+    m_dailyCover = new DailyArtwork(m_dailyEntry);
+    m_dailyCover->setObjectName("hpDailyCover");
+    m_dailyCover->setFixedSize(145, 132);
+    m_dailyCover->setAttribute(Qt::WA_TransparentForMouseEvents);
+    dailyLay->addWidget(m_dailyCover, 0, Qt::AlignVCenter);
+    connect(m_dailyEntry, &QPushButton::clicked, this, &HomePage::navigateToDailyRecommendations);
     lay->addWidget(m_dailyEntry);
-    refreshDailyEntry();
-    applyDailyEntryStyle();
-    setDailyCoverPlaceholder();
 
-    // ─── 推荐歌单标题 ─────────────────────────────────
-    auto *titleLabel = new QLabel(I18n::instance().tr("recommend_playlists"), container);
-    titleLabel->setObjectName("hpSectionTitle");
-    lay->addWidget(titleLabel);
-    lay->addSpacing(4);
+    auto *shortcuts = new QHBoxLayout;
+    shortcuts->setSpacing(14);
+    auto makeEntry = [this, container](bool hot, QLabel **caption) {
+        auto *button = new QPushButton(container);
+        button->setObjectName(hot ? "hpHotEntry" : "hpLatestEntry");
+        button->setProperty("discoveryTile", true);
+        button->setCursor(Qt::PointingHandCursor);
+        button->setMinimumHeight(72);
+        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        auto *row = new QHBoxLayout(button);
+        row->setContentsMargins(18, 12, 18, 12);
+        row->setSpacing(14);
+        auto *icon = new QLabel(button);
+        icon->setObjectName(hot ? "hpHotGlyph" : "hpLatestGlyph");
+        icon->setFixedSize(38, 38);
+        icon->setAlignment(Qt::AlignCenter);
+        icon->setAttribute(Qt::WA_TransparentForMouseEvents);
+        row->addWidget(icon);
+        *caption = new QLabel(button);
+        (*caption)->setObjectName("hpShortcutCaption");
+        (*caption)->setAttribute(Qt::WA_TransparentForMouseEvents);
+        row->addWidget(*caption, 1);
+        auto *arrow = new QLabel(QStringLiteral("›"), button);
+        arrow->setObjectName("hpTileArrow");
+        arrow->setAttribute(Qt::WA_TransparentForMouseEvents);
+        row->addWidget(arrow);
+        connect(button, &QPushButton::clicked, this, [this, hot]() { emit navigateToMusicList(hot); });
+        return button;
+    };
+    m_hotEntry = makeEntry(true, &m_hotCaption);
+    m_latestEntry = makeEntry(false, &m_latestCaption);
+    shortcuts->addWidget(m_hotEntry, 1);
+    shortcuts->addWidget(m_latestEntry, 1);
+    lay->addLayout(shortcuts);
 
-    // ─── 卡片横向滚动区 ───────────────────────────────
+    auto *title = new QLabel(I18n::instance().tr("recommend_playlists"), container);
+    title->setObjectName("hpSectionTitle");
+    lay->addWidget(title);
     m_cardContainer = new QWidget(container);
     m_cardContainer->setObjectName("hpCardContainer");
-    m_cardLayout = new QHBoxLayout(m_cardContainer);
-    m_cardLayout->setContentsMargins(0, 4, 0, 0);
-    m_cardLayout->setSpacing(24);
-    m_cardLayout->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-
-    auto *loadingLabel = new QLabel(I18n::instance().tr("loading"), m_cardContainer);
-    loadingLabel->setObjectName("hpLoading");
-    loadingLabel->setAlignment(Qt::AlignCenter);
-    m_cardLayout->addWidget(loadingLabel);
-
+    m_cardLayout = new FlowLayout(m_cardContainer, 16);
+    auto *loading = new QLabel(I18n::instance().tr("loading"), m_cardContainer);
+    loading->setObjectName("hpLoading");
+    loading->setMinimumHeight(80);
+    m_cardLayout->addWidget(loading);
     lay->addWidget(m_cardContainer);
     lay->addStretch();
-
     m_scroll->setWidget(container);
     nekoPolishScrollAreaViewport(m_scroll);
-
     auto *outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
     outer->addWidget(m_scroll);
+    retranslate();
+    applyDailyEntryStyle();
+    setDailyCoverPlaceholder();
 }
 
 void HomePage::refreshData()
 {
-    m_hotReady = false;
+    m_refreshBtn->setEnabled(false);
     m_playlistReady = false;
-    m_latestReady = false;
-    m_hotMusic.clear();
     m_playlists.clear();
-    m_latestMusic.clear();
 
-    fetchHotMusic();
     fetchPlaylists();
-    fetchLatestMusic();
     fetchDailyEntryCover();
 }
 
 void HomePage::retranslate()
 {
+    auto &i18n = I18n::instance();
     refreshDailyEntry();
-
-    auto *tl = findChild<QLabel *>("hpSectionTitle");
-    if (tl) tl->setText(I18n::instance().tr("recommend_playlists"));
-    auto *ll = findChild<QLabel *>("hpLoading");
-    if (ll) ll->setText(I18n::instance().tr("loading"));
-
-    for (auto *card : m_aggCards) {
-        card->retranslate();
-        card->applyTheme();
-    }
+    m_heading->setText(i18n.tr("discoverMusic"));
+    const int hour = QTime::currentTime().hour();
+    m_greeting->setText(i18n.tr(hour < 12 ? "discoverMorning" : hour < 18 ? "discoverAfternoon" : "discoverEvening"));
+    m_hotCaption->setText(i18n.tr("hot_music"));
+    m_latestCaption->setText(i18n.tr("latest_music"));
+    m_hotEntry->setAccessibleName(m_hotCaption->text());
+    m_latestEntry->setAccessibleName(m_latestCaption->text());
+    m_refreshBtn->setToolTip(i18n.tr("refresh"));
+    m_refreshBtn->setAccessibleName(i18n.tr("refresh"));
+    if (auto *label = findChild<QLabel *>("hpSectionTitle"))
+        label->setText(i18n.tr("recommend_playlists"));
+    if (auto *label = findChild<QLabel *>("hpLoading"))
+        label->setText(i18n.tr("loading"));
+    if (auto *label = findChild<QLabel *>("hpEmpty"))
+        label->setText(i18n.tr("discoverEmpty"));
 }
 
 void HomePage::refreshDailyEntry()
 {
-    if (!m_dailyEntry)
-        return;
-    const QString day = QDate::currentDate().toString(QStringLiteral("dd"));
-    const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    if (m_dailyIcon) {
-        QPixmap icon = Icons::renderNamed("Calendar-Empty", 18,
-                                          dark ? QColor(244, 246, 255, 220)
-                                               : QColor(33, 37, 41, 210));
-        if (!icon.isNull()) {
-            QPainter p(&icon);
-            p.setRenderHint(QPainter::TextAntialiasing, true);
-            QFont f = p.font();
-            f.setPixelSize(8);
-            f.setBold(true);
-            p.setFont(f);
-            p.setPen(QColor(230, 57, 80));
-            p.drawText(icon.rect().adjusted(0, 5, 0, 0), Qt::AlignHCenter | Qt::AlignTop, day);
-            p.end();
-        }
-        m_dailyIcon->setPixmap(icon);
-    }
-    if (m_dailyTitle)
-        m_dailyTitle->setText(I18n::instance().tr("dailyRecommend"));
-    if (m_dailyDesc)
-        m_dailyDesc->setText(QStringLiteral("根据你的音乐口味 · 每日更新"));
-
+    auto &i18n = I18n::instance();
+    const bool loggedIn = UserManager::instance().isLoggedIn();
+    m_dailyTitle->setText(i18n.tr("dailyRecommend"));
+    m_dailyDesc->setText(i18n.tr(loggedIn ? "dailyMixDescription" : "dailyMixGuest"));
+    m_dailyAction->setText(i18n.tr(loggedIn ? "dailyMixOpen" : "dailyMixGuestAction") + QStringLiteral("  →"));
+    m_dailyEntry->setAccessibleName(m_dailyTitle->text() + QStringLiteral(" · ") + m_dailyAction->text());
 }
 
 void HomePage::setDailyCoverPlaceholder()
@@ -450,8 +332,8 @@ void HomePage::setDailyCoverPlaceholder()
     QPainterPath path;
     path.addRoundedRect(0, 0, 70, 70, 10, 10);
     QLinearGradient g(0, 0, 70, 70);
-    g.setColorAt(0.0, dark ? QColor(66, 49, 84) : QColor(255, 224, 232));
-    g.setColorAt(1.0, dark ? QColor(45, 34, 64) : QColor(233, 215, 255));
+    g.setColorAt(0.0, dark ? QColor(33, 91, 117) : QColor(159, 225, 241));
+    g.setColorAt(1.0, dark ? QColor(46, 62, 107) : QColor(155, 173, 236));
     p.fillPath(path, g);
     p.setClipPath(path);
     const QPixmap musicIc = Icons::renderNamed("Music", 26,
@@ -534,94 +416,14 @@ void HomePage::fetchDailyEntryCover()
 
 void HomePage::applyDailyEntryStyle()
 {
-    if (!m_dailyEntry)
-        return;
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    if (dark) {
-        m_dailyEntry->setStyleSheet(
-            "QPushButton#hpDailyRecommendEntry {"
-            " background: rgba(28,28,28,0.56);"
-            " border: 1px solid rgba(255,255,255,0.12);"
-            " border-radius: 10px;"
-            " text-align: left;"
-            "}"
-            "QPushButton#hpDailyRecommendEntry:hover {"
-            " background: rgba(40,40,40,0.74);"
-            " border: 1px solid rgba(255,255,255,0.22);"
-            "}"
-            "QPushButton#hpDailyRecommendEntry:pressed {"
-            " background: rgba(48,48,48,0.82);"
-            "}");
-        if (m_dailyTitle)
-            m_dailyTitle->setStyleSheet("QLabel { font-size: 18px; font-weight: 700; color: rgba(245,247,255,0.98); }");
-        if (m_dailyDesc)
-            m_dailyDesc->setStyleSheet("QLabel { font-size: 13px; font-weight: 500; color: rgba(245,247,255,0.68); }");
-    } else {
-        m_dailyEntry->setStyleSheet(
-            "QPushButton#hpDailyRecommendEntry {"
-            " background: rgba(255,255,255,0.90);"
-            " border: 1px solid rgba(0,0,0,0.08);"
-            " border-radius: 10px;"
-            " text-align: left;"
-            "}"
-            "QPushButton#hpDailyRecommendEntry:hover {"
-            " background: rgba(255,255,255,0.98);"
-            " border: 1px solid rgba(0,0,0,0.14);"
-            "}"
-            "QPushButton#hpDailyRecommendEntry:pressed {"
-            " background: rgba(242,243,246,0.96);"
-            "}");
-        if (m_dailyTitle)
-            m_dailyTitle->setStyleSheet("QLabel { font-size: 18px; font-weight: 700; color: rgba(28,28,32,0.98); }");
-        if (m_dailyDesc)
-            m_dailyDesc->setStyleSheet("QLabel { font-size: 13px; font-weight: 500; color: rgba(28,28,32,0.62); }");
-    }
-}
-
-void HomePage::fetchHotMusic()
-{
-    // 与旧版 Home 一致：排行榜不带 limit，卡片上的「X 首」为接口返回的全量条数（仅前 4 条用于封面拼图）
-    QUrl url(QString::fromUtf8("%1/api/music/ranking").arg(Theme::kApiBase));
-    QNetworkRequest req(url);
-    req.setTransferTimeout(5000);
-    QNetworkReply *reply = m_nam.get(req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            m_hotReady = true;
-            rebuildRecommendSection();
-            return;
-        }
-        QByteArray rawData = reply->readAll();
-
-        QtConcurrent::run([rawData]() {
-            auto doc = QJsonDocument::fromJson(rawData);
-            if (!doc.object().value("success").toBool()) {
-                return QList<MusicInfo>();
-            }
-            QList<MusicInfo> result;
-            auto arr = doc.object().value("data").toArray();
-            result.reserve(arr.size());
-            for (int i = 0; i < arr.size(); ++i) {
-                auto obj = arr[i].toObject();
-                MusicInfo info;
-                info.id = obj.value("id").toInt();
-                info.title = obj.value("title").toString();
-                info.artist = obj.value("artist").toString();
-                info.album = obj.value("album").toString();
-                info.duration = obj.value("duration").toInt();
-                info.maxQuality = obj.value("maxQuality").toString();
-                info.coverUrl = QString::fromUtf8("%1/api/music/cover/%2")
-                                    .arg(Theme::kApiBase).arg(info.id);
-                result.append(info);
-            }
-            return result;
-        }).then(this, [this](QList<MusicInfo> musicList) {
-            m_hotMusic = std::move(musicList);
-            m_hotReady = true;
-            rebuildRecommendSection();
-        });
-    });
+    const QColor accent = dark ? QColor(Theme::kLavender) : QColor(Theme::kLavenderDk);
+    m_refreshBtn->setIcon(Icons::iconNamed("Refresh", 18, accent, accent));
+    if (auto *icon = findChild<QLabel *>("hpHotGlyph"))
+        icon->setPixmap(Icons::renderNamed("Eq", 24, accent));
+    if (auto *icon = findChild<QLabel *>("hpLatestGlyph"))
+        icon->setPixmap(Icons::renderNamed("Music", 24, accent));
+    m_dailyEntry->update();
 }
 
 void HomePage::fetchPlaylists()
@@ -672,112 +474,29 @@ void HomePage::fetchPlaylists()
     });
 }
 
-void HomePage::fetchLatestMusic()
-{
-    // 与旧版 HomeView 一致：拉一批用于统计条数；卡片仍只展示前 4 张封面
-    QUrl url(QString::fromUtf8("%1/api/music/latest?limit=300").arg(Theme::kApiBase));
-    QNetworkRequest req(url);
-    req.setTransferTimeout(5000);
-    QNetworkReply *reply = m_nam.get(req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            m_latestReady = true;
-            rebuildRecommendSection();
-            return;
-        }
-        QByteArray rawData = reply->readAll();
-
-        QtConcurrent::run([rawData]() {
-            auto doc = QJsonDocument::fromJson(rawData);
-            if (!doc.object().value("success").toBool()) {
-                return QList<MusicInfo>();
-            }
-            QList<MusicInfo> result;
-            auto arr = doc.object().value("data").toArray();
-            result.reserve(arr.size());
-            for (int i = 0; i < arr.size(); ++i) {
-                auto obj = arr[i].toObject();
-                MusicInfo info;
-                info.id = obj.value("id").toInt();
-                info.title = obj.value("title").toString();
-                info.artist = obj.value("artist").toString();
-                info.album = obj.value("album").toString();
-                info.duration = obj.value("duration").toInt();
-                info.maxQuality = obj.value("maxQuality").toString();
-                info.coverUrl = QString::fromUtf8("%1/api/music/cover/%2")
-                                    .arg(Theme::kApiBase).arg(info.id);
-                result.append(info);
-            }
-            return result;
-        }).then(this, [this](QList<MusicInfo> musicList) {
-            m_latestMusic = std::move(musicList);
-            m_latestReady = true;
-            rebuildRecommendSection();
-        });
-    });
-}
-
 void HomePage::rebuildRecommendSection()
 {
-    if (!m_hotReady || !m_playlistReady || !m_latestReady) return;
-
-    // 移除"加载中"标签
-    auto *loadingLabel = findChild<QLabel *>("hpLoading");
-    if (loadingLabel) {
-        loadingLabel->hide();
-        loadingLabel->deleteLater();
-    }
-
-    QLayoutItem *item;
-    while ((item = m_cardLayout->takeAt(0)) != nullptr) {
+    if (!m_playlistReady)
+        return;
+    m_refreshBtn->setEnabled(true);
+    while (auto *item = m_cardLayout->takeAt(0)) {
         delete item->widget();
         delete item;
     }
-    m_aggCards.clear();
-
-    // ── 热门音乐聚合卡片 ──
-    {
-        int firstId = m_hotMusic.isEmpty() ? 0 : m_hotMusic.first().id;
-        auto *card = new MusicAggregateCard(MusicAggregateCard::Hot, firstId, m_hotMusic.size(), m_cardContainer);
-        for (int i = 0; i < qMin(m_hotMusic.size(), 4); ++i) {
-            card->setCover(i, m_hotMusic[i].coverUrl);
-        }
-        m_aggCards.append(card);
-        m_cardLayout->addWidget(card);
-    }
-
-    // ── 最新音乐聚合卡片 ──
-    {
-        int firstId = m_latestMusic.isEmpty() ? 0 : m_latestMusic.first().id;
-        auto *card = new MusicAggregateCard(MusicAggregateCard::Latest, firstId, m_latestMusic.size(), m_cardContainer);
-        for (int i = 0; i < qMin(m_latestMusic.size(), 4); ++i) {
-            card->setCover(i, m_latestMusic[i].coverUrl);
-        }
-        m_aggCards.append(card);
-        m_cardLayout->addWidget(card);
-    }
-
-    // ── 推荐歌单卡片（原有样式不动）──
     for (const auto &info : m_playlists) {
         auto *card = new PlaylistCard(info, m_cardContainer);
         connect(card, &PlaylistCard::clicked, this, &HomePage::navigateToPlaylist);
-
-        auto *eff = new QGraphicsOpacityEffect(card);
-        eff->setOpacity(0.0);
-        card->setGraphicsEffect(eff);
-        auto *anim = new QPropertyAnimation(eff, "opacity");
-        anim->setDuration(300);
-        anim->setStartValue(0.0);
-        anim->setEndValue(1.0);
-        anim->setEasingCurve(QEasingCurve::OutCubic);
-        connect(anim, &QPropertyAnimation::finished, card, [card]() {
-            card->setGraphicsEffect(nullptr);
-        });
-        anim->start(QAbstractAnimation::DeleteWhenStopped);
-
         m_cardLayout->addWidget(card);
     }
+    if (m_playlists.isEmpty()) {
+        auto *empty = new QLabel(I18n::instance().tr("discoverEmpty"), m_cardContainer);
+        empty->setObjectName("hpEmpty");
+        empty->setWordWrap(true);
+        empty->setFixedSize(340, 90);
+        m_cardLayout->addWidget(empty);
+    }
+    m_cardLayout->invalidate();
+    m_cardContainer->updateGeometry();
 }
 
-void HomePage::paintEvent(QPaintEvent *) { /* 透明，由父窗口渐变背景透出 */ }
+void HomePage::paintEvent(QPaintEvent *) {}

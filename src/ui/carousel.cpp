@@ -25,7 +25,7 @@
 
 namespace {
 const QColor kArrowNormal = QColor(245, 240, 255, 160);
-const QColor kArrowActive = QColor(240, 94, 122, 230);
+const QColor kArrowActive = QColor(64, 197, 241, 230);
 }
 
 Carousel::Carousel(QWidget *parent) : QWidget(parent)
@@ -228,7 +228,7 @@ void Carousel::updateDisplay()
     ph.fill(Qt::transparent);
     QPainter p(&ph);
     QLinearGradient g(0, 0, ph.width(), ph.height());
-    g.setColorAt(0.0, QColor(230, 57, 80, 80));
+    g.setColorAt(0.0, QColor(22, 119, 184, 80));
     g.setColorAt(0.5, QColor(242, 172, 185, 50));
     g.setColorAt(1.0, QColor(36, 31, 49, 200));
     p.fillRect(ph.rect(), g);

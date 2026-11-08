@@ -75,6 +75,27 @@ cmake --build build --parallel
 ctest --test-dir build/linux-debug --output-on-failure
 ```
 
+### 界面与主题
+
+客户端采用统一的冰蓝强调色、雾面侧栏和圆角悬浮播放栏，支持浅色、深色及跟随系统。
+首页包含每日推荐、热门/最新音乐入口和自动换行的歌单网格；歌单导入集中在侧栏「导入歌单」菜单。
+「设置 → 外观」可以选择默认氛围、自定义图片或纯色背景。
+
+玻璃效果在应用内绘制：背景在尺寸、图片或主题变化时进行降采样模糊并缓存，
+侧栏、播放栏和设置面板共享缓存。滚动时不隐藏控件、不递归截取窗口，也不会模糊文字。
+
+可选 UI 回归测试需要 Qt Test，使用独立临时配置和离线数据，不会读取真实账户或曲库：
+
+```bash
+cmake -S . -B build-linux -DBUILD_TESTING=ON
+cmake --build build-linux --parallel
+ctest --test-dir build-linux --output-on-failure
+
+# Linux：可选保存深浅主题、紧凑窗口、列表、播放页等截图
+QT_QPA_PLATFORM=offscreen NEKO_UI_ARTIFACT_DIR=/tmp/nekomusic-ui-preview \
+  ./build-linux/tests/NekoMusicUiSmoke
+```
+
 ### 安装（Linux）
 
 ```bash

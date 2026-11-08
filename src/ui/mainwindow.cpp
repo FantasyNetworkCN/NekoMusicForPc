@@ -1,8 +1,8 @@
 /**
  * @file mainwindow.cpp
- * @brief 主窗口实现 — SPlayer 式布局
+ * @brief 主窗口实现 — 浮层玻璃布局
  *
- * 侧栏全高 + 内容区顶栏 + 底栏播放器；简约扁平表面。
+ * 雾面侧栏 + 清晰内容区 + 悬浮播放器；背景统一缓存。
  */
 
 #include "mainwindow.h"
@@ -447,7 +447,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     });
 
     setWindowTitle(QStringLiteral("NekoMusic"));
-    resize(1000, 680);
+    resize(1200, 800);
     setMinimumSize(960, 640);
     scheduleShellBackdropRebuild(0);
 
@@ -493,8 +493,8 @@ void MainWindow::setupUi()
     m_shellBackdrop->lower();
 
     auto *mainV = new QVBoxLayout(central);
-    mainV->setContentsMargins(0, 0, 0, 0);
-    mainV->setSpacing(0);
+    mainV->setContentsMargins(12, 12, 12, 12);
+    mainV->setSpacing(14);
 
     // 中间区域：侧栏（全高）+ 内容列（顶栏 + 页面）
     m_midWidget = new QWidget(this);
@@ -502,7 +502,7 @@ void MainWindow::setupUi()
     m_midWidget->setAttribute(Qt::WA_StyledBackground, true);
     auto *midH = new QHBoxLayout(m_midWidget);
     midH->setContentsMargins(0, 0, 0, 0);
-    midH->setSpacing(0);
+    midH->setSpacing(8);
 
     m_apiClient = new ApiClient(this);
     m_sidebar = new Sidebar(m_apiClient, this);
@@ -684,6 +684,7 @@ void MainWindow::setupUi()
             switchPage(m_downloadPage);
         }
         else if (key == "search") switchPage(m_searchPage);
+        else if (key == "settings") switchPage(m_settingsPage);
     });
     connect(m_favoritesPage, &FavoritesPage::playRequested, this, &MainWindow::playMusicById);
     connect(m_favoritesPage, &FavoritesPage::unfavoriteRequested, this, &MainWindow::toggleFavorite);
@@ -1477,6 +1478,9 @@ void MainWindow::applyTheme()
         qApp->setStyleSheet(style);
     if (m_shellBackdrop)
         m_shellBackdrop->update();
+    m_shellBackdropCache = QPixmap();
+    m_shellBackdropCacheSize = QSize();
+    scheduleShellBackdropRebuild(0);
     updateChromeForShellBackdrop();
 }
 
@@ -1507,7 +1511,7 @@ void MainWindow::scheduleShellBackdropRebuild(int delayMs)
 
 void MainWindow::rebuildShellBackdropCache()
 {
-    if (!m_shellBackdrop || !ShellBackdropSettings::instance().usesImageBackdrop())
+    if (!m_shellBackdrop)
         return;
 
     const QSize target = cappedBackdropCacheSize(m_shellBackdrop->size());
@@ -1516,22 +1520,31 @@ void MainWindow::rebuildShellBackdropCache()
     if (m_shellBackdropCacheSize == target && !m_shellBackdropCache.isNull())
         return;
 
-    const QPixmap source = ShellBackdropSettings::instance().cachedSourcePixmap();
-    if (source.isNull())
-        return;
-
-    QPixmap cover = source.scaled(target, Qt::KeepAspectRatioByExpanding, Qt::FastTransformation);
-    if (cover.width() > target.width() || cover.height() > target.height()) {
-        const int x = (cover.width() - target.width()) / 2;
-        const int y = (cover.height() - target.height()) / 2;
-        cover = cover.copy(x, y, target.width(), target.height());
-    } else if (cover.size() != target) {
-        cover = cover.scaled(target, Qt::IgnoreAspectRatio, Qt::FastTransformation);
+    auto &settings = ShellBackdropSettings::instance();
+    const bool dark = Theme::ThemeManager::instance().isDarkMode();
+    QPixmap cover(target);
+    cover.fill(Qt::transparent);
+    {
+        QPainter painter(&cover);
+        if (settings.kind() == ShellBackdropSettings::Kind::SolidColor) {
+            GlassPaint::paintMainWindowSolidBackdrop(painter, cover.rect(), settings.solidColor());
+        } else if (settings.kind() == ShellBackdropSettings::Kind::CustomImage) {
+            const QPixmap source = settings.cachedSourcePixmap();
+            const QPixmap soft = GlassPaint::blurredPixmap(source, target, 16);
+            GlassPaint::paintMainWindowPagesImageBackdrop(painter, cover.rect(), soft, dark);
+        } else {
+            GlassPaint::paintMainWindowDeepBackdrop(painter, cover.rect(), dark);
+        }
     }
 
     m_shellBackdropCache = cover;
     m_shellBackdropCacheSize = target;
+    setProperty("nekoFrostedBackdrop",
+                settings.kind() == ShellBackdropSettings::Kind::SolidColor
+                    ? cover : GlassPaint::blurredPixmap(cover, target, 32));
     m_shellBackdrop->update();
+    updateChromeForShellBackdrop();
+    centralWidget()->update();
 }
 
 QPixmap MainWindow::shellBackdropPixmapForSize(const QSize &size)
@@ -1578,7 +1591,7 @@ void MainWindow::paintShellBackdrop(QPainter &p, const QRect &r) const
         GlassPaint::paintMainWindowDeepBackdrop(p, r, dark);
         return;
     }
-    GlassPaint::paintMainWindowPagesImageBackdrop(p, r, m_shellBackdropCache, dark);
+    p.drawPixmap(r, m_shellBackdropCache);
 }
 
 void MainWindow::updateChromeForShellBackdrop()

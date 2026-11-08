@@ -1,0 +1,153 @@
+/* 雾面主题的共享组件规则；@TOKEN@ 由 ThemeManager 按明暗模式替换。 */
+QWidget { color: @INK@; }
+QLabel { background: transparent; }
+QPushButton { outline: none; }
+QPushButton:focus { border: 1px solid @ACCENT@; }
+QPushButton:disabled { color: @MUTED@; }
+QToolTip { border-color: @LINE@; padding: 8px 12px; }
+QMenu { background: @POPUP@; border-color: @LINE@; border-radius: 12px; padding: 7px; }
+QMenu::item { padding: 9px 26px 9px 12px; border-radius: 6px; }
+QMenu::item:selected { background: @SELECTED@; color: @INK@; }
+
+#tbSearchWrap {
+    background: @SURFACE@;
+    border: 1px solid @LINE@;
+    border-radius: 14px;
+    min-height: 38px;
+}
+#tbSearchWrap:hover { background: @HOVER@; border-color: @LINE@; }
+#tbSearchWrap[searchFocus="true"] { border-color: @ACCENT@; background: @SURFACE@; }
+#tbSearchInner { color: @INK@; font-size: 13px; }
+#tbAvatarWidget { background: @SURFACE@; border-color: @LINE@; border-radius: 16px; }
+#tbAvatarWidget:hover { background: @HOVER@; border-color: @ACCENT@; }
+#tbIconBtn { background: transparent; border-radius: 10px; }
+#tbIconBtn:hover, #tbMinBtn:hover, #tbMaxBtn:hover { background: @HOVER@; }
+#tbCloseBtn:hover { background: rgba(242, 100, 100, 50); }
+#tbCloseBtn:pressed { background: rgba(242, 100, 100, 90); }
+
+#sbLogoRow { border: none; }
+#sbLogoText { font-size: 19px; font-weight: 700; color: @INK@; }
+#sbLibraryLabel {
+    color: @MUTED@;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    padding: 8px 12px 10px;
+}
+#sbNavItem {
+    border: 1px solid transparent;
+    border-radius: 12px;
+    padding: 0 12px;
+    color: @SECONDARY@;
+    font-size: 13px;
+}
+#sbNavItem:hover { background: @HOVER@; border-color: transparent; color: @INK@; }
+#sbNavItem[active="true"] {
+    background: @SELECTED@;
+    border: 1px solid @ACCENTLINE@;
+    color: @ACCENT@;
+    font-weight: 600;
+}
+#sbNavItem:focus { border-color: @ACCENT@; }
+#sbDivider { background: @LINE@; margin: 8px 12px; }
+#sbPlaylistTitle { color: @SECONDARY@; padding: 14px 12px 6px; font-size: 11px; }
+#sbCreatePlaylist, #sbImportPlaylist {
+    background: transparent;
+    border: 1px solid @LINE@;
+    border-radius: 10px;
+    padding: 0 12px;
+    text-align: left;
+    color: @SECONDARY@;
+    font-size: 12px;
+}
+#sbCreatePlaylist:hover, #sbImportPlaylist:hover { background: @HOVER@; color: @INK@; }
+#sbImportPlaylist { padding-left: 12px; padding-right: 24px; }
+#sbImportPlaylist::menu-indicator { subcontrol-origin: padding; subcontrol-position: right center; right: 12px; }
+#sbEmpty, #sbEmptyPlaylist { color: @MUTED@; padding: 10px; font-size: 11px; }
+
+#hpHeading { color: @INK@; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+#hpSubtitle { color: @SECONDARY@; font-size: 13px; }
+#hpEyebrow { color: @ACCENT@; font-size: 10px; font-weight: 700; letter-spacing: 1.7px; }
+#hpDailyTitle { color: @INK@; font-size: 28px; font-weight: 700; }
+#hpDailyAction {
+    background: @CTA@;
+    color: @CTATEXT@;
+    border-radius: 12px;
+    padding: 0 16px;
+    font-size: 12px;
+    font-weight: 600;
+}
+#hpSectionTitle { color: @INK@; font-size: 19px; font-weight: 700; }
+QPushButton[discoveryTile="true"] {
+    background: @SURFACE@;
+    border: 1px solid @LINE@;
+    border-radius: 16px;
+    padding: 0;
+}
+QPushButton[discoveryTile="true"]:hover { background: @HOVER@; border-color: @ACCENTLINE@; }
+QPushButton[discoveryTile="true"]:pressed { background: @SELECTED@; }
+QPushButton[discoveryTile="true"]:focus { border-color: @ACCENT@; }
+#hpHotGlyph, #hpLatestGlyph { background: @SELECTED@; border-radius: 12px; }
+#hpShortcutCaption { color: @INK@; font-size: 14px; font-weight: 600; }
+#hpTileArrow { color: @MUTED@; font-size: 24px; }
+#hpRefreshBtn { background: @SURFACE@; border: 1px solid @LINE@; border-radius: 12px; }
+#hpRefreshBtn:hover { background: @HOVER@; border-color: @ACCENTLINE@; }
+#hpRefreshBtn:focus { border-color: @ACCENT@; }
+#hpEmpty, #hpLoading { color: @SECONDARY@; font-size: 13px; }
+#plName { color: @INK@; font-size: 13px; font-weight: 600; }
+
+#pageTitle, #settingsTitle { color: @INK@; font-size: 28px; font-weight: 700; }
+#settingsTabBtn { background: transparent; border: 1px solid transparent; border-radius: 12px; color: @SECONDARY@; }
+#settingsTabBtn:hover { background: @HOVER@; color: @INK@; }
+#settingsTabBtn:checked { background: @SELECTED@; color: @ACCENT@; border-color: @ACCENTLINE@; }
+#settingsInfo { color: @SECONDARY@; font-size: 13px; }
+#settingsLabel { color: @INK@; font-size: 13px; }
+#settingsDivider { background: @LINE@; border: none; max-height: 1px; min-height: 1px; }
+#settingsLinkBtn { color: @ACCENT@; }
+#settingsCombo { background: @SURFACE@; border-color: @LINE@; color: @INK@; border-radius: 10px; }
+#settingsCombo QAbstractItemView { background: @POPUP@; color: @INK@; border-color: @LINE@; }
+#settingsInput, #dialogEdit, QTextEdit, QLineEdit {
+    border-color: @LINE@;
+    border-radius: 10px;
+    color: @INK@;
+    selection-background-color: @ACCENT@;
+}
+#settingsInput:focus, #dialogEdit:focus, QTextEdit:focus, QLineEdit:focus { border-color: @ACCENT@; }
+/* 搜索输入由外层提供焦点环，内部保持无框。 */
+#tbSearchInner, #tbSearchInner:focus { border: none; background: transparent; }
+
+#pbMainRow, #pbLeft, #pbCenter, #pbRight { background: transparent; }
+#pbSong { color: @INK@; font-size: 14px; font-weight: 600; }
+#pbArtist, #pbLyric, #pbTime, #pbTimeSep { color: @SECONDARY@; }
+#pbPlayBtn { background: #8ADFF5; border: 1px solid rgba(255,255,255,70); border-radius: 22px; }
+#pbPlayBtn:hover { background: #B4EEFC; }
+#pbPlayBtn:pressed { background: #40C5F1; }
+#pbPlayBtn:focus { border-color: @INK@; }
+#pbVolumePanel { background: @POPUP@; border-color: @LINE@; border-radius: 16px; }
+#pbQualitySelector {
+    background: @SURFACE@;
+    border: 1px solid @LINE@;
+    border-radius: 9px;
+    padding: 0 8px;
+    color: @INK@;
+    font-size: 11px;
+}
+#pbQualitySelector:disabled { color: @MUTED@; }
+#pbQualitySelector:hover { border-color: @ACCENTLINE@; }
+#pbQualitySelector:focus { border-color: @ACCENT@; }
+#pbQualitySelector::drop-down { border: none; width: 18px; }
+#pbQualitySelector QAbstractItemView {
+    background: @POPUP@;
+    color: @INK@;
+    border: 1px solid @LINE@;
+    selection-background-color: @SELECTED@;
+    selection-color: @INK@;
+    padding: 4px;
+}
+
+QScrollBar:vertical { background: transparent; width: 6px; margin: 2px 0; }
+QScrollBar::handle:vertical { background: @SCROLL@; min-height: 32px; border-radius: 3px; }
+QScrollBar::handle:vertical:hover { background: @ACCENT@; }
+QScrollBar:horizontal { background: transparent; height: 6px; margin: 0 2px; }
+QScrollBar::handle:horizontal { background: @SCROLL@; min-width: 32px; border-radius: 3px; }
+QScrollBar::handle:horizontal:hover { background: @ACCENT@; }

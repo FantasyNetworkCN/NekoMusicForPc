@@ -39,14 +39,14 @@ constexpr int kReplyIndent = 44;
 constexpr int kCardRadius = 8;
 
 /** 与播放队列抽屉同一主色（Theme 未暴露 accent 常量） */
-constexpr QColor kPrimary(230, 57, 80);
+constexpr QColor kPrimary(22, 119, 184);
 
 bool isDark() {
     return Theme::ThemeManager::instance().isDarkMode();
 }
 
 QString themeTextMain() {
-    return isDark() ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    return isDark() ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
 }
 
 QString themeTextSub() {
@@ -324,8 +324,8 @@ void CommentPanel::applyPanelChrome()
         m_scroll->setStyleSheet(QStringLiteral(
             "QScrollArea#cmtScroll { border: none; background: transparent; }"
             "QScrollBar:vertical { width: 5px; background: transparent; margin: 2px 0 4px 0; }"
-            "QScrollBar::handle:vertical { background: rgba(230,57,80,%1); border-radius: 3px; min-height: 40px; }"
-            "QScrollBar::handle:vertical:hover { background: rgba(230,57,80,%2); }"
+            "QScrollBar::handle:vertical { background: rgba(22, 119, 184,%1); border-radius: 3px; min-height: 40px; }"
+            "QScrollBar::handle:vertical:hover { background: rgba(22, 119, 184,%2); }"
             "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
             "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }")
                                     .arg(dark ? 70 : 82)
@@ -347,7 +347,7 @@ void CommentPanel::applyPanelChrome()
 
     if (m_submitBtn)
         m_submitBtn->setStyleSheet(QStringLiteral(
-            "QPushButton { background: #E63950; color: #ffffff; border: none; border-radius: 8px; "
+            "QPushButton { background: #1677B8; color: #ffffff; border: none; border-radius: 8px; "
             "padding: 0 16px; font-size: 12px; }"
             "QPushButton:hover { background: %1; }"
             "QPushButton:disabled { background: %2; color: rgba(255,255,255,0.45); }")
@@ -619,7 +619,7 @@ void CommentPanel::addCommentCard(QVBoxLayout *layout, const QVariantMap &commen
     const QString actionStyle = QStringLiteral(
         "QPushButton { border: none; background: transparent; border-radius: 6px; font-size: 11px; "
         "color: %1; padding: 2px 8px; }"
-        "QPushButton:hover { background: rgba(230,57,80,0.18); color: %2; }")
+        "QPushButton:hover { background: rgba(22, 119, 184,0.18); color: %2; }")
         .arg(themeTextSub(), themeAccent());
 
     auto *actions = new QHBoxLayout();

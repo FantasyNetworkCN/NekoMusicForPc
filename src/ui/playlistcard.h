@@ -24,10 +24,13 @@ struct PlaylistInfo {
 class PlaylistCard : public QWidget
 {
     Q_OBJECT
+    Q_PROPERTY(qreal hoverProgress READ hoverProgress WRITE setHoverProgress)
 
 public:
     explicit PlaylistCard(const PlaylistInfo &info, QWidget *parent = nullptr);
     int playlistId() const;
+    qreal hoverProgress() const { return m_hoverProgress; }
+    void setHoverProgress(qreal value) { m_hoverProgress = value; update(); }
 
 signals:
     void clicked(int id);
@@ -37,6 +40,8 @@ protected:
     void leaveEvent(QEvent *) override;
     void mousePressEvent(QMouseEvent *) override;
     void paintEvent(QPaintEvent *) override;
+    void keyPressEvent(QKeyEvent *) override;
+    void changeEvent(QEvent *) override;
 
 private:
     void loadCover();
@@ -46,5 +51,7 @@ private:
     QLabel *m_name       = nullptr;
     QPixmap m_coverPixmap;
     bool m_hovered       = false;
+    qreal m_hoverProgress = 0;
+    class QPropertyAnimation *m_hoverAnimation = nullptr;
     QMetaObject::Connection m_coverConn;
 };

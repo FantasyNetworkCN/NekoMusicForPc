@@ -93,7 +93,7 @@ protected:
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing, true);
         const bool dark = Theme::ThemeManager::instance().isDarkMode();
-        QColor bg = dark ? QColor(255, 255, 255, 28) : QColor(230, 57, 80, 28);
+        QColor bg = dark ? QColor(255, 255, 255, 28) : QColor(22, 119, 184, 28);
         p.setPen(Qt::NoPen);
         p.setBrush(bg);
         p.drawRoundedRect(rect().adjusted(4, 2, -4, -2), 8, 8);
@@ -112,7 +112,7 @@ void SongContextMenuRow::applyTheme()
     const bool off = m_entry.disabled;
     const QString fg = off ? (dark ? QStringLiteral("rgba(244,246,255,0.38)")
                                    : QStringLiteral("rgba(33,37,41,0.35)"))
-                           : (dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529"));
+                           : (dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45"));
     const QColor ic = off ? (dark ? QColor(244, 246, 255, 90) : QColor(33, 37, 41, 85))
                           : (dark ? QColor(244, 246, 255, 210) : QColor(33, 37, 41, 210));
     if (m_iconLbl && m_entry.iconName)

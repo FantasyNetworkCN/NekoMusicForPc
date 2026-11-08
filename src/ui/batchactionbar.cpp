@@ -350,10 +350,10 @@ void BatchActionBar::retranslate()
 void BatchActionBar::applyTheme()
 {
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
 
-    const QString secondaryBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
-    const QString secondaryFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    const QString secondaryBg = dark ? QStringLiteral("#223149") : QStringLiteral("#E9F0F8");
+    const QString secondaryFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
     const QColor secondaryIc = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
     const QColor primaryIc = dark ? QColor(255, 255, 255) : QColor(255, 255, 255);
 
@@ -365,7 +365,7 @@ void BatchActionBar::applyTheme()
     // 与页面原有按钮排保持同一套胶囊样式：主操作（加入歌单）用品牌色，其余用次级底色
     const QString primaryStyle = QStringLiteral(
         "QPushButton {"
-        "  background: #D84B63;"
+        "  background: #1677B8;"
         "  color: #ffffff;"
         "  border: none;"
         "  border-radius: 20px;"
@@ -373,8 +373,8 @@ void BatchActionBar::applyTheme()
         "  font-weight: 500;"
         "  padding: 0 20px;"
         "}"
-        "QPushButton:hover { background: #ff5070; }"
-        "QPushButton:disabled { background: rgba(230,57,80,0.35); color: rgba(255,255,255,0.6); }");
+        "QPushButton:hover { background: #218CC8; }"
+        "QPushButton:disabled { background: rgba(22, 119, 184,0.35); color: rgba(255,255,255,0.6); }");
 
     const QString secondaryStyle = QStringLiteral(
         "QPushButton {"
@@ -386,7 +386,7 @@ void BatchActionBar::applyTheme()
         "  font-weight: 500;"
         "  padding: 0 20px;"
         "}"
-        "QPushButton:hover:enabled { background: rgba(230,57,80,0.15); }"
+        "QPushButton:hover:enabled { background: rgba(22, 119, 184,0.15); }"
         "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
                                         .arg(secondaryBg, secondaryFg);
 
@@ -414,7 +414,7 @@ void BatchActionBar::applyTheme()
                 "  font-weight: 500;"
                 "  padding: 0 14px;"
                 "}"
-                "QPushButton:hover { background: rgba(230,57,80,0.15); }")
+                "QPushButton:hover { background: rgba(22, 119, 184,0.15); }")
                                             .arg(secondaryBg, secondaryFg));
             m_triggerBtn->setIcon(Icons::renderNamed("Menu", 16, secondaryIc));
             m_triggerBtn->setIconSize(QSize(16, 16));

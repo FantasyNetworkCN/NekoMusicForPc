@@ -134,9 +134,9 @@ protected:
             return;
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing, true);
-        QColor bg(230, 57, 80, 31);
+        QColor bg(22, 119, 184, 31);
         if (!Theme::ThemeManager::instance().isDarkMode())
-            bg = QColor(230, 57, 80, 22);
+            bg = QColor(22, 119, 184, 22);
         p.setPen(Qt::NoPen);
         p.setBrush(bg);
         p.drawRoundedRect(rect().adjusted(2, 1, -2, -1), kRowRadius, kRowRadius);
@@ -624,7 +624,7 @@ void AddToPlaylistDialog::setupUi()
 void AddToPlaylistDialog::applyTheme()
 {
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
     const QString metaFg = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.55)");
     const QString emptyFg = metaFg;
 

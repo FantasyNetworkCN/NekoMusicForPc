@@ -85,7 +85,7 @@ protected:
 
     void enterEvent(QEnterEvent *) override
     {
-        setStyleSheet(QStringLiteral("SearchArtistTile { background: rgba(230,57,80,0.08); border-radius: 16px; }"));
+        setStyleSheet(QStringLiteral("SearchArtistTile { background: rgba(22, 119, 184,0.08); border-radius: 16px; }"));
     }
 
     void leaveEvent(QEvent *) override { setStyleSheet(QString()); }
@@ -394,10 +394,10 @@ void SearchPage::setupUi()
 void SearchPage::applyPageStyle()
 {
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
     const QString metaFg = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.72)");
     const QString statusFg = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.55)");
-    const QString tabBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
+    const QString tabBg = dark ? QStringLiteral("#223149") : QStringLiteral("#E9F0F8");
     const QString tabSelBg = dark ? QStringLiteral("#3a3a3a") : QStringLiteral("#ffffff");
 
     if (m_keywordLbl) {
@@ -459,7 +459,7 @@ void SearchPage::applyPageStyle()
             "  font-weight: 500;"
             "  padding: 0 24px;"
             "}"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }"
+            "QPushButton:hover { background: rgba(22, 119, 184,0.15); }"
             "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
                                          .arg(tabBg, titleFg));
     }
@@ -470,7 +470,7 @@ void SearchPage::applyPageStyle()
         m_songsPlayAllBtn->setIconSize(QSize(18, 18));
         m_songsPlayAllBtn->setStyleSheet(QStringLiteral(
             "QPushButton {"
-            "  background: #D84B63;"
+            "  background: #1677B8;"
             "  color: #ffffff;"
             "  border: none;"
             "  border-radius: 20px;"
@@ -478,8 +478,8 @@ void SearchPage::applyPageStyle()
             "  font-weight: 500;"
             "  padding: 0 20px;"
             "}"
-            "QPushButton:hover { background: #ff5070; }"
-            "QPushButton:disabled { background: rgba(230,57,80,0.35); color: rgba(255,255,255,0.6); }"));
+            "QPushButton:hover { background: #218CC8; }"
+            "QPushButton:disabled { background: rgba(22, 119, 184,0.35); color: rgba(255,255,255,0.6); }"));
     }
     if (m_songsDownloadAllBtn) {
         m_songsDownloadAllBtn->setIcon(Icons::renderNamed("Download", 18, secondaryIc));
@@ -494,7 +494,7 @@ void SearchPage::applyPageStyle()
             "  font-weight: 500;"
             "  padding: 0 20px;"
             "}"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }"
+            "QPushButton:hover { background: rgba(22, 119, 184,0.15); }"
             "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
                                              .arg(tabBg, titleFg));
     }
@@ -511,7 +511,7 @@ void SearchPage::applyPageStyle()
             "  font-weight: 500;"
             "  padding: 0 20px;"
             "}"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }"
+            "QPushButton:hover { background: rgba(22, 119, 184,0.15); }"
             "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
                                                  .arg(tabBg, titleFg));
     }
@@ -530,7 +530,7 @@ void SearchPage::applyPageStyle()
             "  font-weight: 500;"
             "  padding: 0 20px;"
             "}"
-            "QPushButton:hover:enabled { background: rgba(230,57,80,0.15); }"
+            "QPushButton:hover:enabled { background: rgba(22, 119, 184,0.15); }"
             "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
                                                    .arg(tabBg, titleFg));
     }

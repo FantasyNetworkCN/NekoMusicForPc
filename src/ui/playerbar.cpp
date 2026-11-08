@@ -12,6 +12,7 @@
 #include "theme/theme.h"
 #include "theme/thememanager.h"
 #include "ui/glasswidget.h"
+#include "ui/glasspaint.h"
 #include "core/playerengine.h"
 #include "core/playlistmanager.h"
 #include "ui/svgicon.h"
@@ -445,7 +446,7 @@ QPixmap makeUnknownCover(int size, bool dark)
     QPainterPath path;
     path.addRoundedRect(0, 0, size, size, kPbCoverRadius, kPbCoverRadius);
     p.fillPath(path, dark ? QColor(26, 26, 46) : QColor(255, 240, 244));
-    p.setPen(dark ? QColor(230, 57, 80, 200) : QColor(240, 94, 122, 180));
+    p.setPen(dark ? QColor(22, 119, 184, 200) : QColor(64, 197, 241, 180));
     QFont f = p.font();
     f.setPixelSize(13);
     f.setWeight(QFont::DemiBold);
@@ -457,7 +458,7 @@ QPixmap makeUnknownCover(int size, bool dark)
 
 
 // 与 old PlayerBar.vue 的 .control-btn / .play-btn 观感对齐：更大、更亮
-const QColor kPbIconAccent = QColor(255, 143, 158, 255);
+const QColor kPbIconAccent = QColor(138, 223, 245, 255);
 const QColor kPbPlayGlyph = QColor(18, 10, 14, 255);
 const QColor kPbHeartOn = QColor(255, 69, 69, 255);
 /** 对齐 SPlayer MainPlayer：控制键 38px、播放键 44px */
@@ -563,7 +564,7 @@ void PlayerBarInkButton::paintEvent(QPaintEvent *event)
         painter.translate(c);
 
         const bool dark = Theme::ThemeManager::instance().isDarkMode();
-        const QColor track = dark ? QColor(230, 57, 80, 72) : QColor(214, 90, 108, 90);
+        const QColor track = dark ? QColor(22, 119, 184, 72) : QColor(214, 90, 108, 90);
         QPen penTrack(track, 2.0, Qt::SolidLine, Qt::RoundCap);
         painter.setPen(penTrack);
         painter.drawArc(-R, -R, 2 * R, 2 * R, 0, 360 * 16);
@@ -741,11 +742,18 @@ void PlayerBar::layoutCenterControls()
         return;
 
     const QSize hint = m_pbCenter->sizeHint();
-    const int cw = qMax(m_pbCenter->width(), hint.width());
+    const int cw = hint.width();
     const int ch = qMax(m_pbCenter->height(), hint.height());
     if (m_pbCenterSpacer)
         m_pbCenterSpacer->setFixedWidth(cw);
-    m_pbCenter->setGeometry((rowW - cw) / 2, (rowH - ch) / 2, cw, ch);
+    // 宽窗口居中；窄窗口先给时间、音质和工具保留完整宽度，避免绝对居中盖住文字。
+    const int rightMinimum = m_pbRight ? m_pbRight->minimumSizeHint().width() : 0;
+    const int leftWidth = qMax(kPbCoverSize + 80, qMin((rowW - cw) / 2, rowW - cw - rightMinimum));
+    if (m_pbLeft)
+        m_pbLeft->setFixedWidth(leftWidth);
+    if (m_pbRight)
+        m_pbRight->setFixedWidth(qMax(0, rowW - cw - leftWidth));
+    m_pbCenter->setGeometry(leftWidth, (rowH - ch) / 2, cw, ch);
     m_pbCenter->raise();
 }
 
@@ -763,7 +771,8 @@ int PlayerBar::playerBarSideBudget() const
     const int centerW = m_pbCenter
         ? qMax(m_pbCenter->minimumSizeHint().width(), m_pbCenter->sizeHint().width())
         : 0;
-    const int side = (barInner - centerW) / 2;
+    const int rightMinimum = m_pbRight ? m_pbRight->minimumSizeHint().width() : 0;
+    const int side = qMin((barInner - centerW) / 2, barInner - centerW - rightMinimum);
     return qBound(kPbCoverSize + 40, side, 640);
 }
 
@@ -794,9 +803,9 @@ void PlayerBar::layoutPlayerBarChrome()
         m_progress->setParent(host);
 
     const QPoint topLeft = mapTo(host, QPoint(0, 0));
-    m_progress->setGeometry(topLeft.x(),
-                            topLeft.y() - Theme::kPlayerBarSliderOverhang,
-                            w,
+    m_progress->setGeometry(topLeft.x() + 24,
+                            topLeft.y() - 2,
+                            qMax(1, w - 48),
                             kPbSliderHostH);
     m_progress->raise();
     m_progress->show();
@@ -837,12 +846,12 @@ void PlayerBar::setupUi()
     m_progress->setValue(0);
 
     m_glass = new GlassWidget(this);
-    m_glass->setBorderRadius(0);
+    m_glass->setBorderRadius(22);
 
     QWidget *const body = m_glass->contentWidget();
 
     auto *bodyLay = new QVBoxLayout(body);
-    bodyLay->setContentsMargins(15, 0, 15, 0);
+    bodyLay->setContentsMargins(20, 8, 20, 0);
     bodyLay->setSpacing(0);
 
     // ─── 主行：左(封面+信息) | 中(控制) | 右(时间+工具) ─────
@@ -873,8 +882,8 @@ void PlayerBar::setupUi()
     QPainterPath ppp;
     ppp.addRoundedRect(0, 0, kPbCoverSize, kPbCoverSize, kPbCoverRadius, kPbCoverRadius);
     QLinearGradient g(0, 0, kPbCoverSize, kPbCoverSize);
-    g.setColorAt(0.0, QColor(230, 57, 80));
-    g.setColorAt(1.0, QColor(214, 40, 57));
+    g.setColorAt(0.0, QColor(22, 119, 184));
+    g.setColorAt(1.0, QColor(64, 197, 241));
     pp.fillPath(ppp, g);
     pp.end();
     coverBtn->setIcon(QIcon(ph));
@@ -961,7 +970,7 @@ void PlayerBar::setupUi()
     center->setObjectName(QStringLiteral("pbCenter"));
     center->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
     auto *ctrlL = new QHBoxLayout(center);
-    ctrlL->setContentsMargins(60, 0, 60, 0);
+    ctrlL->setContentsMargins(16, 0, 16, 0);
     ctrlL->setSpacing(8);
     ctrlL->setAlignment(Qt::AlignCenter);
 
@@ -1044,7 +1053,7 @@ void PlayerBar::setupUi()
     auto *rl = new QHBoxLayout(right);
     rl->setContentsMargins(0, 0, 0, 0);
     rl->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    rl->setSpacing(8);
+    rl->setSpacing(4);
 
     rl->addStretch();
 
@@ -1076,6 +1085,7 @@ void PlayerBar::setupUi()
     m_qualitySelector->addItem(QStringLiteral("SQ"), QStringLiteral("sq"));
     m_qualitySelector->addItem(QStringLiteral("Hi-Res"), QStringLiteral("hires"));
     m_qualitySelector->setMinimumWidth(78);
+    m_qualitySelector->setFixedHeight(30);
     m_qualitySelector->setToolTip(QStringLiteral("选择播放音质"));
     const QSettings qualitySettings;
     const QString savedQuality = qualitySettings.value(
@@ -1912,14 +1922,9 @@ void PlayerBar::applyPlayerBarGlassStyle()
     if (!m_glass)
         return;
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const bool photoShell = ShellBackdropSettings::instance().usesImageBackdrop();
-    m_glass->setBackdropCaptureEnabled(false);
-    m_glass->setBaseColor(photoShell
-        ? (dark ? QColor(30, 30, 30, 175) : QColor(255, 255, 255, 210))
-        : (dark ? QColor(30, 30, 30) : QColor(255, 255, 255)));
-    m_glass->setBorderColor(dark ? QColor(255, 255, 255, 18) : QColor(0, 0, 0, 22));
-    m_glass->setOpacity(1.0);
-    m_glass->setBorderRadius(0);
+    GlassPaint::applyFrostedSurface(m_glass, dark);
+    m_glass->setBaseColor(dark ? QColor(22, 34, 54, 210) : QColor(255, 255, 255, 210));
+    m_glass->setBorderRadius(22);
 }
 
 void PlayerBar::refreshGlassBackdrop()

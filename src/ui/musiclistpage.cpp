@@ -319,6 +319,7 @@ void MusicListPage::setupUi()
     titleLineLay->addWidget(m_titleLbl);
 
     m_countLbl = new QLabel(titleLine);
+    m_countLbl->setObjectName(QStringLiteral("musicListCount"));
     titleLineLay->addWidget(m_countLbl);
     titleLineLay->addStretch();
 
@@ -379,6 +380,7 @@ void MusicListPage::setupUi()
     root->addWidget(m_songList, 1);
 
     m_emptyWrap = new QWidget(this);
+    m_emptyWrap->setObjectName(QStringLiteral("musicListEmpty"));
     auto *emptyLay = new QVBoxLayout(m_emptyWrap);
     emptyLay->setAlignment(Qt::AlignCenter);
     emptyLay->setSpacing(12);
@@ -558,7 +560,7 @@ QString MusicListPage::pageDesc() const
 void MusicListPage::applyPageStyle()
 {
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#212529");
+    const QString titleFg = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
     const QString metaFg = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.72)");
     const QString statusFg = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.55)");
 
@@ -577,13 +579,13 @@ void MusicListPage::applyPageStyle()
     }
 
     if (m_backBtn) {
-        const QString backBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
+        const QString backBg = dark ? QStringLiteral("#223149") : QStringLiteral("#E9F0F8");
         const QColor backIc = dark ? QColor(244, 246, 255, 210) : QColor(33, 37, 41, 210);
         m_backBtn->setIcon(Icons::renderNamed("SkipPrev", 20, backIc));
         m_backBtn->setIconSize(QSize(20, 20));
         m_backBtn->setStyleSheet(QStringLiteral(
             "QPushButton { background: %1; border: none; border-radius: 20px; }"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }")
+            "QPushButton:hover { background: rgba(22, 119, 184,0.15); }")
                                      .arg(backBg));
     }
 
@@ -592,7 +594,7 @@ void MusicListPage::applyPageStyle()
         m_playAllBtn->setIconSize(QSize(18, 18));
         m_playAllBtn->setStyleSheet(QStringLiteral(
             "QPushButton {"
-            "  background: #D84B63;"
+            "  background: #1677B8;"
             "  color: #ffffff;"
             "  border: none;"
             "  border-radius: 20px;"
@@ -600,18 +602,18 @@ void MusicListPage::applyPageStyle()
             "  font-weight: 500;"
             "  padding: 0 20px;"
             "}"
-            "QPushButton:hover { background: #ff5070; }"
-            "QPushButton:disabled { background: rgba(230,57,80,0.35); color: rgba(255,255,255,0.6); }"));
+            "QPushButton:hover { background: #218CC8; }"
+            "QPushButton:disabled { background: rgba(22, 119, 184,0.35); color: rgba(255,255,255,0.6); }"));
     }
 
-    const QString secondaryBg = dark ? QStringLiteral("#2a2a2a") : QStringLiteral("#f0f0f0");
+    const QString secondaryBg = dark ? QStringLiteral("#223149") : QStringLiteral("#E9F0F8");
     const QColor secondaryIc = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
     if (m_moreBtn) {
         m_moreBtn->setIcon(Icons::renderNamed("More", 20, secondaryIc));
         m_moreBtn->setIconSize(QSize(20, 20));
         m_moreBtn->setStyleSheet(QStringLiteral(
             "QPushButton { background: %1; border: none; border-radius: 20px; }"
-            "QPushButton:hover { background: rgba(230,57,80,0.15); }").arg(secondaryBg));
+            "QPushButton:hover { background: rgba(22, 119, 184,0.15); }").arg(secondaryBg));
     }
     if (m_batchBar)
         m_batchBar->applyTheme();

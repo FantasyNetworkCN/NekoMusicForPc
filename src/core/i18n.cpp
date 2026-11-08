@@ -115,13 +115,13 @@ static QMap<QString, QString> zhCN()
     m["mcpCopied"] = QStringLiteral("客户端配置已复制到剪贴板");
     m["personalization"] = QStringLiteral("个性化");
     m["shellBackdrop"] = QStringLiteral("窗口背景");
-    m["shellBackdropDefaultImage"] = QStringLiteral("默认图片");
+    m["shellBackdropDefaultImage"] = QStringLiteral("默认氛围");
     m["shellBackdropCustomImage"] = QStringLiteral("自定义图片");
     m["shellBackdropSolidColor"] = QStringLiteral("纯色");
     m["shellBackdropPickImage"] = QStringLiteral("选择图片");
     m["shellBackdropPickColor"] = QStringLiteral("选择颜色");
-    m["shellBackdropResetImage"] = QStringLiteral("恢复默认图片");
-    m["shellBackdropUsingDefault"] = QStringLiteral("当前使用内置默认背景图");
+    m["shellBackdropResetImage"] = QStringLiteral("恢复默认氛围");
+    m["shellBackdropUsingDefault"] = QStringLiteral("随明暗主题变化的柔和氛围背景");
     m["shellBackdropNoCustomImage"] = QStringLiteral("尚未选择自定义图片");
     m["shellBackdropCurrentFile"] = QStringLiteral("当前文件");
     m["shellBackdropImageInvalid"] = QStringLiteral("无法加载该图片，请选择其它文件");
@@ -749,6 +749,18 @@ static QMap<QString, QString> zhCN()
     // --- 登录提示（此前三张表都没有，会直接显示 loginRequired）---
     m["loginRequired"] = QStringLiteral("请先登录");
 
+    // 发现页与导航文案
+    m["discoverMusic"] = QStringLiteral("发现音乐");
+    m["discoverMorning"] = QStringLiteral("早上好，让喜欢的旋律开启今天。");
+    m["discoverAfternoon"] = QStringLiteral("下午好，给日常一点好音乐。");
+    m["discoverEvening"] = QStringLiteral("晚上好，把时间留给喜欢的音乐。");
+    m["dailyMixDescription"] = QStringLiteral("从你的喜好出发，每天遇见新的心动。");
+    m["dailyMixGuest"] = QStringLiteral("登录后，为你发现合拍的旋律。");
+    m["dailyMixOpen"] = QStringLiteral("探索今日推荐");
+    m["dailyMixGuestAction"] = QStringLiteral("发现每日推荐");
+    m["discoverEmpty"] = QStringLiteral("暂时没有推荐歌单，点击右上角刷新重试。");
+    m["importPlaylist"] = QStringLiteral("导入歌单");
+    m["musicLibrary"] = QStringLiteral("音乐空间");
     return m;
 }
 
@@ -1333,13 +1345,13 @@ static QMap<QString, QString> enUS()
     m["mcpCopied"] = "Client config copied to clipboard";
     m["personalization"] = "Personalization";
     m["shellBackdrop"] = "Window Background";
-    m["shellBackdropDefaultImage"] = "Default Image";
+    m["shellBackdropDefaultImage"] = "Ambient";
     m["shellBackdropCustomImage"] = "Custom Image";
     m["shellBackdropSolidColor"] = "Solid Color";
     m["shellBackdropPickImage"] = "Choose Image";
     m["shellBackdropPickColor"] = "Choose Color";
-    m["shellBackdropResetImage"] = "Reset to Default Image";
-    m["shellBackdropUsingDefault"] = "Using built-in default background";
+    m["shellBackdropResetImage"] = "Reset ambient background";
+    m["shellBackdropUsingDefault"] = "Soft ambient background that follows the theme";
     m["shellBackdropNoCustomImage"] = "No custom image selected";
     m["shellBackdropCurrentFile"] = "Current file";
     m["shellBackdropImageInvalid"] = "Could not load image. Please choose another file.";
@@ -1978,6 +1990,18 @@ static QMap<QString, QString> enUS()
     // --- Sign-in prompt (was missing from every table) ---
     m["loginRequired"] = "Please sign in first";
 
+    // 发现页与导航文案
+    m["discoverMusic"] = QStringLiteral("Discover");
+    m["discoverMorning"] = QStringLiteral("Good morning. Find your rhythm for the day.");
+    m["discoverAfternoon"] = QStringLiteral("Good afternoon. Make room for good music.");
+    m["discoverEvening"] = QStringLiteral("Good evening. Stay a little longer with your music.");
+    m["dailyMixDescription"] = QStringLiteral("A fresh selection, inspired by what you love.");
+    m["dailyMixGuest"] = QStringLiteral("Sign in to discover music that feels like you.");
+    m["dailyMixOpen"] = QStringLiteral("Explore your mix");
+    m["dailyMixGuestAction"] = QStringLiteral("Discover your mix");
+    m["discoverEmpty"] = QStringLiteral("No playlists available. Use the refresh button to try again.");
+    m["importPlaylist"] = QStringLiteral("Import playlist");
+    m["musicLibrary"] = QStringLiteral("YOUR LIBRARY");
     return m;
 }
 

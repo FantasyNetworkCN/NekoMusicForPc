@@ -133,10 +133,10 @@ void LineInputDialog::setupUi()
             QStringLiteral(
                 "QLineEdit {"
                 "  background: rgba(255, 255, 255, 0.94);"
-                "  border: 1px solid rgba(240, 94, 122, 0.35);"
+                "  border: 1px solid rgba(64, 197, 241, 0.35);"
                 "  border-radius: 8px;"
                 "  padding: 0 12px;"
-                "  color: #212529;"
+                "  color: #182B45;"
                 "  font-size: 14px;"
                 "}"
                 "QLineEdit:focus { border: 1px solid %1; }")
@@ -185,7 +185,7 @@ void LineInputDialog::setupUi()
     okBtn->setStyleSheet(
         QStringLiteral(
             "QPushButton {"
-            "  background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #FF879D, stop:1 #D84B63);"
+            "  background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #8ADFF5, stop:1 #1677B8);"
             "  color: #1a1625;"
             "  border: none;"
             "  border-radius: 8px;"

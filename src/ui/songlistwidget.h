@@ -16,7 +16,7 @@ class QShowEvent;
 class QWidget;
 class SongCardWidget;
 
-/** SPlayer SongList.vue — 虚拟列表 item-height 90、sticky 表头 */
+/** 音乐虚拟列表：统一行高、固定表头与批量操作。 */
 class SongListWidget : public QWidget
 {
     Q_OBJECT
@@ -67,9 +67,9 @@ public:
     void setBatchSelectAll(bool selectAll);
     bool batchAllSelected() const;
 
-    /** 行高 90px + 行间距 12px（对齐 SPlayer SongList） */
-    static constexpr int kRowHeight = 90;
-    static constexpr int kRowGap = 12;
+    /** 保留封面与两行文字的呼吸感，同时提高桌面列表密度。 */
+    static constexpr int kRowHeight = 76;
+    static constexpr int kRowGap = 6;
     static constexpr int kRowStride = kRowHeight + kRowGap;
 
     std::function<void(const MusicInfo &)> onSongActivate;

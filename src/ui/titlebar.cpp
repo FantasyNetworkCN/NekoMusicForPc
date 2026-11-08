@@ -92,6 +92,11 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent)
             this, [this](Theme::ThemeMode) {
                 updateChevronPixmap();
                 refreshSearchGlyph();
+                m_notifyBtn->setIcon(Icons::iconNamed("Bell", 18, iconNormal(), iconActive()));
+                m_settingsBtn->setIcon(Icons::iconNamed("Settings", 18, iconNormal(), iconActive()));
+                findChild<QPushButton *>("tbMinBtn")->setIcon(Icons::iconNamed("WindowMinimize", 20, iconNormal(), iconActive()));
+                findChild<QPushButton *>("tbMaxBtn")->setIcon(Icons::iconNamed("WindowMaximize", 20, iconNormal(), iconActive()));
+                findChild<QPushButton *>("tbCloseBtn")->setIcon(Icons::iconNamed("WindowClose", 20, closeNormal(), closeActive()));
             });
 }
 
@@ -197,8 +202,8 @@ void TitleBar::setupUi()
     setAutoFillBackground(false);
 
     auto *lay = new QHBoxLayout(this);
-    lay->setContentsMargins(24, 0, 16, 0);
-    lay->setSpacing(12);
+    lay->setContentsMargins(24, 0, 8, 0);
+    lay->setSpacing(8);
 
     // ─── 搜索框（SPlayer Nav 居中条）────────────────
     m_searchWrap = new QWidget(this);
@@ -206,9 +211,9 @@ void TitleBar::setupUi()
     m_searchWrap->setAttribute(Qt::WA_StyledBackground, true);
     m_searchWrap->setCursor(Qt::PointingHandCursor);
     m_searchWrap->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    m_searchWrap->setFixedHeight(36);
-    m_searchWrap->setMinimumWidth(220);
-    m_searchWrap->setMaximumWidth(560);
+    m_searchWrap->setFixedHeight(40);
+    m_searchWrap->setMinimumWidth(180);
+    m_searchWrap->setMaximumWidth(380);
     auto *searchLay = new QHBoxLayout(m_searchWrap);
     searchLay->setContentsMargins(14, 0, 14, 0);
     searchLay->setSpacing(8);
@@ -237,8 +242,7 @@ void TitleBar::setupUi()
         if (!q.isEmpty())
             emit searchRequested(q);
     });
-    lay->addStretch(1);
-    lay->addWidget(m_searchWrap, 0, Qt::AlignVCenter);
+    lay->addWidget(m_searchWrap, 1, Qt::AlignVCenter);
     lay->addStretch(1);
 
     // 账号区与设置、窗口按钮分组留白
@@ -319,8 +323,8 @@ void TitleBar::setupUi()
     lay->addSpacing(6);
 
     // 窗口控制（圆形彩色按钮）
-    const QColor kMinHover = QColor(230, 57, 80);
-    const QColor kMaxHover = QColor(240, 94, 122);
+    const QColor kMinHover = QColor(22, 119, 184);
+    const QColor kMaxHover = QColor(64, 197, 241);
     const QColor kCloseHover = QColor(232, 93, 117); // 红色
 
     auto *minBtn = new QPushButton(this);
