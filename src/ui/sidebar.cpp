@@ -194,10 +194,28 @@ void Sidebar::setupUi()
     div->setFixedHeight(1);
     lay->addWidget(div);
 
-    // 歌单区域标题
-    auto *plHeader = new QLabel(I18n::instance().tr("myPlaylistsTitle"), container);
+    // 歌单区域标题与刷新按钮
+    auto *plHeaderRow = new QWidget(container);
+    plHeaderRow->setObjectName("sbPlaylistHeader");
+    auto *plHeaderLay = new QHBoxLayout(plHeaderRow);
+    plHeaderLay->setContentsMargins(0, 0, 4, 0);
+    plHeaderLay->setSpacing(2);
+    auto *plHeader = new QLabel(I18n::instance().tr("myPlaylistsTitle"), plHeaderRow);
     plHeader->setObjectName("sbPlaylistTitle");
-    lay->addWidget(plHeader);
+    plHeaderLay->addWidget(plHeader, 1);
+
+    m_refreshPlaylistsBtn = new QPushButton(plHeaderRow);
+    m_refreshPlaylistsBtn->setObjectName("sbPlaylistRefreshBtn");
+    m_refreshPlaylistsBtn->setFixedSize(28, 28);
+    m_refreshPlaylistsBtn->setIcon(
+        Icons::iconNamed("Refresh", 16, navIconNormalColor(), navIconActiveColor()));
+    m_refreshPlaylistsBtn->setIconSize(QSize(16, 16));
+    m_refreshPlaylistsBtn->setCursor(Qt::PointingHandCursor);
+    m_refreshPlaylistsBtn->setToolTip(I18n::instance().tr("refresh"));
+    m_refreshPlaylistsBtn->setAccessibleName(I18n::instance().tr("refresh"));
+    connect(m_refreshPlaylistsBtn, &QPushButton::clicked, this, &Sidebar::refreshPlaylists);
+    plHeaderLay->addWidget(m_refreshPlaylistsBtn, 0, Qt::AlignVCenter);
+    lay->addWidget(plHeaderRow);
 
     // 播放列表容器
     m_playlistContainer = new QWidget(container);
@@ -307,7 +325,13 @@ void Sidebar::setupUi()
     footerLayout->addWidget(createNavItem("settings", I18n::instance().tr("settings"), navIcon("settings", false)));
     outer->addWidget(footer);
     connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged,
-            this, [this](Theme::ThemeMode) { setActiveNav(m_activeKey); });
+            this, [this](Theme::ThemeMode) {
+                setActiveNav(m_activeKey);
+                if (m_refreshPlaylistsBtn) {
+                    m_refreshPlaylistsBtn->setIcon(
+                        Icons::iconNamed("Refresh", 16, navIconNormalColor(), navIconActiveColor()));
+                }
+            });
 
     m_playlistRefreshTimer = new QTimer(this);
     m_playlistRefreshTimer->setSingleShot(true);
@@ -361,8 +385,9 @@ void Sidebar::loadPlaylists()
         }
         refreshPlaylistList();
         enqueueMissingPlaylistCovers();
-        loadFavPlaylists();
     });
+    // 「我的歌单」刷新入口同时刷新收藏的歌单，两类请求并行发出。
+    loadFavPlaylists();
 }
 
 void Sidebar::schedulePlaylistListRefresh()
@@ -695,6 +720,10 @@ void Sidebar::retranslate()
     if (m_favBtn) m_favBtn->setText(I18n::instance().tr("favorites"));
     if (m_recBtn) m_recBtn->setText(I18n::instance().tr("recentPlay"));
     if (m_downloadBtn) m_downloadBtn->setText(I18n::instance().tr("downloadManage"));
+    if (m_refreshPlaylistsBtn) {
+        m_refreshPlaylistsBtn->setToolTip(I18n::instance().tr("refresh"));
+        m_refreshPlaylistsBtn->setAccessibleName(I18n::instance().tr("refresh"));
+    }
 
     auto headers = findChildren<QLabel *>("sbPlaylistTitle");
     if (headers.size() >= 1) headers[0]->setText(I18n::instance().tr("myPlaylistsTitle"));

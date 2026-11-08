@@ -51,7 +51,16 @@ QMenu::item:selected { background: @SELECTED@; color: @INK@; }
 }
 #sbNavItem:focus { border-color: @ACCENT@; }
 #sbDivider { background: @LINE@; margin: 8px 12px; }
+#sbPlaylistHeader { background: transparent; }
 #sbPlaylistTitle { color: @SECONDARY@; padding: 14px 12px 6px; font-size: 11px; }
+#sbPlaylistRefreshBtn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 0;
+}
+#sbPlaylistRefreshBtn:hover { background: @HOVER@; border-color: @LINE@; }
+#sbPlaylistRefreshBtn:pressed { background: @SELECTED@; border-color: @ACCENTLINE@; }
 #sbCreatePlaylist, #sbImportPlaylist {
     background: transparent;
     border: 1px solid @LINE@;

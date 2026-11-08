@@ -150,9 +150,17 @@ void UpdateChecker::fetchChangelogSource(const QString &version, const QStringLi
         }
         qInfo() << "[更新日志] 已加载:" << sourceUrl;
         const QString section = extractChangelogSection(markdown, version);
-        emit changelogReady(version, section.isEmpty()
-                                          ? markdown.left(16000)
-                                          : section.left(16000));
+        if (section.isEmpty()) {
+            // 不能把整份日志当作目标版本的日志返回：发布新版本时旧客户端可能仍在
+            // 检查上一版本，若日志里没有该段落就会错误展示更高版本的内容。
+            QStringList nextErrors = errors;
+            nextErrors.append(QStringLiteral("%1: version %2 not found")
+                                  .arg(sourceUrl.toString(), version));
+            qWarning() << "[更新日志] 未找到目标版本段落:" << version << sourceUrl;
+            fetchChangelogSource(version, sources, index + 1, nextErrors);
+            return;
+        }
+        emit changelogReady(version, section.left(16000));
     });
 }
 

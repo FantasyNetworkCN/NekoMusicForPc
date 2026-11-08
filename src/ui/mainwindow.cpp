@@ -2820,6 +2820,16 @@ bool MainWindow::event(QEvent *event)
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    // 鼠标侧键（Back）沿用标题栏返回按钮的页面历史。
+    if (event->type() == QEvent::MouseButtonPress) {
+        auto *mouseEvent = static_cast<QMouseEvent *>(event);
+        auto *widget = qobject_cast<QWidget *>(watched);
+        if (mouseEvent->button() == Qt::BackButton && widget && widget->window() == this) {
+            navigateBack();
+            return true;
+        }
+    }
+
     if (!isMaximized() && windowHandle()) {
         QWidget *w = qobject_cast<QWidget *>(watched);
         if (w && w->window() == this) {
