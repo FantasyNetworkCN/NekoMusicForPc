@@ -979,6 +979,12 @@ void MainWindow::setupUi()
     // 音乐列表页面导航
     connect(m_homePage, &HomePage::navigateToMusicList, this, &MainWindow::showMusicListPage);
     connect(m_homePage, &HomePage::navigateToDailyRecommendations, this, &MainWindow::showDailyRecommendationsPage);
+    connect(m_homePage, &HomePage::navigateToPlaylist, this, &MainWindow::showPlaylistDetailPage);
+    connect(m_homePage, &HomePage::playPlaylist, this, [this](int playlistId) {
+        syncListPageFavoriteIds();
+        m_playlistDetailPage->loadPlaylist(playlistId, true);
+        switchPage(m_playlistDetailPage);
+    });
 
     // 音乐列表页面返回
     connect(m_hotMusicPage, &MusicListPage::backRequested, this, [this]() {

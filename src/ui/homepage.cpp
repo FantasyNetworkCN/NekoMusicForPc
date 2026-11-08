@@ -514,6 +514,7 @@ void HomePage::rebuildRecommendSection()
     for (const auto &info : m_playlists) {
         auto *card = new PlaylistCard(info, m_cardContainer);
         connect(card, &PlaylistCard::clicked, this, &HomePage::navigateToPlaylist);
+        connect(card, &PlaylistCard::playClicked, this, &HomePage::playPlaylist);
         m_cardLayout->addWidget(card);
     }
     if (m_playlists.isEmpty()) {

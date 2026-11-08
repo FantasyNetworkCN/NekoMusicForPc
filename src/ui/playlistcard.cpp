@@ -174,7 +174,7 @@ void PlaylistCard::paintEvent(QPaintEvent *)
         p.setBrush(QColor(230, 248, 255));
         p.drawEllipse(button);
         p.drawPixmap(button.adjusted(9, 9, -9, -9),
-                     Icons::renderNamed("Right", 18, QColor(20, 52, 78)));
+                     Icons::renderNamed("Play", 18, QColor(20, 52, 78)));
     }
 }
 
@@ -196,13 +196,25 @@ void PlaylistCard::leaveEvent(QEvent *e)
 
 void PlaylistCard::mousePressEvent(QMouseEvent *e)
 {
-    if (e->button() == Qt::LeftButton) emit clicked(m_info.id);
+    if (e->button() == Qt::LeftButton) {
+        const QRect coverRect(10, 10, Theme::kCoverSmall, Theme::kCoverSmall);
+        const QRect playButton(coverRect.right() - 46, coverRect.bottom() - 46, 36, 36);
+        if (m_hoverProgress > 0.5 && playButton.contains(e->pos()))
+            emit playClicked(m_info.id);
+        else
+            emit clicked(m_info.id);
+    }
     QWidget::mousePressEvent(e);
 }
 
 void PlaylistCard::keyPressEvent(QKeyEvent *event)
 {
-    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter || event->key() == Qt::Key_Space) {
+    if (event->key() == Qt::Key_Space) {
+        emit playClicked(m_info.id);
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         emit clicked(m_info.id);
         event->accept();
         return;

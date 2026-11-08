@@ -38,6 +38,7 @@ public:
 
 signals:
     void clicked(int id);
+    void playClicked(int id);
 
 protected:
     void enterEvent(QEnterEvent *) override;

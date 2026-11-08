@@ -31,6 +31,7 @@ public:
 
 signals:
     void navigateToPlaylist(int id);
+    void playPlaylist(int id);
     void playMusic(int id);
     void navigateToMusicList(bool isHot);  // 导航到音乐列表页面
     void navigateToDailyRecommendations();

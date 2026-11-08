@@ -986,7 +986,7 @@ void PlaylistDetailPage::editPlaylistDescription()
                                 });
 }
 
-void PlaylistDetailPage::loadPlaylist(int playlistId)
+void PlaylistDetailPage::loadPlaylist(int playlistId, bool autoPlay)
 {
     if (m_searchDebounce)
         m_searchDebounce->stop();
@@ -996,6 +996,7 @@ void PlaylistDetailPage::loadPlaylist(int playlistId)
     m_savedScrollPlaylistId = playlistId;
 
     m_playlistId = playlistId;
+    m_autoPlayOnLoad = autoPlay;
     m_allSongs.clear();
     m_displaySongs.clear();
     if (m_songList)
@@ -1059,6 +1060,7 @@ void PlaylistDetailPage::loadPlaylist(int playlistId)
                                             }
 
                                             if (m_allSongs.isEmpty()) {
+                                                m_autoPlayOnLoad = false;
                                                 showPageStatus(
                                                     I18n::instance().tr(QStringLiteral("noMusicInPlaylist")),
                                                     "SearchOff");
@@ -1070,6 +1072,10 @@ void PlaylistDetailPage::loadPlaylist(int playlistId)
                                             hidePageStatus();
                                             updateCoverImage();
                                             applyFilter();
+                                            if (m_autoPlayOnLoad && !m_displaySongs.isEmpty()) {
+                                                m_autoPlayOnLoad = false;
+                                                emit playAllRequested(m_displaySongs);
+                                            }
                                             if (m_songList) {
                                                 m_songList->show();
                                                 if (m_pendingScrollTop > 0)

@@ -28,7 +28,7 @@ class PlaylistDetailPage : public QWidget
 public:
     explicit PlaylistDetailPage(ApiClient *apiClient, QWidget *parent = nullptr);
 
-    void loadPlaylist(int playlistId);
+    void loadPlaylist(int playlistId, bool autoPlay = false);
     void retranslate();
     void setPlaybackPaused(bool paused);
     void setFavoritedMusicIds(const QSet<int> &ids);
@@ -121,6 +121,7 @@ private:
 
     QVariantAnimation *m_headerAnim = nullptr;
     bool m_headerCompact = false;
+    bool m_autoPlayOnLoad = false;
 
     /** 搜索框防抖：几万首的歌单下每敲一个字都重建列表会明显卡顿。 */
     QTimer *m_searchDebounce = nullptr;
