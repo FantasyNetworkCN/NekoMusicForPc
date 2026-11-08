@@ -685,6 +685,20 @@ PlayerPage::PlayerPage(PlayerEngine *engine, ApiClient *apiClient, QWidget *pare
     m_controlHideTimer->setSingleShot(true);
     m_controlHideTimer->setInterval(kControlHideMs);
     connect(m_controlHideTimer, &QTimer::timeout, this, [this]() { hidePlayerChrome(); });
+
+    // 逐字扫亮使用独立帧时钟：播放器 positionChanged 频率不足，仅靠它会造成整词跳变。
+    m_lyricFrameTimer = new QTimer(this);
+    m_lyricFrameTimer->setTimerType(Qt::PreciseTimer);
+    m_lyricFrameTimer->setInterval(33);
+    connect(m_lyricFrameTimer, &QTimer::timeout, this, [this]() {
+        if (!isVisible() || !m_engine || m_engine->playbackState() != PlayerEngine::Playing
+            || m_currentLyricLine < 0 || m_currentLyricLine >= m_lyrics.size()) {
+            if (m_lyricFrameTimer)
+                m_lyricFrameTimer->stop();
+            return;
+        }
+        renderKaraokeLine(m_currentLyricLine, m_engine->position());
+    });
     if (m_controlBar)
         m_controlBar->installEventFilter(this);
     if (m_menuBar)
@@ -1091,16 +1105,70 @@ void PlayerPage::renderKaraokeLine(int lineIndex, qint64 positionMs)
         return;
     }
 
+    const auto smoothStep = [](qreal value) {
+        const qreal t = qBound<qreal>(0.0, value, 1.0);
+        return t * t * (3.0 - 2.0 * t);
+    };
+    const auto colorForAlpha = [](int alpha) {
+        return QStringLiteral("rgba(255,255,255,%1)").arg(qBound(0, alpha, 255));
+    };
+
     QString html;
-    html.reserve(line.text.size() + line.words.size() * 32);
+    html.reserve(line.text.size() * 28 + line.words.size() * 16);
     for (const LyricWord &word : line.words) {
-        const bool sung = positionMs >= word.startMs;
-        html += QStringLiteral("<span style=\"color:%1;\">%2</span>")
-                    .arg(sung ? m_clrLyricHi : m_clrLyricHiTrans,
-                         word.text.toHtmlEscaped());
+        const qint64 duration = qMax<qint64>(1, word.endMs - word.startMs);
+        const qreal progress = qBound<qreal>(
+            0.0, qreal(positionMs - word.startMs) / qreal(duration), 1.0);
+        if (progress <= 0.0 || word.text.isEmpty()) {
+            html += QStringLiteral("<span style=\"color:%1;\">%2</span>")
+                        .arg(colorForAlpha(112), word.text.toHtmlEscaped());
+            continue;
+        }
+        if (progress >= 1.0) {
+            html += QStringLiteral("<span style=\"color:%1;\">%2</span>")
+                        .arg(m_clrLyricHi, word.text.toHtmlEscaped());
+            continue;
+        }
+
+        int offset = 0;
+        while (offset < word.text.size()) {
+            const int length = word.text.at(offset).isHighSurrogate()
+                ? 2 : 1;
+            const QString glyph = word.text.mid(offset, length);
+            const qreal glyphStart = qreal(offset) / qMax(1, word.text.size());
+            const qreal glyphEnd = qreal(offset + length) / qMax(1, word.text.size());
+            const qreal local = glyphEnd <= glyphStart
+                ? progress
+                : (progress - glyphStart) / (glyphEnd - glyphStart);
+            const int alpha = 112 + qRound((255 - 112) * smoothStep(local));
+            html += QStringLiteral("<span style=\"color:%1;\">%2</span>")
+                        .arg(colorForAlpha(alpha), glyph.toHtmlEscaped());
+            offset += length;
+        }
     }
-    label->setTextFormat(Qt::RichText);
-    label->setText(html);
+    if (label->textFormat() != Qt::RichText)
+        label->setTextFormat(Qt::RichText);
+    if (label->text() != html)
+        label->setText(html);
+}
+
+void PlayerPage::syncKaraokeAnimation()
+{
+    if (!m_lyricFrameTimer)
+        return;
+    const bool hasWords = m_currentLyricLine >= 0
+        && m_currentLyricLine < m_lyrics.size()
+        && !m_lyrics.at(m_currentLyricLine).words.isEmpty();
+    const bool shouldAnimate = hasWords && isVisible() && m_engine
+        && m_engine->playbackState() == PlayerEngine::Playing;
+    if (shouldAnimate) {
+        if (!m_lyricFrameTimer->isActive())
+            m_lyricFrameTimer->start();
+    } else {
+        m_lyricFrameTimer->stop();
+    }
+    if (hasWords && m_engine)
+        renderKaraokeLine(m_currentLyricLine, m_engine->position());
 }
 
 void PlayerPage::scrollLyricsToActiveLine(int line)
@@ -3262,6 +3330,8 @@ void PlayerPage::updateLyricHighlight(qint64 positionMs)
     updateLyricCountdown(positionMs);
 
     if (m_lyrics.isEmpty()) {
+        if (m_lyricFrameTimer)
+            m_lyricFrameTimer->stop();
         if (m_currentLyricLine != -1) {
             m_currentLyricLine = -1;
             m_currentLyricWord = -1;
@@ -3292,6 +3362,7 @@ void PlayerPage::updateLyricHighlight(qint64 positionMs)
         syncLyricLinesVisual(line, previousLine);
     if (line >= 0)
         renderKaraokeLine(line, positionMs);
+    syncKaraokeAnimation();
     QTimer::singleShot(0, this, [this, line]() { scrollLyricsToActiveLine(line); });
 }
 
