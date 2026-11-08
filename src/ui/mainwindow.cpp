@@ -69,6 +69,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QGuiApplication>
+#include <QPointer>
 #include <QMouseEvent>
 #include <QWindow>
 #include <QPainter>
@@ -955,10 +956,14 @@ void MainWindow::setupUi()
                     menu->close();
                     return;
                 }
-                m_apiClient->logout(token, [menu](bool) {
+                const QPointer<QMenu> menuGuard(menu);
+                m_apiClient->logout(token, [menuGuard](bool) {
                     // 只退出当前客户端。Web 与其它设备由 NekoAuth 独立维护。
                     UserManager::instance().logout();
-                    menu->close();
+                    // QAction 触发后菜单通常会立即关闭并因 WA_DeleteOnClose
+                    // 进入删除队列；异步回调不能再直接使用裸指针。
+                    if (menuGuard)
+                        menuGuard->close();
                 });
             });
 
