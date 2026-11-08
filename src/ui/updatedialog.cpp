@@ -13,6 +13,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QProgressBar>
+#include <QTextBrowser>
 #include <QPainter>
 #include <QPainterPath>
 #include <QDesktopServices>
@@ -32,7 +33,7 @@ UpdateDialog::UpdateDialog(const QString &currentVersion, const QString &newVers
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint | Qt::WindowSystemMenuHint);
     setAttribute(Qt::WA_TranslucentBackground);
     setModal(true);
-    setFixedSize(400, 280);
+    setFixedSize(540, 540);
 
     setupUi();
 }
@@ -90,6 +91,28 @@ void UpdateDialog::setupUi()
     infoLay->addWidget(m_newVerLbl);
 
     containerLay->addWidget(infoWidget);
+
+    m_changelogTitle = new QLabel(I18n::instance().tr("changelog"), container);
+    m_changelogTitle->setObjectName("updateChangelogTitle");
+    m_changelogTitle->setStyleSheet(
+        "QLabel#updateChangelogTitle { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.92); }");
+    containerLay->addWidget(m_changelogTitle);
+
+    m_changelogBrowser = new QTextBrowser(container);
+    m_changelogBrowser->setObjectName("updateChangelog");
+    m_changelogBrowser->setOpenExternalLinks(true);
+    m_changelogBrowser->setMinimumHeight(210);
+    m_changelogBrowser->setStyleSheet(
+        "QTextBrowser#updateChangelog {"
+        "  background: rgba(255, 255, 255, 0.06);"
+        "  border: 1px solid rgba(255, 255, 255, 0.10);"
+        "  border-radius: 10px;"
+        "  color: rgba(255, 255, 255, 0.88);"
+        "  padding: 10px;"
+        "  selection-background-color: #667eea;"
+        "}");
+    m_changelogBrowser->setPlainText(I18n::instance().tr("changelogLoading"));
+    containerLay->addWidget(m_changelogBrowser, 1);
 
     // 进度条（初始隐藏）
     m_progressBar = new QProgressBar(container);
@@ -335,6 +358,20 @@ void UpdateDialog::showDownloadFinished(const QString &filePath)
 void UpdateDialog::showDownloadFailed(const QString &error)
 {
     setupFailedUi(error);
+}
+
+void UpdateDialog::setChangelog(const QString &version, const QString &markdown)
+{
+    if (version != m_newVersion || !m_changelogBrowser)
+        return;
+    m_changelogBrowser->setMarkdown(markdown);
+}
+
+void UpdateDialog::setChangelogFailed(const QString &version)
+{
+    if (version != m_newVersion || !m_changelogBrowser)
+        return;
+    m_changelogBrowser->setPlainText(I18n::instance().tr("changelogLoadFailed"));
 }
 
 void UpdateDialog::paintEvent(QPaintEvent *event)

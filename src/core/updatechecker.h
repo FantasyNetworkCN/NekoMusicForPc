@@ -42,6 +42,8 @@ public:
 
 signals:
     void updateAvailable(const UpdateInfo &info);
+    void changelogReady(const QString &version, const QString &markdown);
+    void changelogFailed(const QString &version, const QString &error);
     void noUpdate();
     void checkFailed(const QString &error);
     void downloadProgress(qint64 bytesReceived, qint64 bytesTotal);
@@ -53,6 +55,8 @@ private:
     QString getPlatformKey() const;
     UpdateInstallKind resolveInstallKind(const QString &platformKey,
                                          const QString &downloadUrl) const;
+    void fetchChangelog(const QString &version);
+    static QString extractChangelogSection(const QString &markdown, const QString &version);
 
     QString m_currentVersion;
     NekoNetworkAccessManager m_nam;

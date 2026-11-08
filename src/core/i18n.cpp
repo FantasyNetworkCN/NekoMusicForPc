@@ -399,6 +399,9 @@ static QMap<QString, QString> zhCN()
     m["downloading"] = QStringLiteral("下载中...");
     m["downloadComplete"] = QStringLiteral("下载完成");
     m["installNow"] = QStringLiteral("立即安装");
+    m["changelog"] = QStringLiteral("更新日志");
+    m["changelogLoading"] = QStringLiteral("正在从 GitHub 加载更新日志…");
+    m["changelogLoadFailed"] = QStringLiteral("更新日志加载失败，你仍可继续更新。");
     m["installLater"] = QStringLiteral("稍后安装");
     m["updateViaAur"] = QStringLiteral("通过 AUR 更新");
     m["updateViaAurHint"] = QStringLiteral("点击「立即更新」后将在终端显示命令，请自行执行：%1");
@@ -1172,6 +1175,9 @@ static QMap<QString, QString> nyaCN()
     m["downloading"] = QStringLiteral("正在加速跑，要把新版本带给你喵~...");
     m["downloadComplete"] = QStringLiteral("呼，搬回来了！快安装喵~");
     m["installNow"] = QStringLiteral("现在就合体喵！");
+    m["changelog"] = QStringLiteral("这次更新了什么喵~");
+    m["changelogLoading"] = QStringLiteral("正在从 GitHub 翻更新日志喵…");
+    m["changelogLoadFailed"] = QStringLiteral("更新日志没翻到喵，不过还是可以继续更新~");
     m["installLater"] = QStringLiteral("晚点再合体喵~");
     m["updateViaAur"] = QStringLiteral("走 AUR 进化喵！");
     m["updateViaAurHint"] = QStringLiteral("点「马上进化」会在终端显示命令，自己敲喵：%1");
@@ -1645,6 +1651,9 @@ static QMap<QString, QString> enUS()
     m["downloading"] = "Downloading...";
     m["downloadComplete"] = "Download Complete";
     m["installNow"] = "Install Now";
+    m["changelog"] = "What's New";
+    m["changelogLoading"] = "Loading the changelog from GitHub...";
+    m["changelogLoadFailed"] = "Could not load the changelog. You can still update.";
     m["installLater"] = "Install Later";
     m["updateViaAur"] = "Update via AUR";
     m["updateViaAurHint"] = "Terminal will show this command after you click Update: %1";

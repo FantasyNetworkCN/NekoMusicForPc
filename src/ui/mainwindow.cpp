@@ -453,10 +453,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     qApp->installEventFilter(this);
 
-    // 启动时不再自动检查版本更新（本机为开发版，更新需手动卸载后去官网重下，
-    // 开屏弹更新框没有意义）。仍保留设置页里的「检查更新」手动入口。
-    // QTimer::singleShot(2000, this, [this]() { checkForUpdates(false); });
-    QTimer::singleShot(3500, this, [this]() { maybePromptDefaultMusicPlayer(); });
+    // 启动后自动检查更新；发现新版本会直接弹窗询问，并异步加载 GitHub 更新日志。
+    QTimer::singleShot(1800, this, [this]() { checkForUpdates(false); });
+    QTimer::singleShot(6000, this, [this]() { maybePromptDefaultMusicPlayer(); });
 }
 
 MainWindow::~MainWindow()
@@ -3361,6 +3360,10 @@ void MainWindow::checkForUpdates(bool showNoUpdateToast)
         qDebug() << "[更新] 发现新版本:" << info.version << "下载链接:" << info.downloadUrl;
         m_updateDialog = new UpdateDialog(m_updateChecker->currentVersion(), info.version,
                                          info.downloadUrl, info.installKind, this);
+        connect(m_updateChecker, &UpdateChecker::changelogReady,
+                m_updateDialog, &UpdateDialog::setChangelog);
+        connect(m_updateChecker, &UpdateChecker::changelogFailed,
+                m_updateDialog, &UpdateDialog::setChangelogFailed);
 
         if (info.installKind == UpdateInstallKind::DownloadInstaller) {
             connect(m_updateDialog, &UpdateDialog::downloadRequested, this, [this](const QString &url) {
@@ -3375,6 +3378,8 @@ void MainWindow::checkForUpdates(bool showNoUpdateToast)
         }
 
         m_updateDialog->exec();
+        m_updateDialog->deleteLater();
+        m_updateDialog = nullptr;
     });
 
     connect(m_updateChecker, &UpdateChecker::noUpdate, this, [this, showNoUpdateToast]() {

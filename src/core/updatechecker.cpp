@@ -17,6 +17,14 @@
 #include <QDir>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QRegularExpression>
+
+namespace {
+
+constexpr const char *kChangelogUrl =
+        "https://raw.githubusercontent.com/FantasyNetworkCN/NekoMusicForPc/qt6/CHANGELOG.md";
+
+} // namespace
 
 UpdateChecker::UpdateChecker(const QString &currentVersion, QObject *parent)
     : QObject(parent), m_currentVersion(currentVersion)
@@ -76,11 +84,60 @@ void UpdateChecker::checkForUpdates()
             } else {
                 info.downloadUrl = urlTemplate.replace(QStringLiteral("{pc_ver}"), remoteVersion);
             }
+            fetchChangelog(remoteVersion);
             emit updateAvailable(info);
         } else {
             emit noUpdate();
         }
     });
+}
+
+void UpdateChecker::fetchChangelog(const QString &version)
+{
+    QNetworkRequest req(QUrl(QString::fromLatin1(kChangelogUrl)));
+    req.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
+    req.setRawHeader("Cache-Control", "no-cache");
+    req.setRawHeader("Accept", "text/plain");
+    req.setTransferTimeout(10000);
+
+    auto *reply = m_nam.get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, version]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit changelogFailed(version, reply->errorString());
+            return;
+        }
+        const QString markdown = QString::fromUtf8(reply->readAll()).trimmed();
+        if (markdown.isEmpty()) {
+            emit changelogFailed(version, QStringLiteral("empty changelog"));
+            return;
+        }
+        const QString section = extractChangelogSection(markdown, version);
+        emit changelogReady(version, section.isEmpty()
+                                          ? markdown.left(16000)
+                                          : section.left(16000));
+    });
+}
+
+QString UpdateChecker::extractChangelogSection(const QString &markdown, const QString &version)
+{
+    if (markdown.isEmpty() || version.isEmpty())
+        return {};
+    const QString pattern = QStringLiteral("^##\\s+(?:\\[)?v?%1(?:\\])?\\b.*$")
+                                .arg(QRegularExpression::escape(version));
+    const QRegularExpression heading(pattern,
+                                     QRegularExpression::MultilineOption
+                                         | QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch match = heading.match(markdown);
+    if (!match.hasMatch())
+        return {};
+
+    const int bodyStart = match.capturedEnd();
+    static const QRegularExpression nextHeading(QStringLiteral("^##\\s+.*$"),
+                                                QRegularExpression::MultilineOption);
+    const QRegularExpressionMatch next = nextHeading.match(markdown, bodyStart);
+    const int bodyEnd = next.hasMatch() ? next.capturedStart() : markdown.size();
+    return markdown.mid(bodyStart, bodyEnd - bodyStart).trimmed();
 }
 
 void UpdateChecker::downloadUpdate(const QString &url)
