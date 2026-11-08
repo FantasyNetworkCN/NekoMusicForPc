@@ -1,5 +1,6 @@
 #include "playerpage.h"
 #include "playerprogressslider.h"
+#include "amlllyricsview.h"
 #include "videorenderdialog.h"
 #include "toast.h"
 #include "svgicon.h"
@@ -691,15 +692,16 @@ PlayerPage::PlayerPage(PlayerEngine *engine, ApiClient *apiClient, QWidget *pare
     // 逐字扫亮使用独立帧时钟：播放器 positionChanged 频率不足，仅靠它会造成整词跳变。
     m_lyricFrameTimer = new QTimer(this);
     m_lyricFrameTimer->setTimerType(Qt::PreciseTimer);
-    m_lyricFrameTimer->setInterval(33);
+    m_lyricFrameTimer->setInterval(16);
     connect(m_lyricFrameTimer, &QTimer::timeout, this, [this]() {
         if (!isVisible() || !m_engine || m_engine->playbackState() != PlayerEngine::Playing
-            || m_currentLyricLine < 0 || m_currentLyricLine >= m_lyrics.size()) {
+            || m_lyrics.isEmpty()) {
             if (m_lyricFrameTimer)
                 m_lyricFrameTimer->stop();
             return;
         }
-        renderKaraokeLine(m_currentLyricLine, m_engine->position());
+        if (m_amllLyricsView)
+            m_amllLyricsView->setPosition(m_engine->position());
     });
     if (m_controlBar)
         m_controlBar->installEventFilter(this);
@@ -940,6 +942,7 @@ void PlayerPage::refreshTintedPalette()
     m_clrLyricHiTrans = QStringLiteral("rgba(255,255,255,153)");
     m_clrLyricHiBg = QStringLiteral("rgba(255,255,255,36)");
     updateMetaIcons();
+    syncAmllLyricsStyle();
 
     if (m_engine && !m_lyrics.isEmpty()) {
         m_currentLyricLine = -1;
@@ -991,6 +994,32 @@ void PlayerPage::applyLyricLineStyle(QLabel *textLabel, QLabel *romanLabel,
     };
     applySecondaryStyle(romanLabel, true);
     applySecondaryStyle(transLabel, false);
+}
+
+void PlayerPage::syncAmllLyricsStyle()
+{
+    if (!m_amllLyricsView)
+        return;
+    int pageH = height();
+    if (pageH < 480 && m_lyricsScroll && m_lyricsScroll->viewport())
+        pageH = qMax(pageH, m_lyricsScroll->viewport()->height());
+
+    QColor activeColor(m_clrLyricHi);
+    if (!activeColor.isValid())
+        activeColor = QColor(Qt::white);
+    QColor dimColor(m_clrLyricDim);
+    if (!dimColor.isValid()) {
+        dimColor = activeColor;
+        dimColor.setAlpha(77);
+    }
+    QColor secondaryColor(m_clrLyricHiTrans);
+    if (!secondaryColor.isValid()) {
+        secondaryColor = activeColor;
+        secondaryColor.setAlpha(153);
+    }
+    m_amllLyricsView->setTextStyle(activeColor, dimColor, secondaryColor,
+                                   lyricMainFontPx(pageH));
+    m_amllLyricsView->setEmptyText(I18n::instance().tr("noLyrics"));
 }
 
 static QWidget *findLyricLineByIndex(const QVector<QWidget *> &lines, int index)
@@ -1167,10 +1196,7 @@ void PlayerPage::syncKaraokeAnimation()
 {
     if (!m_lyricFrameTimer)
         return;
-    const bool hasWords = m_currentLyricLine >= 0
-        && m_currentLyricLine < m_lyrics.size()
-        && !m_lyrics.at(m_currentLyricLine).words.isEmpty();
-    const bool shouldAnimate = hasWords && isVisible() && m_engine
+    const bool shouldAnimate = !m_lyrics.isEmpty() && isVisible() && m_engine
         && m_engine->playbackState() == PlayerEngine::Playing;
     if (shouldAnimate) {
         if (!m_lyricFrameTimer->isActive())
@@ -1178,8 +1204,8 @@ void PlayerPage::syncKaraokeAnimation()
     } else {
         m_lyricFrameTimer->stop();
     }
-    if (hasWords && m_engine)
-        renderKaraokeLine(m_currentLyricLine, m_engine->position());
+    if (m_amllLyricsView && m_engine)
+        m_amllLyricsView->setPosition(m_engine->position());
 }
 
 void PlayerPage::scrollLyricsToActiveLine(int line)
@@ -1961,6 +1987,8 @@ void PlayerPage::connectPlayerControlEngine()
     connect(m_engine, &PlayerEngine::stateChanged, this, [this](PlayerEngine::PlaybackState st) {
         if (st == PlayerEngine::Playing && m_musicId > 0)
             QTimer::singleShot(300, this, [this]() { refreshAudioQuality(); });
+        if (m_amllLyricsView)
+            m_amllLyricsView->setPlaying(st == PlayerEngine::Playing);
         // 暂停期间歌词不做自动定位，恢复播放时重新定位回当前行
         if (st == PlayerEngine::Playing)
             QTimer::singleShot(0, this, [this]() { scrollLyricsToActiveLine(m_currentLyricLine); });
@@ -2667,13 +2695,10 @@ void PlayerPage::setupUi()
     m_lyricsScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_lyricsScroll->setFrameShape(QFrame::NoFrame);
 
-    m_lyricsContainer = new QWidget();
+    m_amllLyricsView = new AmllLyricsView();
+    m_lyricsContainer = m_amllLyricsView;
     m_lyricsContainer->setObjectName(QStringLiteral("lyricsContainer"));
-    m_lyricsContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-    m_lyricsLayout = new QVBoxLayout(m_lyricsContainer);
-    m_lyricsLayout->setAlignment(Qt::AlignTop);
-    m_lyricsLayout->setSpacing(12);
-    m_lyricsLayout->setContentsMargins(0, 0, 16, 0);
+    m_lyricsLayout = nullptr;
 
     m_lyricsScroll->setWidget(m_lyricsContainer);
     nekoPolishScrollAreaViewport(m_lyricsScroll);
@@ -2771,6 +2796,8 @@ void PlayerPage::retranslate()
     if (noLyricsText) {
         noLyricsText->setText(I18n::instance().tr("noLyrics"));
     }
+    if (m_amllLyricsView)
+        m_amllLyricsView->setEmptyText(I18n::instance().tr("noLyrics"));
 
     if (m_videoRenderBtn)
         m_videoRenderBtn->setText(I18n::instance().tr(QStringLiteral("videoRenderButton")));
@@ -3187,121 +3214,20 @@ void PlayerPage::rebuildLyricLabels()
     m_lyricLineWidgets.clear();
     m_lyricTextLabels.clear();
     m_currentLyricWord = -1;
-    QLayoutItem *item;
-    while ((item = m_lyricsLayout->takeAt(0)) != nullptr) {
-        delete item->widget();
-        delete item;
+    syncAmllLyricsStyle();
+    if (m_amllLyricsView) {
+        m_amllLyricsView->setLyrics(m_lyrics);
+        m_amllLyricsView->setPlaying(m_engine && m_engine->playbackState() == PlayerEngine::Playing);
     }
-
-    if (m_lyrics.isEmpty()) {
-        auto *noData = new QLabel(QString::fromUtf8("\xe2\x99\xaa"), m_lyricsContainer);
-        noData->setAlignment(Qt::AlignCenter);
-        noData->setObjectName("noLyricsIcon");
-        noData->setStyleSheet(QString::fromUtf8(
-            "color: %1; font-size: 56px; background: transparent; margin-top: 60px;"
-        ).arg(m_clrLyricDim));
-        m_lyricsLayout->addWidget(noData);
-
-        auto *noDataLabel = new QLabel(I18n::instance().tr("noLyrics"), m_lyricsContainer);
-        noDataLabel->setAlignment(Qt::AlignCenter);
-        noDataLabel->setObjectName("noLyricsText");
-        noDataLabel->setStyleSheet(QString::fromUtf8(
-            "color: %1; font-size: 14px; background: transparent;"
-        ).arg(m_clrLyricDim));
-        m_lyricsLayout->addWidget(noDataLabel);
-        m_lyricsLayout->addStretch();
-        emitDesktopLyricsPayload();
-        emitBarLyricUpdate(-1);
-        return;
-    }
-
-    auto *topPad = new QWidget(m_lyricsContainer);
-    topPad->setObjectName(QStringLiteral("lyricPadTop"));
-    topPad->setFixedHeight(kLyricTopPad);
-    topPad->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    m_lyricsLayout->addWidget(topPad);
-
-    if (!m_lyrics.isEmpty() && m_lyrics.first().time >= kLyricIntroCountdownMs) {
-        auto *countdown = new LyricCountdownWidget(m_lyricsContainer);
-        countdown->setObjectName(QStringLiteral("lyricIntroCountdown"));
-        countdown->configure(0, m_lyrics.first().time, lyricCountdownDotColor());
-        m_lyricsLayout->addWidget(countdown);
-        m_lyricIntroCountdown = countdown;
-    }
-
-    for (int i = 0; i < m_lyrics.size(); ++i) {
-        auto *lineWidget = new QWidget(m_lyricsContainer);
-        lineWidget->setObjectName(QString("lyricWidget_%1").arg(i));
-        lineWidget->setProperty("lyricIndex", i);
-        lineWidget->setAttribute(Qt::WA_TranslucentBackground);
-        lineWidget->setAutoFillBackground(false);
-        lineWidget->setStyleSheet(QStringLiteral("background: transparent;"));
-        lineWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-
-        auto *outerLay = new QVBoxLayout(lineWidget);
-        outerLay->setContentsMargins(0, 0, 0, 0);
-        outerLay->setSpacing(0);
-
-        auto *inner = new QWidget(lineWidget);
-        inner->setObjectName(QStringLiteral("lyricLineInner"));
-        inner->setAttribute(Qt::WA_TranslucentBackground);
-        inner->setAutoFillBackground(false);
-        inner->setStyleSheet(QStringLiteral("background: transparent;"));
-
-        auto *lineLayout = new QVBoxLayout(inner);
-        lineLayout->setContentsMargins(16, 10, 16, 10);
-        lineLayout->setSpacing(0);
-        outerLay->addWidget(inner);
-
-        auto *textLabel = new QLabel(m_lyrics[i].text, inner);
-        textLabel->setObjectName(QStringLiteral("lyricText"));
-        textLabel->setProperty("lyricIndex", i);
-        configureLyricLabel(textLabel);
-        lineLayout->addWidget(textLabel, 0, Qt::AlignTop);
-        m_lyricTextLabels.append(textLabel);
-
-        QLabel *romanLabel = nullptr;
-        const QString romanization = m_lyrics[i].romanization.trimmed();
-        if (!romanization.isEmpty()) {
-            romanLabel = new QLabel(romanization, inner);
-            romanLabel->setObjectName(QStringLiteral("lyricRomanization"));
-            romanLabel->setProperty("lyricIndex", i);
-            configureLyricLabel(romanLabel);
-            lineLayout->addWidget(romanLabel, 0, Qt::AlignTop);
-        }
-
-        QLabel *transLabel = nullptr;
-        const QString translation = m_lyrics[i].translation.trimmed();
-        if (!translation.isEmpty()) {
-            transLabel = new QLabel(translation, inner);
-            transLabel->setObjectName(QStringLiteral("lyricTranslation"));
-            transLabel->setProperty("lyricIndex", i);
-            configureLyricLabel(transLabel);
-            lineLayout->addWidget(transLabel, 0, Qt::AlignTop);
-        }
-        applyLyricLineStyle(textLabel, romanLabel, transLabel, false);
-
-        m_lyricsLayout->addWidget(lineWidget);
-        m_lyricLineWidgets.append(lineWidget);
-    }
-
-    auto *botPad = new QWidget(m_lyricsContainer);
-    botPad->setObjectName(QStringLiteral("lyricPadBottom"));
-    botPad->setFixedHeight(200);
-    botPad->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    m_lyricsLayout->addWidget(botPad);
     emitDesktopLyricsPayload();
     emitBarLyricUpdate(-1);
 
     QTimer::singleShot(0, this, [this]() {
-        updateLyricWrapWidth();
         m_currentLyricLine = -1;
         if (m_engine && !m_lyrics.isEmpty()) {
             const qint64 pos = m_engine->position();
             updateLyricCountdown(pos);
             updateLyricHighlight(pos);
-        } else {
-            scheduleLyricFocusBlurUpdate();
         }
     });
 }
@@ -3373,19 +3299,19 @@ void PlayerPage::updateLyricHighlight(qint64 positionMs)
     const int word = line >= 0
         ? LyricsParser::wordIndexAt(m_lyrics.at(line), positionMs)
         : -1;
-    if (line == m_currentLyricLine && word == m_currentLyricWord)
+    if (line == m_currentLyricLine && word == m_currentLyricWord) {
+        if (m_amllLyricsView)
+            m_amllLyricsView->setPosition(positionMs);
         return;
+    }
     const int previousLine = m_currentLyricLine;
     m_currentLyricLine = line;
     m_currentLyricWord = word;
     emitBarLyricUpdate(line);
 
-    if (line != previousLine)
-        syncLyricLinesVisual(line, previousLine);
-    if (line >= 0)
-        renderKaraokeLine(line, positionMs);
+    if (m_amllLyricsView)
+        m_amllLyricsView->setPosition(positionMs, line >= 0 && previousLine >= 0 && line < previousLine);
     syncKaraokeAnimation();
-    QTimer::singleShot(0, this, [this, line]() { scrollLyricsToActiveLine(line); });
 }
 
 int PlayerPage::trackDurationSec() const

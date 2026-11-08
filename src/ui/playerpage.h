@@ -21,6 +21,7 @@
 #include "../core/playerengine.h"
 
 class ApiClient;
+class AmllLyricsView;
 class QTimer;
 class QWheelEvent;
 class QSlider;
@@ -117,6 +118,7 @@ private:
     void updateQualityBadgeStyle();
     void applyLyricLineStyle(QLabel *textLabel, QLabel *romanLabel,
                              QLabel *transLabel, bool isCurrent) const;
+    void syncAmllLyricsStyle();
     void syncLyricLinesVisual(int activeLine, int previousLine = -1);
     void renderKaraokeLine(int lineIndex, qint64 positionMs);
     void syncKaraokeAnimation();
@@ -235,6 +237,7 @@ private:
     QScrollArea *m_lyricsScroll;
     QWidget *m_lyricsContainer;
     QVBoxLayout *m_lyricsLayout;
+    AmllLyricsView *m_amllLyricsView = nullptr;
 
     int m_musicId = 0;
     int m_trackDurationSec = 0;
