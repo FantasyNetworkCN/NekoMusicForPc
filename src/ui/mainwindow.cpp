@@ -833,6 +833,7 @@ void MainWindow::setupUi()
     });
     connect(m_titleBar, &TitleBar::notificationsClicked, this,
             &MainWindow::toggleNotificationDrawer);
+    connect(m_titleBar, &TitleBar::backRequested, this, &MainWindow::navigateBack);
     connect(m_settingsPage, &SettingsPage::languageChanged, m_homePage, &HomePage::retranslate);
     connect(m_settingsPage, &SettingsPage::languageChanged, m_sidebar, &Sidebar::retranslate);
     connect(m_settingsPage, &SettingsPage::languageChanged, m_titleBar, &TitleBar::retranslate);
@@ -1616,6 +1617,14 @@ void MainWindow::switchPage(QWidget *target)
     QWidget *current = m_stack->currentWidget();
     if (current == target) return;
 
+    if (!m_navigatingBack && current) {
+        m_pageHistory.append(current);
+        if (m_pageHistory.size() > 50)
+            m_pageHistory.removeFirst();
+    }
+    if (m_titleBar)
+        m_titleBar->setBackEnabled(!m_pageHistory.isEmpty());
+
     // 离开热门/最新列表时释放内存，下次进入 refresh() 会重新请求。
     // 每日推荐保留当前内容，避免返回首页后再次进入时先闪到空白/loading。
     if (current == m_hotMusicPage)
@@ -1661,6 +1670,18 @@ void MainWindow::switchPage(QWidget *target)
 
     fadeOut->start(QAbstractAnimation::DeleteWhenStopped);
     fadeIn->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void MainWindow::navigateBack()
+{
+    if (m_switching || m_pageHistory.isEmpty())
+        return;
+    QWidget *target = m_pageHistory.takeLast();
+    if (m_titleBar)
+        m_titleBar->setBackEnabled(!m_pageHistory.isEmpty());
+    m_navigatingBack = true;
+    switchPage(target);
+    m_navigatingBack = false;
 }
 
 void MainWindow::showMusicListPage(bool isHot)

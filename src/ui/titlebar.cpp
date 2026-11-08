@@ -92,6 +92,8 @@ TitleBar::TitleBar(QWidget *parent) : QWidget(parent)
             this, [this](Theme::ThemeMode) {
                 updateChevronPixmap();
                 refreshSearchGlyph();
+                if (m_backBtn)
+                    m_backBtn->setIcon(Icons::iconNamed("NavigateBefore", 20, iconNormal(), iconActive()));
                 m_notifyBtn->setIcon(Icons::iconNamed("Bell", 18, iconNormal(), iconActive()));
                 m_settingsBtn->setIcon(Icons::iconNamed("Settings", 18, iconNormal(), iconActive()));
                 findChild<QPushButton *>("tbMinBtn")->setIcon(Icons::iconNamed("WindowMinimize", 20, iconNormal(), iconActive()));
@@ -204,6 +206,17 @@ void TitleBar::setupUi()
     auto *lay = new QHBoxLayout(this);
     lay->setContentsMargins(24, 0, 8, 0);
     lay->setSpacing(8);
+
+    m_backBtn = new QPushButton(this);
+    m_backBtn->setObjectName("tbBackBtn");
+    m_backBtn->setFixedSize(36, 36);
+    m_backBtn->setIcon(Icons::iconNamed("NavigateBefore", 20, iconNormal(), iconActive()));
+    m_backBtn->setCursor(Qt::PointingHandCursor);
+    m_backBtn->setToolTip(I18n::instance().tr("back"));
+    m_backBtn->setAccessibleName(I18n::instance().tr("back"));
+    m_backBtn->setEnabled(false);
+    connect(m_backBtn, &QPushButton::clicked, this, &TitleBar::backRequested);
+    lay->addWidget(m_backBtn, 0, Qt::AlignVCenter);
 
     // ─── 搜索框（SPlayer Nav 居中条）────────────────
     m_searchWrap = new QWidget(this);
@@ -364,10 +377,20 @@ void TitleBar::retranslate()
 
     // 铃铛与设置按钮同为 tbIconBtn 样式，只能用成员指针区分（findChild 会拿到先建的那个）
     if (m_settingsBtn) m_settingsBtn->setToolTip(I18n::instance().tr("settings"));
+    if (m_backBtn) {
+        m_backBtn->setToolTip(I18n::instance().tr("back"));
+        m_backBtn->setAccessibleName(I18n::instance().tr("back"));
+    }
     updateNotifyBadge();
 
     updateAvatar();
     updateVipPill();
+}
+
+void TitleBar::setBackEnabled(bool enabled)
+{
+    if (m_backBtn)
+        m_backBtn->setEnabled(enabled);
 }
 
 void TitleBar::setUnreadCount(int unread)

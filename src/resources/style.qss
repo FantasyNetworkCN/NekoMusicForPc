@@ -337,6 +337,24 @@ QTextEdit:focus {
     background: rgba(255, 255, 255, 6);
 }
 
+#tbBackBtn {
+    background: rgba(255, 255, 255, 8);
+    border: none;
+    border-radius: 16px;
+}
+
+#tbBackBtn:hover {
+    background: rgba(255, 255, 255, 14);
+}
+
+#tbBackBtn:pressed {
+    background: rgba(255, 255, 255, 6);
+}
+
+#tbBackBtn:disabled {
+    background: transparent;
+}
+
 /* ─── 窗口控制按钮（低调，hover 时显色）────────────── */
 #tbMinBtn {
     background: transparent;

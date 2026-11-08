@@ -94,6 +94,7 @@ private:
     void rebuildShellBackdropCache();
     void updateChromeForShellBackdrop();
     void switchPage(QWidget *target);
+    void navigateBack();
     void showMusicListPage(bool isHot);
     void showDailyRecommendationsPage();
     void showPlaylistDetailPage(int localId);
@@ -191,7 +192,9 @@ private:
     void handleRemoteStreamFailure(int musicId, quint64 playSeq, bool midPlaybackError = false);
 
     bool m_switching = false;
+    bool m_navigatingBack = false;
     bool m_playerPageVisible = false;
+    QList<QWidget *> m_pageHistory;
     TitleBar *m_titleBar = nullptr;
     Sidebar *m_sidebar = nullptr;
     HomePage *m_homePage = nullptr;

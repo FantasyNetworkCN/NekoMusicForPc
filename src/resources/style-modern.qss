@@ -20,8 +20,9 @@ QMenu::item:selected { background: @SELECTED@; color: @INK@; }
 #tbSearchInner { color: @INK@; font-size: 13px; }
 #tbAvatarWidget { background: @SURFACE@; border-color: @LINE@; border-radius: 16px; }
 #tbAvatarWidget:hover { background: @HOVER@; border-color: @ACCENT@; }
-#tbIconBtn { background: transparent; border-radius: 10px; }
-#tbIconBtn:hover, #tbMinBtn:hover, #tbMaxBtn:hover { background: @HOVER@; }
+#tbIconBtn, #tbBackBtn { background: transparent; border-radius: 10px; }
+#tbIconBtn:hover, #tbBackBtn:hover, #tbMinBtn:hover, #tbMaxBtn:hover { background: @HOVER@; }
+#tbBackBtn:disabled { background: transparent; }
 #tbCloseBtn:hover { background: rgba(242, 100, 100, 50); }
 #tbCloseBtn:pressed { background: rgba(242, 100, 100, 90); }
 

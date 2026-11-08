@@ -29,9 +29,11 @@ public:
     QPoint avatarPos() const;
     /** 站内消息未读数：0 隐藏红点，>99 显示 99+ */
     void setUnreadCount(int unread);
+    void setBackEnabled(bool enabled);
 
 signals:
     void searchRequested(const QString &query);
+    void backRequested();
     void settingsClicked();
     void avatarClicked();
     void vipClicked();
@@ -56,6 +58,7 @@ private:
     NekoNetworkAccessManager *m_nam = nullptr;
     QNetworkReply *m_avatarReply = nullptr;
     QWidget *m_searchWrap = nullptr;
+    QPushButton *m_backBtn = nullptr;
     QLabel *m_searchGlyph = nullptr;
     QLineEdit *m_search = nullptr;
     QLabel *m_logo = nullptr;
