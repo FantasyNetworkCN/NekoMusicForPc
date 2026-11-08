@@ -115,7 +115,8 @@ private:
     void hideAudioQualityBadge();
     void refineAudioQualityFromEngine();
     void updateQualityBadgeStyle();
-    void applyLyricLineStyle(QLabel *textLabel, QLabel *transLabel, bool isCurrent) const;
+    void applyLyricLineStyle(QLabel *textLabel, QLabel *romanLabel,
+                             QLabel *transLabel, bool isCurrent) const;
     void syncLyricLinesVisual(int activeLine, int previousLine = -1);
     void renderKaraokeLine(int lineIndex, qint64 positionMs);
     void syncKaraokeAnimation();

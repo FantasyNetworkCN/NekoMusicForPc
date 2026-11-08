@@ -228,7 +228,9 @@ static void relayoutSingleLyricLine(QWidget *lineWidget, int textW)
         return;
     for (auto *label : lineWidget->findChildren<QLabel *>()) {
         const QString on = label->objectName();
-        if (on == QLatin1String("lyricText") || on == QLatin1String("lyricTranslation")) {
+        if (on == QLatin1String("lyricText")
+            || on == QLatin1String("lyricRomanization")
+            || on == QLatin1String("lyricTranslation")) {
             applyLyricLabelWrapWidth(label, textW);
             label->adjustSize();
         }
@@ -949,7 +951,8 @@ void PlayerPage::refreshTintedPalette()
     }
 }
 
-void PlayerPage::applyLyricLineStyle(QLabel *textLabel, QLabel *transLabel, bool isCurrent) const
+void PlayerPage::applyLyricLineStyle(QLabel *textLabel, QLabel *romanLabel,
+                                     QLabel *transLabel, bool isCurrent) const
 {
     if (!textLabel)
         return;
@@ -971,16 +974,23 @@ void PlayerPage::applyLyricLineStyle(QLabel *textLabel, QLabel *transLabel, bool
     mainFont.setWeight(isCurrent ? QFont::Bold : QFont::Normal);
     textLabel->setFont(mainFont);
 
-    if (transLabel) {
-        transLabel->setStyleSheet(QString::fromUtf8("color: %1; font-size: %2px; font-weight: 400; %3")
-                                      .arg(isCurrent ? m_clrLyricHiTrans : m_clrLyricDim)
-                                      .arg(tranPx)
-                                      .arg(chrome));
-        QFont tranFont = transLabel->font();
-        tranFont.setPixelSize(tranPx);
-        tranFont.setWeight(QFont::Normal);
-        transLabel->setFont(tranFont);
-    }
+    const auto applySecondaryStyle = [&](QLabel *label, bool italic) {
+        if (!label)
+            return;
+        label->setStyleSheet(QString::fromUtf8(
+            "color: %1; font-size: %2px; font-weight: 400; font-style: %3; %4")
+                                 .arg(isCurrent ? m_clrLyricHiTrans : m_clrLyricDim)
+                                 .arg(tranPx)
+                                 .arg(italic ? QStringLiteral("italic") : QStringLiteral("normal"))
+                                 .arg(chrome));
+        QFont font = label->font();
+        font.setPixelSize(tranPx);
+        font.setWeight(QFont::Normal);
+        font.setItalic(italic);
+        label->setFont(font);
+    };
+    applySecondaryStyle(romanLabel, true);
+    applySecondaryStyle(transLabel, false);
 }
 
 static QWidget *findLyricLineByIndex(const QVector<QWidget *> &lines, int index)
@@ -1076,8 +1086,9 @@ void PlayerPage::syncLyricLinesVisual(int activeLine, int previousLine)
         const bool on = (idx == activeLine);
 
         auto *textLabel = lineWidget->findChild<QLabel *>(QStringLiteral("lyricText"));
+        auto *romanLabel = lineWidget->findChild<QLabel *>(QStringLiteral("lyricRomanization"));
         auto *transLabel = lineWidget->findChild<QLabel *>(QStringLiteral("lyricTranslation"));
-        applyLyricLineStyle(textLabel, transLabel, on);
+        applyLyricLineStyle(textLabel, romanLabel, transLabel, on);
         if (!on && idx == previousLine && idx < m_lyrics.size()) {
             textLabel->setTextFormat(Qt::PlainText);
             textLabel->setText(m_lyrics.at(idx).text);
@@ -3249,15 +3260,26 @@ void PlayerPage::rebuildLyricLabels()
         lineLayout->addWidget(textLabel, 0, Qt::AlignTop);
         m_lyricTextLabels.append(textLabel);
 
+        QLabel *romanLabel = nullptr;
+        const QString romanization = m_lyrics[i].romanization.trimmed();
+        if (!romanization.isEmpty()) {
+            romanLabel = new QLabel(romanization, inner);
+            romanLabel->setObjectName(QStringLiteral("lyricRomanization"));
+            romanLabel->setProperty("lyricIndex", i);
+            configureLyricLabel(romanLabel);
+            lineLayout->addWidget(romanLabel, 0, Qt::AlignTop);
+        }
+
         QLabel *transLabel = nullptr;
-        if (!m_lyrics[i].translation.isEmpty()) {
-            transLabel = new QLabel(m_lyrics[i].translation, inner);
+        const QString translation = m_lyrics[i].translation.trimmed();
+        if (!translation.isEmpty()) {
+            transLabel = new QLabel(translation, inner);
             transLabel->setObjectName(QStringLiteral("lyricTranslation"));
             transLabel->setProperty("lyricIndex", i);
             configureLyricLabel(transLabel);
             lineLayout->addWidget(transLabel, 0, Qt::AlignTop);
         }
-        applyLyricLineStyle(textLabel, transLabel, false);
+        applyLyricLineStyle(textLabel, romanLabel, transLabel, false);
 
         m_lyricsLayout->addWidget(lineWidget);
         m_lyricLineWidgets.append(lineWidget);
