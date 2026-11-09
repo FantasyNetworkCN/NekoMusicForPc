@@ -103,6 +103,8 @@ private:
     void setupUi();
     void syncContainerHeight();
     void updateVisibleRows();
+    /** 上下边缘渐隐：浮层挂在滚动视口内，几何完全由列表自己维护，页面无需参与。 */
+    void updateEdgeFade();
     void scheduleVisibleUpdate();
     void rebuildCurrentRowCache();
     void refreshPlayingState();
@@ -145,6 +147,8 @@ private:
 
     QScrollArea *m_scroll = nullptr;
     QWidget *m_container = nullptr;
+    /** 渐隐浮层（挂在滚动视口上，随视口自动对齐）。 */
+    QWidget *m_edgeFade = nullptr;
 
     QHash<int, SongCardWidget *> m_rowCards;
     QList<SongCardWidget *> m_cardPool;

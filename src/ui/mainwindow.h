@@ -71,6 +71,8 @@ public:
     void paintShellBackdrop(QPainter &p, const QRect &r) const;
     /** 供播放页模糊底图复用，避免再次 render 整窗。 */
     QPixmap shellBackdropPixmapForSize(const QSize &size);
+    /** 当前用于绘制窗口背景的缓存（列表边缘渐隐取样用，随壁纸/主题重建）。 */
+    QPixmap shellBackdropCachePixmap() const { return m_shellBackdropCache; }
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
