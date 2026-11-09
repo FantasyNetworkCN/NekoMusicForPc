@@ -28,6 +28,7 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
     void enterEvent(QEnterEvent *event) override;
     void leaveEvent(QEvent *event) override;
 
@@ -41,6 +42,8 @@ private:
     QLabel *m_nameLbl = nullptr;
     QMetaObject::Connection m_coverConn;
     void setPlaceholderCover();
+    /** 按当前可用宽度给歌单名加省略号（否则长名字会被硬切成半个字）。 */
+    void applyElidedName();
 };
 
 #endif // PLAYLISTLISTITEM_H

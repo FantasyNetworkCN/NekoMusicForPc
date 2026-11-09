@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file sidebar.cpp
  * @brief 侧边栏实现
  *
@@ -162,6 +162,9 @@ void Sidebar::setupUi()
     scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setObjectName("sbScroll");
+    // 给滚动条留出内边距：否则 6px 滚动条会压在圆角面板的边缘外侧，
+    // 看起来像面板右边被切了一条。
+    scroll->setContentsMargins(0, 0, 8, 0);
 
     auto *container = new QWidget(scroll);
     container->setObjectName("sbContainer");

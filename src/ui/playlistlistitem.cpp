@@ -10,6 +10,9 @@
 #include <QMenu>
 #include <QHBoxLayout>
 #include <QPainterPath>
+#include <QResizeEvent>
+#include <QTimer>
+#include <QFontMetrics>
 
 PlaylistListItem::PlaylistListItem(int playlistId, const QString& name, int musicCount, const QString& coverUrl, Mode mode, QWidget *parent)
     : QWidget(parent), m_playlistId(playlistId), m_name(name), m_musicCount(musicCount), m_mode(mode)
@@ -62,7 +65,14 @@ PlaylistListItem::PlaylistListItem(int playlistId, const QString& name, int musi
     m_nameLbl->setText(m_name);
     m_nameLbl->setAlignment(Qt::AlignVCenter);
     m_nameLbl->setWordWrap(false);
+    // 允许在空间不足时收缩，配合下面的 elide 使用；否则长名字会把条目撑宽再被硬切
+    m_nameLbl->setMinimumWidth(0);
+    m_nameLbl->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    m_nameLbl->setToolTip(m_name);
     lay->addWidget(m_nameLbl, 1);
+
+    // 布局完成后再算一次省略号（此时标签宽度才确定）
+    QTimer::singleShot(0, this, [this]() { applyElidedName(); });
 
     connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged, this, [this]() {
         update();
@@ -77,6 +87,27 @@ void PlaylistListItem::setPlaceholderCover() {
     QPixmap pix(36, 36);
     pix.fill(QColor(128, 128, 128, 60));
     m_coverLbl->setPixmap(pix);
+}
+
+void PlaylistListItem::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    applyElidedName();
+}
+
+void PlaylistListItem::applyElidedName()
+{
+    if (!m_nameLbl)
+        return;
+    const int avail = m_nameLbl->width();
+    if (avail <= 0)
+        return;
+    // Qt 的 QLabel 不会自动加省略号，宽度不够时会在字形中间硬切（如“张信哲/拿…”被切成半字）
+    const QFontMetrics fm(m_nameLbl->font());
+    const QString elided = fm.elidedText(m_name, Qt::ElideRight, avail);
+    if (m_nameLbl->text() != elided)
+        m_nameLbl->setText(elided);
+    m_nameLbl->setToolTip(m_name);
 }
 
 void PlaylistListItem::mousePressEvent(QMouseEvent *event) {
