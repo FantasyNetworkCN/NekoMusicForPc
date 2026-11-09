@@ -57,12 +57,13 @@ QJsonObject strProp(const QString &description)
     return prop(QStringLiteral("string"), description);
 }
 
-QJsonObject numProp(const QString &description, double minimum, double maximum)
+// 工具 schema 只下发 type/description：DSH 的工具 schema 子集与严格模型端点
+// （如 deepseek-official）不支持 minimum/maximum 等数值边界关键字，带边界的
+// schema 会让该工具所在的整轮模型请求在入口被 400 拒绝（INVALID_REQUEST）。
+// 取值范围改由执行器校验（readPositiveInt 等），描述里已有上限说明。
+QJsonObject numProp(const QString &description, double /*minimum*/ = 0, double /*maximum*/ = 0)
 {
-    QJsonObject p = prop(QStringLiteral("number"), description);
-    p.insert(QStringLiteral("minimum"), minimum);
-    p.insert(QStringLiteral("maximum"), maximum);
-    return p;
+    return prop(QStringLiteral("number"), description);
 }
 
 QJsonObject enumProp(const QString &description, const QStringList &values)
@@ -177,13 +178,22 @@ QJsonArray McpBridge::listTools() const
     const auto musicIdProp = [] {
         return numProp(QStringLiteral("曲目 ID（可由 search_music / get_favorites 等获得）"), 1, 1e12);
     };
+    // 只返回 properties：add() 自己会用 objSchema() 包上 type/required。
+    // 曾在这里多包了一层 objSchema，导致 schema 变成
+    //   properties.properties.music_id
+    // 模型端看到 music_id 的类型是 "properties" 这种非标准类型而拒绝调用
+    // （DSH 报错：["music_id"] is not of types "boolean", "object"）。
     const auto musicIdField = [](const QString &extra = QString()) {
-        return objSchema(QJsonObject{{QStringLiteral("music_id"),
-                                      numProp(extra.isEmpty()
-                                                  ? QStringLiteral("曲目 ID（可由 search_music 获得）")
-                                                  : extra,
-                                              1, 1e12)}},
-                         QJsonArray{QStringLiteral("music_id")});
+        return QJsonObject{{QStringLiteral("music_id"),
+                            numProp(extra.isEmpty()
+                                        ? QStringLiteral("曲目 ID（可由 search_music 获得）")
+                                        : extra,
+                                    1, 1e12)}};
+    };
+    // 便捷封装：只有 music_id 一个必填参数的工具走这里。
+    const auto addMusicIdTool = [&add, &musicIdField](const QString &name, const QString &description) {
+        add(name, description, musicIdField(),
+            QJsonArray{QStringLiteral("music_id")});
     };
 
     // ── 播放控制 ───────────────────────────────────────
@@ -224,9 +234,8 @@ QJsonArray McpBridge::listTools() const
         QJsonObject{{QStringLiteral("query"), strProp(QStringLiteral("搜索关键词"))},
                     {QStringLiteral("index"), numProp(QStringLiteral("结果序号，默认 1"), 1, 50)}},
         QJsonArray{QStringLiteral("query")});
-    add(QStringLiteral("play_next"), QStringLiteral("把曲目插到当前曲目之后，作为下一首播放（插队播放）。"),
-        musicIdField());
-    add(QStringLiteral("remove_from_queue"), QStringLiteral("按曲目 ID 从播放队列中移除。"), musicIdField());
+    addMusicIdTool(QStringLiteral("play_next"), QStringLiteral("把曲目插到当前曲目之后，作为下一首播放（插队播放）。"));
+    addMusicIdTool(QStringLiteral("remove_from_queue"), QStringLiteral("按曲目 ID 从播放队列中移除。"));
     add(QStringLiteral("clear_queue"), QStringLiteral("清空播放队列。"));
 
     // ── 搜索与内容 ─────────────────────────────────────
@@ -234,8 +243,7 @@ QJsonArray McpBridge::listTools() const
         QJsonObject{{QStringLiteral("query"), strProp(QStringLiteral("搜索关键词"))},
                     {QStringLiteral("limit"), numProp(QStringLiteral("返回数量，默认 10，最大 50"), 1, 50)}},
         QJsonArray{QStringLiteral("query")});
-    add(QStringLiteral("play_music"), QStringLiteral("按曲目 ID 播放（ID 可由 search_music 获得）。"),
-        musicIdField());
+    addMusicIdTool(QStringLiteral("play_music"), QStringLiteral("按曲目 ID 播放（ID 可由 search_music 获得）。"));
     add(QStringLiteral("play_search_result"),
         QStringLiteral("搜索并按序号播放第 N 个结果（index 从 1 开始）。"),
         QJsonObject{{QStringLiteral("query"), strProp(QStringLiteral("搜索关键词"))},
@@ -252,8 +260,8 @@ QJsonArray McpBridge::listTools() const
         QStringLiteral("获取最多 5 个推荐歌单；游客返回热门精选，登录用户返回个性化推荐。"),
         QJsonObject{{QStringLiteral("refresh"),
                      prop(QStringLiteral("boolean"), QStringLiteral("true 时更换探索位"))}});
-    add(QStringLiteral("get_music_detail"), QStringLiteral("获取指定曲目的详细信息。"), musicIdField());
-    add(QStringLiteral("get_lyrics"), QStringLiteral("获取指定曲目的歌词文本。"), musicIdField());
+    addMusicIdTool(QStringLiteral("get_music_detail"), QStringLiteral("获取指定曲目的详细信息。"));
+    addMusicIdTool(QStringLiteral("get_lyrics"), QStringLiteral("获取指定曲目的歌词文本。"));
     add(QStringLiteral("get_comments"), QStringLiteral("获取指定曲目的评论列表。"),
         QJsonObject{{QStringLiteral("music_id"), musicIdProp()},
                     {QStringLiteral("page"), numProp(QStringLiteral("页码，默认 1"), 1, 10000)},
@@ -262,10 +270,10 @@ QJsonArray McpBridge::listTools() const
 
     // ── 收藏 ───────────────────────────────────────────
     add(QStringLiteral("get_favorites"), QStringLiteral("获取当前登录用户的收藏曲目列表（需登录）。"));
-    add(QStringLiteral("is_favorite"), QStringLiteral("判断某曲目是否已收藏。"), musicIdField());
-    add(QStringLiteral("add_favorite"), QStringLiteral("收藏指定曲目（需登录）。"), musicIdField());
-    add(QStringLiteral("remove_favorite"), QStringLiteral("取消收藏指定曲目（需登录）。"), musicIdField());
-    add(QStringLiteral("toggle_favorite"), QStringLiteral("切换指定曲目的收藏状态（需登录）。"), musicIdField());
+    addMusicIdTool(QStringLiteral("is_favorite"), QStringLiteral("判断某曲目是否已收藏。"));
+    addMusicIdTool(QStringLiteral("add_favorite"), QStringLiteral("收藏指定曲目（需登录）。"));
+    addMusicIdTool(QStringLiteral("remove_favorite"), QStringLiteral("取消收藏指定曲目（需登录）。"));
+    addMusicIdTool(QStringLiteral("toggle_favorite"), QStringLiteral("切换指定曲目的收藏状态（需登录）。"));
 
     // ── 在线歌单 ───────────────────────────────────────
     add(QStringLiteral("list_playlists"), QStringLiteral("获取当前登录用户创建的歌单列表（需登录）。"));
@@ -308,8 +316,8 @@ QJsonArray McpBridge::listTools() const
 
     // ── 下载 ───────────────────────────────────────────
     add(QStringLiteral("list_downloads"), QStringLiteral("列出已下载与正在下载的曲目。"));
-    add(QStringLiteral("download_music"), QStringLiteral("把指定曲目加入下载队列。"), musicIdField());
-    add(QStringLiteral("cancel_download"), QStringLiteral("取消指定曲目的下载。"), musicIdField());
+    addMusicIdTool(QStringLiteral("download_music"), QStringLiteral("把指定曲目加入下载队列。"));
+    addMusicIdTool(QStringLiteral("cancel_download"), QStringLiteral("取消指定曲目的下载。"));
 
     // ── 账户与消息 ─────────────────────────────────────
     add(QStringLiteral("get_user_info"), QStringLiteral("获取当前登录用户的资料。"));
@@ -441,7 +449,7 @@ QJsonArray McpBridge::listTools() const
     add(QStringLiteral("download_playlist"), QStringLiteral("把整张歌单加入下载队列。"),
         QJsonObject{{QStringLiteral("playlist_id"), numProp(QStringLiteral("歌单 ID"), 1, 1e12)}},
         QJsonArray{QStringLiteral("playlist_id")});
-    add(QStringLiteral("remove_download"), QStringLiteral("移除某曲目的下载记录。"), musicIdField());
+    addMusicIdTool(QStringLiteral("remove_download"), QStringLiteral("移除某曲目的下载记录。"));
 
     // ── 外部歌单导入 ───────────────────────────────────
     add(QStringLiteral("get_external_playlist"),
