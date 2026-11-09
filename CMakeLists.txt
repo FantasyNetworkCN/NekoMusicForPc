@@ -190,6 +190,8 @@ set(SOURCES
         src/core/playerengine.cpp
         src/core/mcpserver.cpp
         src/core/mcpbridge.cpp
+        src/core/applog.cpp
+        src/core/crashhandler.cpp
         src/core/apiclient.cpp
         src/core/nekonetworkaccessmanager.cpp
         src/core/notificationcenter.cpp
@@ -281,6 +283,8 @@ set(HEADERS
         src/core/playerengine.h
         src/core/mcpserver.h
         src/core/mcpbridge.h
+        src/core/applog.h
+        src/core/crashhandler.h
         src/core/apiclient.h
         src/core/nekonetworkaccessmanager.h
         src/core/notificationcenter.h
@@ -461,9 +465,10 @@ if(WIN32)
     # MSVC 用 Shlwapi.lib；MinGW 交叉编译用 libshlwapi.a（小写 -lshlwapi）
     # user32 提供全局快捷键所需的 RegisterHotKey/UnregisterHotKey
     if(MINGW)
-        target_link_libraries(${PROJECT_NAME} PRIVATE shlwapi advapi32 user32 bcrypt ncrypt)
+        # dbghelp 提供崩溃抓栈（SymInitialize / StackWalk64）
+        target_link_libraries(${PROJECT_NAME} PRIVATE shlwapi advapi32 user32 bcrypt ncrypt dbghelp)
     else()
-        target_link_libraries(${PROJECT_NAME} PRIVATE Shlwapi Advapi32 User32 bcrypt ncrypt)
+        target_link_libraries(${PROJECT_NAME} PRIVATE Shlwapi Advapi32 User32 bcrypt ncrypt Dbghelp)
     endif()
 endif()
 
