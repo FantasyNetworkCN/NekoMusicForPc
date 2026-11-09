@@ -1074,29 +1074,40 @@ void PlayerPage::applyLyricViewportFocusBlur()
         const int lineH = lineWidget->height();
         const int lineCenterY = lineTop + lineH / 2;
 
-        if (lineTop + lineH < scrollY - 120 || lineTop > scrollY + viewH + 120) {
-            lineWidget->setGraphicsEffect(nullptr);
-            continue;
-        }
+        auto *effect = qobject_cast<QGraphicsBlurEffect *>(lineWidget->graphicsEffect());
 
+        const bool offscreen = lineTop + lineH < scrollY - 120 || lineTop > scrollY + viewH + 120;
         int signedDist = lineCenterY - focusY;
         if (signedDist < 0)
             signedDist = qMin(0, signedDist + kLyricFocusTopEasePx);
         else
             signedDist = qMax(0, signedDist - kLyricFocusBottomEasePx);
-        const qreal radius = blurForDistance(qAbs(signedDist));
+        const qreal radius = offscreen ? 0.0 : blurForDistance(qAbs(signedDist));
+
+        // 不需要模糊时只把效果关掉，**不摘除**。
+        // 旧写法在这里反复 setGraphicsEffect(nullptr)/new，16ms 定时器一分钟能增删上千次，
+        // 一旦与动画/控件销毁时序重叠就会踩到已释放的 QWidget
+        // （崩溃点正是 QWidget::setGraphicsEffect +0x196）。现在每行最多挂一次效果。
         if (radius <= 0.05) {
-            lineWidget->setGraphicsEffect(nullptr);
+            if (effect) {
+                if (effect->isEnabled())
+                    effect->setEnabled(false);
+                if (effect->blurRadius() > 0.01)
+                    effect->setBlurRadius(0.0);
+            }
             continue;
         }
 
-        auto *effect = qobject_cast<QGraphicsBlurEffect *>(lineWidget->graphicsEffect());
         if (!effect) {
             effect = new QGraphicsBlurEffect(lineWidget);
             effect->setBlurHints(QGraphicsBlurEffect::PerformanceHint);
+            effect->setBlurRadius(radius);
             lineWidget->setGraphicsEffect(effect);
+            continue;
         }
-        if (!qFuzzyCompare(effect->blurRadius(), radius))
+        if (!effect->isEnabled())
+            effect->setEnabled(true);
+        if (!qFuzzyCompare(effect->blurRadius() + 1.0, radius + 1.0))
             effect->setBlurRadius(radius);
     }
 }

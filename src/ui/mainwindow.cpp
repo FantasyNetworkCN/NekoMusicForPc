@@ -37,6 +37,7 @@
 #include <QSettings>
 #include <QUrlQuery>
 #include <QSet>
+#include <QPointer>
 #include "core/playerengine.h"
 #include "core/mcpserver.h"
 #include "core/mcpbridge.h"
@@ -62,6 +63,7 @@
 #include "core/localmusicmeta.h"
 #include "core/defaultmusicappchecker.h"
 #include "core/appshortcuts.h"
+#include "core/applog.h"
 #include "core/globalshortcutcontroller.h"
 #include "core/micsynccontroller.h"
 #include "core/shellbackdropsettings.h"
@@ -128,7 +130,8 @@ public:
         m_fadeAnim->setStartValue(0.0);
         m_fadeAnim->setEndValue(1.0);
         m_fadeAnim->setEasingCurve(QEasingCurve::OutCubic);
-        connect(m_fadeAnim, &QPropertyAnimation::finished, this, [this]() { m_fadeAnim = nullptr; });
+        connect(m_fadeAnim.data(), &QPropertyAnimation::finished, this,
+                [this]() { m_fadeAnim = nullptr; });
         m_fadeAnim->start(QAbstractAnimation::DeleteWhenStopped);
     }
 
@@ -144,7 +147,7 @@ public:
         m_fadeAnim->setStartValue(m_opacityFx->opacity());
         m_fadeAnim->setEndValue(0.0);
         m_fadeAnim->setEasingCurve(QEasingCurve::InCubic);
-        connect(m_fadeAnim, &QPropertyAnimation::finished, this, [this]() {
+        connect(m_fadeAnim.data(), &QPropertyAnimation::finished, this, [this]() {
             m_fadeAnim = nullptr;
             hide();
             m_opacityFx->setOpacity(0.0);
@@ -177,17 +180,18 @@ protected:
 private:
     void stopFadeAnim()
     {
-        if (!m_fadeAnim)
+        if (m_fadeAnim.isNull())
             return;
+        // DeleteWhenStopped：stop() 之后 Qt 会负责销毁，不需要（也不能）再 deleteLater
         m_fadeAnim->stop();
-        m_fadeAnim->deleteLater();
         m_fadeAnim = nullptr;
     }
 
     QPixmap m_blurPixmap;
     bool m_fullPlayerMode = false;
     QGraphicsOpacityEffect *m_opacityFx = nullptr;
-    QPropertyAnimation *m_fadeAnim = nullptr;
+    // QPointer：动画在 DeleteWhenStopped 下由 Qt 自行回收，裸指针会悬垂
+    QPointer<QPropertyAnimation> m_fadeAnim;
 };
 
 /** 铺满 centralWidget 的整窗底图（含首页） */
@@ -256,6 +260,7 @@ Qt::CursorShape cursorForResizeEdges(Qt::Edges edges)
 #include <QDebug>
 #include "ui/lineinputdialog.h"
 #include <QTimer>
+#include <QElapsedTimer>
 #include <memory>
 
 #include <QHBoxLayout>
@@ -1658,13 +1663,35 @@ void MainWindow::switchPage(QWidget *target)
     fadeIn->setEndValue(1.0);
     fadeIn->setEasingCurve(QEasingCurve::OutCubic);
 
-    connect(fadeIn, &QPropertyAnimation::finished, this, [this, target, current]() {
-        m_stack->setCurrentWidget(target);
-        current->setGraphicsEffect(nullptr);
-        target->setGraphicsEffect(nullptr);
+    // 用 QPointer 兜底：页面本身是长生命周期对象，但一旦某条路径提前销毁了它，
+    // 这里对已销毁控件调 setGraphicsEffect 正是 0xc0000005 的来源之一。
+    QPointer<QWidget> guardCurrent(current);
+    QPointer<QWidget> guardTarget(target);
+    const quint64 token = ++m_switchToken;
+
+    connect(fadeIn, &QPropertyAnimation::finished, this,
+            [this, guardCurrent, guardTarget, token]() {
+                if (token != m_switchToken)
+                    return;
+                if (!guardCurrent.isNull())
+                    guardCurrent->setGraphicsEffect(nullptr);
+                if (!guardTarget.isNull()) {
+                    guardTarget->setGraphicsEffect(nullptr);
+                    m_stack->setCurrentWidget(guardTarget.data());
+                }
+                m_switching = false;
+                if (m_playerBar)
+                    m_playerBar->refreshGlassBackdrop();
+            });
+
+    // 兜底：动画若被中止（这种情况不会发 finished），m_switching 会永久为 true，
+    // 之后所有页面切换都被静默忽略，表现就是「界面点不动了」。
+    QTimer::singleShot(Theme::kAnimNormal + 600, this, [this, token]() {
+        if (token != m_switchToken || !m_switching)
+            return;
+        qWarning().noquote()
+            << QStringLiteral("[UI] 页面切换动画未回调，已强制解除 m_switching 锁定");
         m_switching = false;
-        if (m_playerBar)
-            m_playerBar->refreshGlassBackdrop();
     });
 
     fadeOut->start(QAbstractAnimation::DeleteWhenStopped);
@@ -2497,11 +2524,17 @@ void MainWindow::disconnectDownloader()
 void MainWindow::playNext()
 {
     qDebug() << "[MainWindow] playNext called";
+    QElapsedTimer timer;
+    timer.start();
 
     m_isDownloading = false;
     disconnectDownloader();
     m_downloader->cancel();
     m_engine->stop();
+    if (timer.elapsed() >= 200) {
+        qWarning().noquote() << QStringLiteral("[UI] playNext: engine->stop() 阻塞 GUI %1")
+                                    .arg(AppLog::msText(timer.elapsed()));
+    }
 
     ++m_enginePlaySeq;
     const quint64 playSeq = m_enginePlaySeq;
@@ -2563,7 +2596,15 @@ void MainWindow::playPrevious()
     m_isDownloading = false;
     disconnectDownloader();
     m_downloader->cancel();
-    m_engine->stop();
+    {
+        QElapsedTimer stopTimer;
+        stopTimer.start();
+        m_engine->stop();
+        if (stopTimer.elapsed() >= 200) {
+            qWarning().noquote() << QStringLiteral("[UI] playPrevious: engine->stop() 阻塞 GUI %1")
+                                        .arg(AppLog::msText(stopTimer.elapsed()));
+        }
+    }
 
     ++m_enginePlaySeq;
     const quint64 playSeq = m_enginePlaySeq;
@@ -3417,6 +3458,7 @@ void MainWindow::syncPlayModeUi()
 
 void MainWindow::applyDesktopLyricsEnabled(bool enabled, bool showToast)
 {
+    qInfo().noquote() << QStringLiteral("[UI] 桌面歌词 -> %1").arg(enabled ? QStringLiteral("开") : QStringLiteral("关"));
     QSettings().setValue(QStringLiteral("desktopLyrics"), enabled);
     if (m_playerBar)
         m_playerBar->setDesktopLyricsChecked(enabled);
@@ -3461,10 +3503,18 @@ void MainWindow::togglePlaybackForSystemUi()
 {
     if (!m_engine)
         return;
-    if (m_engine->isActuallyPlaying() && !m_engine->isFadingOut())
+    QElapsedTimer timer;
+    timer.start();
+    const bool pausing = m_engine->isActuallyPlaying() && !m_engine->isFadingOut();
+    qInfo().noquote() << QStringLiteral("[UI] 播放/暂停 -> %1").arg(pausing ? QStringLiteral("暂停") : QStringLiteral("播放"));
+    if (pausing)
         m_engine->fadeOut();
     else
         m_engine->fadeIn();
+    if (timer.elapsed() >= 200) {
+        qWarning().noquote() << QStringLiteral("[UI] 播放/暂停处理耗时 %1（同步阻塞）")
+                                    .arg(AppLog::msText(timer.elapsed()));
+    }
 }
 
 void MainWindow::setupKeyboardShortcuts()

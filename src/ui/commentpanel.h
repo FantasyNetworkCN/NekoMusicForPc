@@ -22,7 +22,8 @@ class QLabel;
 class QPushButton;
 class QTextEdit;
 #include "core/nekonetworkaccessmanager.h"
-class QPropertyAnimation;
+#include <QPointer>
+#include <QPropertyAnimation>
 class QGraphicsDropShadowEffect;
 
 class CommentPanel : public QWidget {
@@ -117,6 +118,8 @@ private:
 
     bool m_drawerOpen = false;
     bool m_animating = false;
-    QPropertyAnimation *m_slideAnim = nullptr;
+    // QPointer：动画用 DeleteWhenStopped 启动，可能被 Qt 自行销毁；
+    // 用裸指针时成员会悬垂，下一次 stop() 就踩野指针（QAbstractAnimation::stop 崩溃）。
+    QPointer<QPropertyAnimation> m_slideAnim;
     QGraphicsDropShadowEffect *m_drawerShadow = nullptr;
 };

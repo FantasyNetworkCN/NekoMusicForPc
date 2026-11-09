@@ -637,9 +637,9 @@ void NotificationPanel::openDrawer()
     if (!host)
         return;
 
-    if (m_slideAnim) {
+    if (!m_slideAnim.isNull()) {
+        // DeleteWhenStopped：stop() 已让 Qt 负责销毁，不能再 deleteLater() 二次删除
         m_slideAnim->stop();
-        m_slideAnim->deleteLater();
         m_slideAnim = nullptr;
     }
 
@@ -664,7 +664,7 @@ void NotificationPanel::openDrawer()
     m_slideAnim->setEasingCurve(QEasingCurve::OutCubic);
     m_slideAnim->setStartValue(start);
     m_slideAnim->setEndValue(end);
-    connect(m_slideAnim, &QPropertyAnimation::finished, this, [this]() {
+    connect(m_slideAnim.data(), &QPropertyAnimation::finished, this, [this]() {
         m_animating = false;
         // DeleteWhenStopped 会在动画结束后销毁对象，必须同步置空，避免野指针
         m_slideAnim = nullptr;
@@ -684,9 +684,9 @@ void NotificationPanel::closeDrawer()
     if (!m_drawerOpen && !isVisible())
         return;
 
-    if (m_slideAnim) {
+    if (!m_slideAnim.isNull()) {
+        // DeleteWhenStopped：stop() 已让 Qt 负责销毁，不能再 deleteLater() 二次删除
         m_slideAnim->stop();
-        m_slideAnim->deleteLater();
         m_slideAnim = nullptr;
     }
 
@@ -707,7 +707,7 @@ void NotificationPanel::closeDrawer()
     m_slideAnim->setEasingCurve(QEasingCurve::InCubic);
     m_slideAnim->setStartValue(start);
     m_slideAnim->setEndValue(end);
-    connect(m_slideAnim, &QPropertyAnimation::finished, this, [this]() {
+    connect(m_slideAnim.data(), &QPropertyAnimation::finished, this, [this]() {
         m_animating = false;
         m_slideAnim = nullptr;
         hide();

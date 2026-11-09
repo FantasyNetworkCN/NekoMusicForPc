@@ -17,6 +17,7 @@
 #include <QHash>
 #include <QSet>
 #include <QPointer>
+#include <QPropertyAnimation>
 #include <functional>
 #include "core/musicinfo.h"
 #include "ui/songcontextmenu.h"
@@ -143,6 +144,7 @@ private:
     QSet<int> m_batchSelectedIds;
     /** 每个可见行当前已回灌的选中态，避免重复刷同一行 */
     QSet<int> m_rowBatchChecked;
-    class QPropertyAnimation *m_slideAnim = nullptr;
+    // QPointer：动画以 DeleteWhenStopped 启动，Qt 可能在成员未置空时已经销毁它
+    QPointer<QPropertyAnimation> m_slideAnim;
     class QGraphicsDropShadowEffect *m_drawerShadow = nullptr;
 };

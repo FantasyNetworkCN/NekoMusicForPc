@@ -806,9 +806,10 @@ void CommentPanel::openDrawer()
     QWidget *host = parentWidget();
     if (!host) return;
 
-    if (m_slideAnim) {
+    if (!m_slideAnim.isNull()) {
+        // DeleteWhenStopped：stop() 已让 Qt 负责销毁，不能再 deleteLater() 二次删除；
+        // m_slideAnim 是 QPointer，即使动画已被 Qt 删除也不会悬垂。
         m_slideAnim->stop();
-        m_slideAnim->deleteLater();
         m_slideAnim = nullptr;
     }
 
@@ -832,7 +833,7 @@ void CommentPanel::openDrawer()
     m_slideAnim->setEasingCurve(QEasingCurve::OutCubic);
     m_slideAnim->setStartValue(start);
     m_slideAnim->setEndValue(end);
-    connect(m_slideAnim, &QPropertyAnimation::finished, this, [this]() {
+    connect(m_slideAnim.data(), &QPropertyAnimation::finished, this, [this]() {
         m_animating = false;
         // DeleteWhenStopped 会在动画结束后销毁对象，必须同步置空，避免野指针
         m_slideAnim = nullptr;
@@ -851,9 +852,10 @@ void CommentPanel::closeDrawer()
     }
     if (!m_drawerOpen && !isVisible()) return;
 
-    if (m_slideAnim) {
+    if (!m_slideAnim.isNull()) {
+        // DeleteWhenStopped：stop() 已让 Qt 负责销毁，不能再 deleteLater() 二次删除；
+        // m_slideAnim 是 QPointer，即使动画已被 Qt 删除也不会悬垂。
         m_slideAnim->stop();
-        m_slideAnim->deleteLater();
         m_slideAnim = nullptr;
     }
 
@@ -874,7 +876,7 @@ void CommentPanel::closeDrawer()
     m_slideAnim->setEasingCurve(QEasingCurve::InCubic);
     m_slideAnim->setStartValue(start);
     m_slideAnim->setEndValue(end);
-    connect(m_slideAnim, &QPropertyAnimation::finished, this, [this]() {
+    connect(m_slideAnim.data(), &QPropertyAnimation::finished, this, [this]() {
         m_animating = false;
         // DeleteWhenStopped 会在动画结束后销毁对象，必须同步置空，避免野指针
         m_slideAnim = nullptr;

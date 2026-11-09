@@ -20,7 +20,8 @@ class QVBoxLayout;
 class QScrollArea;
 class QLabel;
 class QPushButton;
-class QPropertyAnimation;
+#include <QPointer>
+#include <QPropertyAnimation>
 class QGraphicsDropShadowEffect;
 
 class NotificationPanel : public QWidget
@@ -92,6 +93,6 @@ private:
     bool m_loaded = false;
     bool m_drawerOpen = false;
     bool m_animating = false;
-    QPropertyAnimation *m_slideAnim = nullptr;
+    QPointer<QPropertyAnimation> m_slideAnim;
     QGraphicsDropShadowEffect *m_drawerShadow = nullptr;
 };

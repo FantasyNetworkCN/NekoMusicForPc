@@ -1,6 +1,8 @@
 #include "playerengine.h"
 #include "httpmediadevice.h"
+#include "core/applog.h"
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QMediaMetaData>
 #include <QSignalBlocker>
 #include <QUrl>
@@ -19,6 +21,7 @@ PlayerEngine::PlayerEngine(QObject *parent)
 
 PlayerEngine::~PlayerEngine()
 {
+    qInfo().noquote() << QStringLiteral("[Player] 引擎析构，开始停止播放器");
     if (m_player)
         m_player->stop();
     if (m_qualitySwitchPlayer)
@@ -44,6 +47,9 @@ void PlayerEngine::attachHttpDevice(QMediaPlayer *player, const QUrl &url, HttpM
     if (!player)
         return;
 
+    QElapsedTimer timer;
+    timer.start();
+
     auto *device = new HttpMediaDevice(url, this);
     connect(device, &HttpMediaDevice::fetchError, this, [this, device](const QString &error) {
         if (device != m_streamDevice && device != m_qualitySwitchDevice)
@@ -53,21 +59,40 @@ void PlayerEngine::attachHttpDevice(QMediaPlayer *player, const QUrl &url, HttpM
     });
     device->open(QIODevice::ReadOnly);
     device->start();
-    // 先交棒给播放器，再回收旧设备，避免交接瞬间旧设备读到半截数据。
-    player->setSourceDevice(device, url);
+    const qint64 prepareMs = timer.elapsed();
 
+    // 关键点：Qt 的 FFmpeg 后端会在调用线程（GUI 线程）上同步等待媒体源打开完成，
+    // 因此这一行就是“按下切歌/播放键后界面整片卡住”的直接落点。
+    // 打开快慢取决于网络首包，日志里 prepareMs 与本行耗时可以把两者区分开。
+    player->setSourceDevice(device, url);
+    const qint64 attachMs = timer.elapsed() - prepareMs;
+
+    // 先交棒给播放器，再回收旧设备，避免交接瞬间旧设备读到半截数据。
     HttpMediaDevice *previous = slot;
     slot = device;
     retireStreamDevice(previous);
+
+    qInfo().noquote() << QStringLiteral("[Player] 挂载音频流 准备%1 + 打开%2 = %3（%4）")
+                             .arg(AppLog::msText(prepareMs), AppLog::msText(attachMs),
+                                  AppLog::msText(timer.elapsed()), AppLog::safeUrl(url));
+    if (attachMs >= 200) {
+        qWarning().noquote() << QStringLiteral("[Player] setSourceDevice 同步阻塞 GUI 线程 %1，界面会在此期间无响应")
+                                    .arg(AppLog::msText(attachMs));
+    }
 }
 
 void PlayerEngine::retireStreamDevice(HttpMediaDevice *device)
 {
     if (!device)
         return;
-    device->abort();
-    // FFmpeg 的解复用线程可能仍在收尾，立即析构会出现 use-after-free，延迟释放。
-    QTimer::singleShot(10000, device, [device]() { device->deleteLater(); });
+    QElapsedTimer timer;
+    timer.start();
+    // 只停机、不析构：FFmpeg 解复用线程在切源之后仍可能回调 readData()/size()/seek()。
+    // 对象是 PlayerEngine 的子对象，会随 m_player（先创建、先析构）之后一起销毁，
+    // 那时后端线程已经 join 完毕，不会再出现 use-after-free。
+    device->shutdown();
+    qInfo().noquote() << QStringLiteral("[Player] 退役音频流设备 耗时%1")
+                             .arg(AppLog::msText(timer.elapsed()));
 }
 
 QAudioDevice PlayerEngine::outputDevice() const
@@ -81,14 +106,27 @@ void PlayerEngine::setOutputDevice(const QAudioDevice &device)
         return;
     if (m_audioOutput->device() == device)
         return;
+    QElapsedTimer timer;
+    timer.start();
     m_audioOutput->setDevice(device);
+    const qint64 cost = timer.elapsed();
+    // 播放中换设备会同步停/启 QAudioSink，是已知的可卡顿点，记录下来。
+    if (cost >= 200) {
+        qWarning().noquote() << QStringLiteral("[Player] 切换音频输出设备阻塞 GUI %1（%2）")
+                                    .arg(AppLog::msText(cost), device.description());
+    } else {
+        qInfo().noquote() << QStringLiteral("[Player] 切换音频输出设备 耗时%1（%2）")
+                                 .arg(AppLog::msText(cost), device.description());
+    }
 }
 
 void PlayerEngine::cancelFade()
 {
     if (m_fadeTimer) {
         m_fadeTimer->stop();
-        delete m_fadeTimer;
+        // 不能 delete：cancelFade 可能在 fade 的 timeout 回调链里被调用，
+        // 直接析构正在发信号的定时器是未定义行为。
+        m_fadeTimer->deleteLater();
         m_fadeTimer = nullptr;
     }
     m_fadingIn = false;
@@ -210,6 +248,11 @@ void PlayerEngine::openMedia(const QUrl &url, qint64 resumeMs)
     m_pendingUrl = url;
     m_pendingResumeMs = resumeMs;
 
+    qInfo().noquote() << QStringLiteral("[Player] openMedia state=%1 resume=%2 %3")
+                             .arg(static_cast<int>(m_player->playbackState()))
+                             .arg(resumeMs)
+                             .arg(AppLog::safeUrl(url));
+
     if (m_player->playbackState() == QMediaPlayer::StoppedState) {
         applyPendingOpen(gen);
         return;
@@ -223,7 +266,16 @@ void PlayerEngine::openMedia(const QUrl &url, qint64 resumeMs)
                 applyPendingOpen(m_openGen);
             });
     }
+
+    // stop() 会同步等待 FFmpeg 解复用线程收工，播放中切歌时这一步也可能阻塞 GUI。
+    QElapsedTimer stopTimer;
+    stopTimer.start();
     m_player->stop();
+    const qint64 stopMs = stopTimer.elapsed();
+    if (stopMs >= 200) {
+        qWarning().noquote() << QStringLiteral("[Player] QMediaPlayer::stop() 阻塞 GUI 线程 %1")
+                                    .arg(AppLog::msText(stopMs));
+    }
 }
 
 void PlayerEngine::applyPendingOpen(quint64 gen)
@@ -237,12 +289,28 @@ void PlayerEngine::applyPendingOpen(quint64 gen)
     m_pendingResumeMs = -1;
 
     // 先清空再加载，降低 QFFmpeg demuxer 在快速切源时的崩溃概率
+    QElapsedTimer timer;
+    timer.start();
     m_player->setSource(QUrl());
+    const qint64 resetMs = timer.elapsed();
+
     if (isHttpUrl(url))
         attachHttpDevice(m_player, url, m_streamDevice);
     else
         m_player->setSource(url);
+    const qint64 loadMs = timer.elapsed() - resetMs;
+
     m_player->play();
+    const qint64 playMs = timer.elapsed() - resetMs - loadMs;
+
+    // 这三段耗时都发生在 GUI 线程上：切源慢会直接表现为界面无响应。
+    qInfo().noquote() << QStringLiteral("[Player] 打开完成 清空%1 加载%2 起播%3（合计%4）")
+                             .arg(AppLog::msText(resetMs), AppLog::msText(loadMs),
+                                  AppLog::msText(playMs), AppLog::msText(timer.elapsed()));
+    if (loadMs >= 300 || resetMs >= 300) {
+        qWarning().noquote() << QStringLiteral("[Player] 切源在 GUI 线程耗时偏高（%1），界面可能卡顿")
+                                    .arg(AppLog::msText(timer.elapsed()));
+    }
 
     if (resumeMs > 0)
         scheduleResumeAfterOpen(resumeMs);
@@ -443,7 +511,7 @@ void PlayerEngine::onFadeTick()
             vol = m_targetVolume;
             m_fadingIn = false;
             m_fadeTimer->stop();
-            delete m_fadeTimer;
+            m_fadeTimer->deleteLater();
             m_fadeTimer = nullptr;
             emit fadeComplete();
         }
@@ -456,7 +524,7 @@ void PlayerEngine::onFadeTick()
             m_player->pause();
             m_fadingOut = false;
             m_fadeTimer->stop();
-            delete m_fadeTimer;
+            m_fadeTimer->deleteLater();
             m_fadeTimer = nullptr;
             emit fadeComplete();
         } else {
@@ -539,6 +607,13 @@ void PlayerEngine::connectPlayerSignals(QMediaPlayer *player)
             });
     connect(player, &QMediaPlayer::mediaStatusChanged,
             this, [this](QMediaPlayer::MediaStatus status) {
+                // 记录"数据供给中断"：BufferingMedia / StalledMedia 出现时，
+                // 用户听到的就是断音。蓝牙链路抖动通常不触发这两个状态，
+                // 因此这份日志也用来区分"是数据没来"还是"声卡侧吞不下"。
+                if (status == QMediaPlayer::StalledMedia)
+                    qWarning().noquote() << QStringLiteral("[Player] 媒体停滞(StalledMedia)：音频数据供给中断");
+                else if (status == QMediaPlayer::BufferingMedia)
+                    qInfo().noquote() << QStringLiteral("[Player] 缓冲中(BufferingMedia)");
                 if (status == QMediaPlayer::EndOfMedia)
                     emit playbackFinished();
             });

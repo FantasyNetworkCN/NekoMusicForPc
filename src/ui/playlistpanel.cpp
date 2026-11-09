@@ -881,11 +881,17 @@ void PlaylistPanel::setFullPlayerMode(bool on)
         return;
     m_fullPlayerMode = on;
     setAttribute(Qt::WA_TranslucentBackground, on);
-    if (on) {
-        setGraphicsEffect(nullptr);
-    } else if (m_drawerShadow) {
-        setGraphicsEffect(m_drawerShadow);
-    }
+
+    // 这里**不能**用 setGraphicsEffect(nullptr) 来关阴影：
+    // Qt 的 QWidget::setGraphicsEffect() 会把旧 effect 交给 deleteLater() 销毁，
+    // 而 m_drawerShadow 仍指向它；下一次 setGraphicsEffect(m_drawerShadow) 就会把
+    // 一个「已排队销毁」的 effect 重新挂上，等 DeferredDelete 执行后控件的
+    // d->graphicsEffect 变成悬垂指针 —— 再调用时就崩在
+    // QWidget::setGraphicsEffect（2026-10-28：Qt6Widgets 0x45523）。
+    // 正确做法是只开关效果，不摘除。
+    if (m_drawerShadow)
+        m_drawerShadow->setEnabled(!on);
+
     applyPanelChrome();
     update();
 }
@@ -1353,9 +1359,9 @@ void PlaylistPanel::openDrawer()
     if (!host)
         return;
 
-    if (m_slideAnim) {
+    if (!m_slideAnim.isNull()) {
+        // DeleteWhenStopped：stop() 已让 Qt 负责销毁，不能再 deleteLater() 二次删除
         m_slideAnim->stop();
-        m_slideAnim->deleteLater();
         m_slideAnim = nullptr;
     }
 
@@ -1383,7 +1389,7 @@ void PlaylistPanel::openDrawer()
     m_slideAnim->setStartValue(start);
     m_slideAnim->setEndValue(end);
     m_slideAnim->setEasingCurve(QEasingCurve::OutCubic);
-    connect(m_slideAnim, &QPropertyAnimation::finished, this, [this]() {
+    connect(m_slideAnim.data(), &QPropertyAnimation::finished, this, [this]() {
         m_animating = false;
         m_slideAnim = nullptr;
     });
@@ -1403,9 +1409,9 @@ void PlaylistPanel::closeDrawer()
     if (!m_drawerOpen && !isVisible())
         return;
 
-    if (m_slideAnim) {
+    if (!m_slideAnim.isNull()) {
+        // DeleteWhenStopped：stop() 已让 Qt 负责销毁，不能再 deleteLater() 二次删除
         m_slideAnim->stop();
-        m_slideAnim->deleteLater();
         m_slideAnim = nullptr;
     }
 
@@ -1427,7 +1433,7 @@ void PlaylistPanel::closeDrawer()
     m_slideAnim->setStartValue(start);
     m_slideAnim->setEndValue(end);
     m_slideAnim->setEasingCurve(QEasingCurve::InCubic);
-    connect(m_slideAnim, &QPropertyAnimation::finished, this, [this]() {
+    connect(m_slideAnim.data(), &QPropertyAnimation::finished, this, [this]() {
         m_animating = false;
         m_slideAnim = nullptr;
         hide();

@@ -376,6 +376,7 @@ int main(int argc, char *argv[])
     LanDeviceManager::instance().stop();
     // 清理数据库
     PlaylistDatabase::instance().close();
+    AppLog::flush();
 
     AppLog::flush();
 
