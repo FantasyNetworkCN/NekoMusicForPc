@@ -15,6 +15,8 @@
 #include <QDir>
 #include <QFile>
 #include <QSaveFile>
+#include "core/applog.h"
+#include "core/crashhandler.h"
 #include <QStandardPaths>
 #include <QProcess>
 #include <QUrl>
@@ -228,6 +230,7 @@ int main(int argc, char *argv[])
         qputenv("QSG_RHI_BACKEND", "software");
 
     QApplication app(argc, argv);
+
     nekoInstallSmoothScroll(app);
 
     // 直连：不读取系统/环境变量代理（如 http_proxy），避免本机代理干扰 API 与流媒体。
@@ -245,6 +248,13 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(QStringLiteral(APP_VERSION));
     app.setOrganizationName(QStringLiteral("NekoMusic"));
     app.setOrganizationDomain(QStringLiteral("nekomusic.local"));
+
+    // 文件日志：必须在设置组织/应用名之后（日志目录取自 AppDataLocation）。
+    // 卡死/崩溃后进程可能来不及收尾，因此警告以上等级会立即 flush。
+    AppLog::install();
+    AppLog::startFreezeWatchdog();
+    // 崩溃抓栈：把调用链写入 logs\crash-*.txt（不依赖 WER 转储、不改注册表）
+    CrashHandler::install();
 
 #ifdef Q_OS_LINUX
     ensureLinuxUrlHandler();
@@ -361,9 +371,13 @@ int main(int argc, char *argv[])
 
     int result = app.exec();
 
+    qInfo().noquote() << QStringLiteral("==== NekoMusic 退出，事件循环返回 %1 ====").arg(result);
+
     LanDeviceManager::instance().stop();
     // 清理数据库
     PlaylistDatabase::instance().close();
+
+    AppLog::flush();
 
     return result;
 }
