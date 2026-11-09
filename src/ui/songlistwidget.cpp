@@ -1,4 +1,4 @@
-#include "songlistwidget.h"
+﻿#include "songlistwidget.h"
 #include "songcardwidget.h"
 #include "songcontextmenu.h"
 #include "songmenubuilder.h"
@@ -16,13 +16,124 @@
 #include <QPushButton>
 #include <QTimer>
 #include <QFontMetrics>
+#include <QPainter>
+#include <QLinearGradient>
+#include <QPixmap>
 #include "ui/svgicon.h"
+#include "ui/mainwindow.h"
 
 namespace {
 
 constexpr int kCoverGap = 62; // 50 cover + 12 spacing in header title gap
 // 数据行 titleLay 的右内边距，表头必须一致才能对齐后面的列
 constexpr int kTitleColRightPad = 20;
+/** 顶部渐隐向表头方向额外延伸的高度；0 = 上沿与视口顶严格对齐（避免压到表头）。 */
+constexpr int kTopOverhang = 0;
+
+/**
+ * 列表上下边缘渐隐。
+ *
+ * 挂在 QScrollArea 的 viewport 上，几何恒等于 viewport->rect()，
+ * 所以无论表头折叠、窗口缩放还是列表内边距变化都不会错位。
+ * 绘制内容取主窗口当前背景像素，换壁纸/主题自动适配。
+ */
+class EdgeFadeOverlay final : public QWidget
+{
+public:
+    explicit EdgeFadeOverlay(QWidget *parent) : QWidget(parent)
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        setAttribute(Qt::WA_NoSystemBackground, true);
+        setAttribute(Qt::WA_TranslucentBackground, true);
+        setFocusPolicy(Qt::NoFocus);
+    }
+
+    void setFades(bool top, bool bottom)
+    {
+        if (m_top == top && m_bottom == bottom)
+            return;
+        m_top = top;
+        m_bottom = bottom;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        if ((!m_top && !m_bottom) || width() <= 0 || height() <= 0)
+            return;
+        QWidget *win = window();
+        if (!win)
+            return;
+
+        QPixmap src;
+        if (auto *mw = qobject_cast<MainWindow *>(win))
+            src = mw->shellBackdropCachePixmap();
+        if (src.isNull()) {
+            if (auto *mw = qobject_cast<MainWindow *>(win))
+                src = mw->shellBackdropPixmapForSize(win->size());
+        }
+        if (src.isNull())
+            return;
+
+        if (m_bg.isNull() || m_bgKey != src.cacheKey() || m_bgSize != win->size()) {
+            m_bg = (src.size() == win->size())
+                       ? src
+                       : src.scaled(win->size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            m_bgKey = src.cacheKey();
+            m_bgSize = win->size();
+        }
+
+        const int topBand = qMin(kTopBandH, height() / 2);
+        const int bottomBand = qMin(kBottomBandH, height() / 2);
+        if (topBand <= 0 && bottomBand <= 0)
+            return;
+
+        QPainter p(this);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        const QPoint offset = mapTo(win, QPoint(0, 0));
+
+        const auto paintBand = [&](int y, int band, bool topSide) {
+            if (band <= 0)
+                return;
+            QPixmap strip(width(), band);
+            strip.fill(Qt::transparent);
+            {
+                QPainter bp(&strip);
+                bp.drawPixmap(QRect(0, 0, strip.width(), band), m_bg,
+                              QRect(offset.x(), offset.y() + y, strip.width(), band));
+                QLinearGradient g(0, 0, 0, band);
+                if (topSide) {
+                    g.setColorAt(0.0, QColor(0, 0, 0, 255));
+                    g.setColorAt(1.0, QColor(0, 0, 0, 0));
+                } else {
+                    g.setColorAt(0.0, QColor(0, 0, 0, 0));
+                    g.setColorAt(1.0, QColor(0, 0, 0, 255));
+                }
+                bp.setCompositionMode(QPainter::CompositionMode_DestinationIn);
+                bp.fillRect(strip.rect(), g);
+            }
+            p.drawPixmap(0, y, strip);
+        };
+
+        if (m_top)
+            paintBand(0, topBand, true);
+        if (m_bottom)
+            paintBand(height() - bottomBand, bottomBand, false);
+    }
+
+private:
+    // 上/下渐隐带高度分开控制：
+    //   顶部 24px —— 尽量少吃歌曲内容；
+    //   底部 32px —— 往下多铺一点，和底栏之间的过渡更缓。
+    static constexpr int kTopBandH = 24;
+    static constexpr int kBottomBandH = 32;
+    bool m_top = false;
+    bool m_bottom = false;
+    QPixmap m_bg;
+    qint64 m_bgKey = 0;
+    QSize m_bgSize;
+};
 
 } // namespace
 
@@ -102,6 +213,11 @@ void SongListWidget::setupUi()
     m_scroll->setWidgetResizable(true);
     m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_scroll->setFrameShape(QFrame::NoFrame);
+    // 容器的最小高度 = 全部歌曲内容高度，QScrollArea 会把它算进 minimumSizeHint，
+    // 导致整个列表把页面撑得比窗口还高（底部被裁掉，底栏也压不住）。
+    // 这里明确允许滚动区收缩到 0，把"内容多高"和"控件多高"彻底解耦。
+    m_scroll->setMinimumHeight(0);
+    m_scroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Ignored);
 
     m_container = new QWidget(m_scroll);
     m_container->setObjectName(QStringLiteral("songListContainer"));
@@ -109,6 +225,15 @@ void SongListWidget::setupUi()
     nekoPolishScrollAreaViewport(m_scroll);
 
     root->addWidget(m_scroll, 1);
+
+    // 边缘渐隐浮层：直接挂在滚动视口上，几何 = 视口 rect()，
+    // 表头折叠/窗口缩放/内边距变化都自动跟随，不会错位。
+    m_edgeFade = new EdgeFadeOverlay(m_scroll->viewport());
+    m_edgeFade->hide();
+    if (QScrollBar *bar = m_scroll->verticalScrollBar()) {
+        connect(bar, &QScrollBar::valueChanged, this, [this]() { updateEdgeFade(); });
+        connect(bar, &QScrollBar::rangeChanged, this, [this]() { updateEdgeFade(); });
+    }
 
     m_scrollCurrentBtn = new QPushButton(this);
     m_scrollCurrentBtn->setFixedSize(42, 42);
@@ -352,6 +477,7 @@ void SongListWidget::setSongs(const QList<MusicInfo> &songs)
         scheduleVisibleUpdate();
     else
         updateVisibleRows();
+    updateEdgeFade();
 }
 
 void SongListWidget::setCurrentPlayingId(int musicId)
@@ -535,14 +661,48 @@ void SongListWidget::scrollToPlaying()
     scheduleVisibleUpdate();
 }
 
+void SongListWidget::updateEdgeFade()
+{
+    if (!m_edgeFade || !m_scroll || !m_scroll->viewport())
+        return;
+    QWidget *vp = m_scroll->viewport();
+
+    // 浮层挂在列表控件（而不是视口）上，并向表头方向多延伸 kTopOverhang：
+    // 渐隐最上面那一段压在表头的空白里，真正被淡掉的歌曲内容更少，"不浪费空间"。
+    if (m_edgeFade->parentWidget() != this)
+        m_edgeFade->setParent(this);
+    QRect geo(vp->mapTo(this, QPoint(0, 0)), vp->size());
+    geo.setTop(qMax(0, geo.top() - kTopOverhang));
+    geo = geo.intersected(rect());
+    if (geo.isEmpty()) {
+        m_edgeFade->hide();
+        return;
+    }
+    if (m_edgeFade->geometry() != geo)
+        m_edgeFade->setGeometry(geo);
+    m_edgeFade->raise();
+
+    QScrollBar *bar = m_scroll->verticalScrollBar();
+    const int value = bar ? bar->value() : 0;
+    const int maxValue = bar ? bar->maximum() : 0;
+    // 停在顶部时不要画顶部渐隐（否则第一行会被吃掉半截）；
+    // 滚到底部时同理不画底部渐隐。
+    const bool canTop = value > 4;
+    const bool canBottom = (maxValue - value) > 4;
+    static_cast<EdgeFadeOverlay *>(m_edgeFade)->setFades(canTop, canBottom);
+    m_edgeFade->setVisible(canTop || canBottom);
+}
+
 void SongListWidget::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
     syncContainerHeight();
     updateVisibleRows();
+    updateEdgeFade();
     QTimer::singleShot(0, this, [this]() {
         syncContainerHeight();
         updateVisibleRows();
+        updateEdgeFade();
     });
 }
 
@@ -551,6 +711,7 @@ void SongListWidget::resizeEvent(QResizeEvent *event)
     QWidget::resizeEvent(event);
     syncContainerHeight();
     scheduleVisibleUpdate();
+    updateEdgeFade();
 
     const int right = width() - 52;
     const int bottom = height() - 100;
@@ -632,6 +793,7 @@ void SongListWidget::releaseCard(SongCardWidget *card)
     card->setDownloadTaskMode(false);
     card->setBatchChecked(false);
     m_cardPool.append(card);
+}
 }
 
 void SongListWidget::updateVisibleRows()
