@@ -794,7 +794,6 @@ void SongListWidget::releaseCard(SongCardWidget *card)
     card->setBatchChecked(false);
     m_cardPool.append(card);
 }
-}
 
 void SongListWidget::updateVisibleRows()
 {
