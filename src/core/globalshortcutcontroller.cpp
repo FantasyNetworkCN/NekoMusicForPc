@@ -2,6 +2,7 @@
 #include "globalshortcutcontroller_p.h"
 #include "appshortcuts.h"
 
+#include "core/applog.h"
 #include "core/i18n.h"
 
 #include <QShortcut>
@@ -147,6 +148,8 @@ bool GlobalShortcutController::installInAppFallback()
         return false;
 
     m_impl->fallback->reload([this](AppShortcuts::Action action) {
+        qInfo().noquote() << QStringLiteral("[Hotkey] 应用内快捷键触发 %1")
+                                 .arg(AppShortcuts::actionLabel(action));
         switch (action) {
         case AppShortcuts::PlayPause:
             emit playPauseTriggered();
@@ -284,7 +287,10 @@ QString GlobalShortcutController::statusText() const
 
 void GlobalShortcutController::dispatchAction(const QString &portalId)
 {
-    switch (AppShortcuts::actionFromPortalId(portalId)) {
+    const AppShortcuts::Action action = AppShortcuts::actionFromPortalId(portalId);
+    // 全局热键在 GUI 线程分发：卡死之后回看日志时，这条是“用户按了哪个键”的起点。
+    qInfo().noquote() << QStringLiteral("[Hotkey] 触发 %1").arg(AppShortcuts::actionLabel(action));
+    switch (action) {
     case AppShortcuts::PlayPause:
         emit playPauseTriggered();
         break;

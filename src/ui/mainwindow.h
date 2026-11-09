@@ -193,6 +193,8 @@ private:
 
     bool m_switching = false;
     bool m_navigatingBack = false;
+    /** 页面切换序号：动画被意外中断时用它判断「还是不是同一次切换」，避免卡死。 */
+    quint64 m_switchToken = 0;
     bool m_playerPageVisible = false;
     QList<QWidget *> m_pageHistory;
     TitleBar *m_titleBar = nullptr;

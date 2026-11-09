@@ -38,6 +38,7 @@
 #include <QThread>
 #include <QUrl>
 #include <QWaitCondition>
+#include <QElapsedTimer>
 
 #include <memory>
 
@@ -57,6 +58,17 @@ public:
     void start();
     /** 中止请求：让阻塞中的读取立即返回，并停止后台下载。 */
     void abort();
+    /**
+     * 停止网络线程并释放临时文件，但**不析构对象**。
+     *
+     * 这是为了避免 use-after-free：Qt 的 FFmpeg 解复用线程在播放器切换源之后仍可能
+     * 继续回调本设备的 readData()/size()/seek()，此时若对象已被删除，虚函数调用会
+     * 落到已释放的 vtable 上（Windows 上表现为 0xc0000005、出错偏移 0x8）。
+     * 因此“退役”只做停机清理，对象本身交给它所属的播放器（QObject 父子关系）
+     * 在播放器析构时销毁 —— 那时后端线程已经 join 完毕。
+     */
+    void shutdown();
+    bool isShutDown() const { return m_shutdown; }
 
     QUrl url() const { return m_url; }
     QString errorString() const;
@@ -113,5 +125,9 @@ private:
     bool m_finished = false;
     bool m_failed = false;
     bool m_errorEmitted = false;
+    bool m_shutdown = false;
     QString m_error;
+    /** 从 start() 起算的首包到达耗时，用于判断“打开慢”还是“网络慢”。 */
+    QElapsedTimer m_started;
+    qint64 m_firstChunkMs = -1;
 };

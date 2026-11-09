@@ -1,6 +1,8 @@
 #include "httpmediadevice.h"
 #include "linuxtmpfscache.h"
 
+#include "core/applog.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QMetaObject>
@@ -46,14 +48,50 @@ HttpMediaDevice::HttpMediaDevice(const QUrl &url, QObject *parent)
     m_netThread.setObjectName(QStringLiteral("neko-http-media"));
     m_netThread.start();
     m_nam.moveToThread(&m_netThread);
+
+    // 线程真正退出后再释放临时文件：退出前它可能还在 readyRead 里写文件。
+    // 用队列连接回到本对象所在线程（GUI），不阻塞任何调用点。
+    connect(&m_netThread, &QThread::finished, this, [this]() {
+        QMutexLocker locker(&m_mutex);
+        m_file.reset();
+        m_finished = true;
+        m_cond.wakeAll();
+    }, Qt::QueuedConnection);
 }
 
 HttpMediaDevice::~HttpMediaDevice()
 {
+    // 析构只发生在 PlayerEngine/播放器销毁时（此时后端线程已 join），
+    // 因此这里等待网络线程退出是可以接受的；运行期一律走 shutdown()。
+    m_shutdown = true;
     abort();
     m_netThread.quit();
-    if (!m_netThread.wait(kThreadStopWaitMs))
+    if (m_netThread.isRunning() && !m_netThread.wait(kThreadStopWaitMs)) {
+        // terminate() 会在任意位置打断线程，可能留下被持有的 Qt 内部锁；
+        // 只有确实卡死时才用，并务必在日志里留痕。
+        qCritical().noquote() << QStringLiteral("[Stream] 网络线程 %1 内未退出，强制终止（可能处于异常状态）")
+                                     .arg(AppLog::msText(kThreadStopWaitMs));
         m_netThread.terminate();
+        m_netThread.wait(1000);
+    }
+    QMutexLocker locker(&m_mutex);
+    m_file.reset();
+}
+
+void HttpMediaDevice::shutdown()
+{
+    if (m_shutdown)
+        return;
+    m_shutdown = true;
+
+    QElapsedTimer timer;
+    timer.start();
+    abort();
+    m_netThread.quit();
+    // 不在 GUI 线程上 wait()：切歌时每次都要退役旧设备，等满 3 秒就等于卡死。
+    // 线程真正退出后会经由 m_netThread.finished 回到 GUI 线程清理临时文件（见构造函数）。
+    qInfo().noquote() << QStringLiteral("[Stream] 设备退役 耗时%1 %2")
+                             .arg(AppLog::msText(timer.elapsed()), AppLog::safeUrl(m_url));
 }
 
 QNetworkReply *HttpMediaDevice::peekReply()
@@ -88,6 +126,11 @@ void HttpMediaDevice::disposeReply(QNetworkReply *reply, bool blocking)
     }
     if (!m_netThread.isRunning())
         return;
+    if (blocking && isGuiThread()) {
+        // 理论上不会走到这里（调用点已按线程区分），留一条断言式日志防止回归。
+        qWarning().noquote() << QStringLiteral("[Stream] 试图在 GUI 线程阻塞等待网络线程，已降级为异步");
+        blocking = false;
+    }
     QMetaObject::invokeMethod(reply, teardown,
                               blocking ? Qt::BlockingQueuedConnection : Qt::QueuedConnection);
 }
@@ -96,6 +139,10 @@ void HttpMediaDevice::start()
 {
     if (peekReply())
         return;
+
+    m_started.start();
+    m_firstChunkMs = -1;
+    qInfo().noquote() << QStringLiteral("[Stream] 发起请求 %1").arg(AppLog::safeUrl(m_url));
 
     m_file = std::make_unique<QTemporaryFile>(QDir::tempPath() + QStringLiteral("/nekomusic-stream-XXXXXX"));
     if (!m_file->open()) {
@@ -137,6 +184,9 @@ void HttpMediaDevice::start()
 
 void HttpMediaDevice::abort()
 {
+    QElapsedTimer timer;
+    timer.start();
+
     QNetworkReply *reply = takeReply();
 
     {
@@ -145,7 +195,15 @@ void HttpMediaDevice::abort()
         m_cond.wakeAll();
     }
 
-    disposeReply(reply, true);
+    // GUI 线程绝不能在这里阻塞等待网络线程收尾：WER 里那种 Cross-thread 挂起
+    // 就是主线程等一个不回到事件循环的线程造成的。非 GUI 线程保留阻塞语义，
+    // 以便调用点之后可以确定请求已经收尾。
+    disposeReply(reply, !isGuiThread());
+
+    const qint64 cost = timer.elapsed();
+    if (cost >= 100)
+        qWarning().noquote() << QStringLiteral("[Stream] abort 耗时 %1（%2）")
+                                    .arg(AppLog::msText(cost), AppLog::safeUrl(m_url));
 }
 
 qint64 HttpMediaDevice::size() const
@@ -214,6 +272,11 @@ QString HttpMediaDevice::appendChunk(const QByteArray &chunk)
         return QStringLiteral("写入音频流临时文件失败");
     m_file->flush();
     m_downloaded += chunk.size();
+    if (m_firstChunkMs < 0 && m_started.isValid()) {
+        m_firstChunkMs = m_started.elapsed();
+        qInfo().noquote() << QStringLiteral("[Stream] 首包到达 耗时%1（%2）")
+                                 .arg(AppLog::msText(m_firstChunkMs), AppLog::safeUrl(m_url));
+    }
     m_cond.wakeAll();
     return QString();
 }
@@ -299,6 +362,8 @@ void HttpMediaDevice::onReplyFinished()
 
 void HttpMediaDevice::fail(const QString &error)
 {
+    qWarning().noquote() << QStringLiteral("[Stream] 失败：%1（%2）")
+                                .arg(error, AppLog::safeUrl(m_url));
     {
         QMutexLocker locker(&m_mutex);
         if (!m_failed) {
