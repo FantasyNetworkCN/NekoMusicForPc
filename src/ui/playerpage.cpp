@@ -48,6 +48,7 @@ constexpr int kPlayerControlH = 80;
 constexpr int kPpSidePad = 30;
 constexpr int kPpMenuPad = 20;
 constexpr int kControlHideMs = 3000;
+constexpr int kTogetherAvatarSize = 32;
 /** 对齐 SPlayer overlay blur(80px) */
 constexpr qreal kBackdropBlurRadius = 80.0;
 /** SPlayer PlayerBackground.blur .bg-img transform: scale(1.5) */
@@ -1032,7 +1033,6 @@ void PlayerPage::rebuildTogetherMembers()
     }
     m_togetherMemberSignature.clear();
 
-    constexpr int kAvatarSize = 36;
     for (const QVariant &value : m_togetherMembers) {
         const QVariantMap member = value.toMap();
         const int userId = member.value(QStringLiteral("userId")).toInt();
@@ -1044,7 +1044,7 @@ void PlayerPage::rebuildTogetherMembers()
 
         auto *avatar = new QLabel(m_togetherStrip);
         avatar->setObjectName(QStringLiteral("togetherMemberAvatar"));
-        avatar->setFixedSize(kAvatarSize, kAvatarSize);
+        avatar->setFixedSize(kTogetherAvatarSize, kTogetherAvatarSize);
         avatar->setAlignment(Qt::AlignCenter);
         avatar->setToolTip(owner ? QStringLiteral("%1 · 房主").arg(nickname) : nickname);
         avatar->setProperty("togetherUserId", userId);
@@ -1057,18 +1057,18 @@ void PlayerPage::rebuildTogetherMembers()
                                 .arg(nickname));
         avatar->setStyleSheet(
             owner ? QStringLiteral("QLabel { border: 2px solid rgba(255, 88, 112, 235); "
-                                   "border-radius: 18px; background: rgba(255,255,255,18); }")
+                                   "border-radius: 16px; background: rgba(255,255,255,18); }")
                   : QStringLiteral("QLabel { border: 1px solid rgba(255,255,255,55); "
-                                   "border-radius: 18px; background: rgba(255,255,255,12); }"));
+                                   "border-radius: 16px; background: rgba(255,255,255,12); }"));
         m_togetherAvatarLayout->addWidget(avatar, 0, Qt::AlignVCenter);
 
         const QPixmap fallback =
             makeCircularAvatarPixmap(QPixmap(QStringLiteral(":/icons/app.png")),
-                                     kAvatarSize, online ? 1.0 : 0.42);
+                                     kTogetherAvatarSize, online ? 1.0 : 0.42);
         if (m_togetherAvatarCache.contains(userId)) {
             const QPixmap cached = m_togetherAvatarCache.value(userId);
             avatar->setPixmap(online ? cached
-                                     : makeCircularAvatarPixmap(cached, kAvatarSize, 0.42));
+                                     : makeCircularAvatarPixmap(cached, kTogetherAvatarSize, 0.42));
         } else {
             avatar->setPixmap(fallback);
         }
@@ -1076,19 +1076,17 @@ void PlayerPage::rebuildTogetherMembers()
 
         m_togetherMemberSignature += avatar->property("togetherSignature").toString() + QLatin1Char('|');
     }
-    m_togetherAvatarLayout->addStretch(1);
 }
 
 void PlayerPage::loadTogetherAvatar(int userId, QLabel *label)
 {
     if (userId <= 0 || !label || !m_togetherAvatarNam)
         return;
-    const int size = label->width() > 0 ? label->width() : 36;
     const bool online = label->property("togetherOnline").toBool();
     if (m_togetherAvatarCache.contains(userId)) {
         const QPixmap cached = m_togetherAvatarCache.value(userId);
         label->setPixmap(online ? cached
-                                : makeCircularAvatarPixmap(cached, size, 0.42));
+                                : makeCircularAvatarPixmap(cached, kTogetherAvatarSize, 0.42));
         return;
     }
 
@@ -1106,7 +1104,7 @@ void PlayerPage::loadTogetherAvatar(int userId, QLabel *label)
         QPixmap source;
         if (!source.loadFromData(reply->readAll()))
             return;
-        const QPixmap rounded = makeCircularAvatarPixmap(source, 36);
+        const QPixmap rounded = makeCircularAvatarPixmap(source, kTogetherAvatarSize);
         if (rounded.isNull())
             return;
         m_togetherAvatarCache.insert(userId, rounded);
@@ -1117,7 +1115,7 @@ void PlayerPage::loadTogetherAvatar(int userId, QLabel *label)
             return;
         label->setPixmap(label->property("togetherOnline").toBool()
                              ? rounded
-                             : makeCircularAvatarPixmap(rounded, 36, 0.42));
+                             : makeCircularAvatarPixmap(rounded, kTogetherAvatarSize, 0.42));
     });
 }
 
@@ -1844,7 +1842,9 @@ void PlayerPage::applyPlayerPageStyle()
                       "  padding: 0 15px; font-size: 12px; font-weight: 600; }"
                       "#ppLeaveTogetherBtn:hover { "
                       "  background: rgba(22, 119, 184,78); border-color: rgba(138,223,245,105); }"
-                      "#togetherMemberStrip { background: transparent; border: none; }"
+                      "#togetherMemberStrip { "
+                      "  background: rgba(12, 18, 30, 105); "
+                      "  border: 1px solid rgba(255,255,255,32); border-radius: 21px; }"
                       "#togetherMemberTitle { color: rgba(255,255,255,205); "
                       "  font-size: 12px; font-weight: 600; background: transparent; }"
                       "#togetherMemberCount { color: rgba(255,255,255,145); "
@@ -2882,24 +2882,31 @@ void PlayerPage::setupUi()
     lyricsCol->setContentsMargins(kLyricPadLeft, 0, kLyricPadRight, 26);
     lyricsCol->setSpacing(0);
 
-    m_togetherStrip = new QWidget(m_rightPanel);
+    m_togetherStrip = new QWidget(m_menuBar);
     m_togetherStrip->setObjectName(QStringLiteral("togetherMemberStrip"));
-    m_togetherStrip->setFixedHeight(58);
+    m_togetherStrip->setAttribute(Qt::WA_StyledBackground, true);
+    m_togetherStrip->setFixedHeight(42);
+    m_togetherStrip->setMaximumWidth(560);
+    m_togetherStrip->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     auto *togetherLay = new QHBoxLayout(m_togetherStrip);
-    togetherLay->setContentsMargins(4, 6, 4, 6);
-    togetherLay->setSpacing(8);
+    togetherLay->setContentsMargins(12, 5, 12, 5);
+    togetherLay->setSpacing(7);
     m_togetherTitleLabel = new QLabel(QStringLiteral("一起听"), m_togetherStrip);
     m_togetherTitleLabel->setObjectName(QStringLiteral("togetherMemberTitle"));
     togetherLay->addWidget(m_togetherTitleLabel, 0, Qt::AlignVCenter);
     m_togetherAvatarLayout = new QHBoxLayout();
     m_togetherAvatarLayout->setContentsMargins(0, 0, 0, 0);
-    m_togetherAvatarLayout->setSpacing(6);
-    togetherLay->addLayout(m_togetherAvatarLayout, 1);
+    m_togetherAvatarLayout->setSpacing(4);
+    togetherLay->addLayout(m_togetherAvatarLayout);
     m_togetherCountLabel = new QLabel(m_togetherStrip);
     m_togetherCountLabel->setObjectName(QStringLiteral("togetherMemberCount"));
     togetherLay->addWidget(m_togetherCountLabel, 0, Qt::AlignVCenter);
     m_togetherStrip->hide();
-    lyricsCol->addWidget(m_togetherStrip);
+    if (auto *menuBarLay = qobject_cast<QHBoxLayout *>(m_menuBar->layout())) {
+        const int leaveIndex = menuBarLay->indexOf(m_ppLeaveTogetherBtn);
+        menuBarLay->insertWidget(leaveIndex >= 0 ? leaveIndex : menuBarLay->count(),
+                                 m_togetherStrip, 0, Qt::AlignVCenter);
+    }
 
     m_lyricsScroll = new QScrollArea(m_rightPanel);
     m_lyricsScroll->setObjectName("lyricsScroll");
