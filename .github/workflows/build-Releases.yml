@@ -44,7 +44,7 @@ jobs:
           host: 'linux'
           target: 'desktop'
           arch: 'linux_gcc_64'
-          modules: 'qtmultimedia'
+          modules: 'qtmultimedia qtwebsockets'
           cache: true
 
       - name: Install packaging deps
@@ -109,7 +109,7 @@ jobs:
           host: 'windows'
           target: 'desktop'
           arch: 'win64_mingw'
-          modules: 'qtmultimedia'
+          modules: 'qtmultimedia qtwebsockets'
           tools: 'tools_mingw1310'
           cache: true
           install-deps: false
@@ -296,7 +296,7 @@ jobs:
           host: 'mac'
           target: 'desktop'
           arch: 'clang_64'
-          modules: 'qtmultimedia'
+          modules: 'qtmultimedia qtwebsockets'
           cache: true
 
       - name: Build and package (universal .pkg)
