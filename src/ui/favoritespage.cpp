@@ -5,6 +5,7 @@
 
 #include "favoritespage.h"
 #include "songlistwidget.h"
+#include "songmenubuilder.h"
 #include "roundcoverlabel.h"
 #include "batchactionbar.h"
 #include "core/apiclient.h"
@@ -353,6 +354,14 @@ void FavoritesPage::setupBatchBar()
         const QList<MusicInfo> picked = m_songList->batchSelectedSongs();
         if (picked.isEmpty())
             return;
+        int roomAdded = 0;
+        if (SongMenuBuilder::addManyToTogetherQueue(picked, &roomAdded)) {
+            Toast::show(this,
+                        I18n::instance().tr(QStringLiteral("batchQueueAdded")).arg(roomAdded),
+                        Toast::Success);
+            exitBatchMode();
+            return;
+        }
         // 本地播放队列一次性写入，避免逐首触发 playlistChanged
         PlaylistManager::instance().addAllToPlaylist(picked);
         Toast::show(this, I18n::instance().tr(QStringLiteral("batchQueueAdded")).arg(picked.size()),
@@ -402,6 +411,13 @@ void FavoritesPage::addAllToQueue()
     const QList<MusicInfo> &songs = m_displaySongs;
     if (songs.isEmpty()) {
         Toast::show(this, I18n::instance().tr(QStringLiteral("queueAddAllEmpty")), Toast::Info);
+        return;
+    }
+
+    int roomAdded = 0;
+    if (SongMenuBuilder::addManyToTogetherQueue(songs, &roomAdded)) {
+        Toast::show(this, I18n::instance().tr(QStringLiteral("addAllToQueueDone")).arg(roomAdded),
+                    Toast::Success);
         return;
     }
 

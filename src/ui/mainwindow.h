@@ -54,6 +54,7 @@ class DesktopLrc;
 class SystemMediaController;
 class McpServer;
 class McpBridge;
+class TogetherRoomClient;
 
 class MainWindow : public QMainWindow
 {
@@ -67,6 +68,8 @@ public:
     void openAudioFileFromPath(const QString &path);
     /** 处理 nekomusic://sso/complete?handoff=... 登录回跳。 */
     void handleSsoCallback(const QUrl &url);
+    /** 处理 nekomusic://together/{token} 房间邀请链接。 */
+    void handleTogetherLink(const QUrl &url);
 
     void paintShellBackdrop(QPainter &p, const QRect &r) const;
     /** 供播放页模糊底图复用，避免再次 render 整窗。 */
@@ -102,6 +105,8 @@ private:
     void showPlaylistDetailPage(int localId);
     void playMusicById(int musicId, const QString &title, const QString &artist, const QString &coverUrl = QString());
     void playMusicFromInfo(const MusicInfo &info);
+    /** 「播放全部」：房间里原子替换临时列表并从指定位置起播，否则走本机队列。 */
+    void playAllMusic(const QList<MusicInfo> &songs, int startIndex = 0);
     /** 「下一首播放」：把曲目插到当前曲目之后并强制下一首为它 */
     void queueAsNextTrack(const MusicInfo &info);
     void playLocalMusicInfo(const MusicInfo &info);
@@ -156,6 +161,11 @@ private:
     void togglePlaybackForSystemUi();
     void resumePlaybackForSystemUi();
     void pausePlaybackForSystemUi();
+    void seekPlaybackForUi(qint64 positionMs);
+    void toggleTogetherRoom();
+    void applyTogetherPlayback();
+    void startTogetherTrack(const QVariantMap &item, bool startPaused);
+    void syncTogetherUi();
     void setupKeyboardShortcuts();
     void reloadKeyboardShortcuts();
     /** 创建内置 MCP 服务端与播放器工具桥，并绑定设置页。 */
@@ -234,6 +244,9 @@ private:
     SystemMediaController *m_systemMedia = nullptr;
     McpServer *m_mcpServer = nullptr;
     McpBridge *m_mcpBridge = nullptr;
+    TogetherRoomClient *m_together = nullptr;
+    QTimer *m_togetherSyncTimer = nullptr;
+    QString m_pendingTogetherToken;
 
     // Download state
     bool m_isDownloading = false;

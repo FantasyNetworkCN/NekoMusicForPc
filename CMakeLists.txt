@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(NekoMusic
-        VERSION 2026.1114.66
+        VERSION 2026.1114.67
         LANGUAGES CXX
 )
 
@@ -41,7 +41,7 @@ endif()
 message(STATUS "NEKO target: WINDOWS=${NEKO_TARGET_WINDOWS} APPLE=${NEKO_TARGET_APPLE} UNIX=${NEKO_TARGET_UNIX} SYSTEM=${CMAKE_SYSTEM_NAME}")
 
 # Qt6
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Multimedia Network SvgWidgets Sql Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Multimedia Network WebSockets SvgWidgets Sql Concurrent)
 if(NEKO_TARGET_UNIX)
     find_package(Qt6 REQUIRED COMPONENTS DBus)
 endif()
@@ -193,6 +193,7 @@ set(SOURCES
         src/core/applog.cpp
         src/core/crashhandler.cpp
         src/core/apiclient.cpp
+        src/core/togetherroomclient.cpp
         src/core/nekonetworkaccessmanager.cpp
         src/core/notificationcenter.cpp
         src/core/musicurlresolver.cpp
@@ -398,6 +399,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         Qt6::Widgets
         Qt6::Multimedia
         Qt6::Network
+        Qt6::WebSockets
         Qt6::SvgWidgets
         Qt6::Sql
         Qt6::Concurrent
@@ -543,6 +545,7 @@ if(LINUX)
             libqt6widgets6
             libqt6multimedia6
             libqt6network6
+            libqt6websockets6
             libqt6sql6
             libqt6dbus6
             libssl3

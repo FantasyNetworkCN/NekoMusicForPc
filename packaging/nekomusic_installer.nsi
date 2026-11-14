@@ -91,6 +91,7 @@ Section "Neko歌姬计划" SecMain
     File "${BUILD_DIR}\Qt6Widgets.dll"
     File "${BUILD_DIR}\Qt6Multimedia.dll"
     File "${BUILD_DIR}\Qt6Network.dll"
+    File "${BUILD_DIR}\Qt6WebSockets.dll"
     File "${BUILD_DIR}\Qt6Sql.dll"
     File "${BUILD_DIR}\Qt6Svg.dll"
     File "${BUILD_DIR}\Qt6SvgWidgets.dll"
@@ -159,7 +160,7 @@ Section "Neko歌姬计划" SecMain
     WriteRegStr HKLM "Software\Classes\Applications\${APP_EXE}\DefaultIcon" "" "$INSTDIR\${APP_EXE},0"
     WriteRegStr HKLM "Software\Classes\Applications\${APP_EXE}\shell\open\command" "" "$\"$INSTDIR\${APP_EXE}$\" $\"%1$\""
 
-    ; NekoAuth SSO 回跳
+    ; NekoAuth SSO 回跳与一起听邀请深链
     WriteRegStr HKLM "Software\Classes\nekomusic" "" "URL:NekoMusic Single Sign-On"
     WriteRegStr HKLM "Software\Classes\nekomusic" "URL Protocol" ""
     WriteRegStr HKLM "Software\Classes\nekomusic\DefaultIcon" "" "$INSTDIR\${APP_EXE},0"

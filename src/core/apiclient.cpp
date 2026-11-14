@@ -2067,3 +2067,89 @@ QNetworkReply *ApiClient::streamNotifications(NotificationsReadyCb onReady,
 
     return reply;
 }
+
+void ApiClient::createTogetherRoom(TogetherCreateCb cb)
+{
+    const QUrl url(QString::fromUtf8("%1/api/listen/rooms").arg(Theme::kApiBase));
+    QNetworkRequest req(url);
+    auto *reply = m_nam.post(req, QByteArray());
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = root.value(QStringLiteral("success")).toBool();
+        const QString roomUrl = root.value(QStringLiteral("data")).toObject()
+                                    .value(QStringLiteral("url")).toString();
+        QString message = root.value(QStringLiteral("message")).toString();
+        if (!ok && message.isEmpty())
+            message = reply->errorString();
+        cb(ok && !roomUrl.isEmpty(), message, roomUrl);
+    });
+}
+
+void ApiClient::joinTogetherRoom(const QString &roomToken, TogetherJoinCb cb)
+{
+    const QUrl url(QString::fromUtf8("%1/api/listen/rooms/%2/join")
+                       .arg(Theme::kApiBase, roomToken));
+    QNetworkRequest req(url);
+    auto *reply = m_nam.post(req, QByteArray());
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const QJsonObject data = root.value(QStringLiteral("data")).toObject();
+        const bool ok = root.value(QStringLiteral("success")).toBool();
+        TogetherJoinResult result;
+        result.ticket = data.value(QStringLiteral("ticket")).toString();
+        result.room = data.value(QStringLiteral("room")).toObject().toVariantMap();
+        QString message = root.value(QStringLiteral("message")).toString();
+        if (!ok && message.isEmpty())
+            message = reply->errorString();
+        cb(ok && !result.ticket.isEmpty() && !result.room.isEmpty(), message, result);
+    });
+}
+
+void ApiClient::issueTogetherTicket(const QString &roomToken, TogetherTicketCb cb)
+{
+    const QUrl url(QString::fromUtf8("%1/api/listen/rooms/%2/ticket")
+                       .arg(Theme::kApiBase, roomToken));
+    QNetworkRequest req(url);
+    auto *reply = m_nam.post(req, QByteArray());
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = root.value(QStringLiteral("success")).toBool();
+        const QString ticket = root.value(QStringLiteral("data")).toObject()
+                                   .value(QStringLiteral("ticket")).toString();
+        QString message = root.value(QStringLiteral("message")).toString();
+        if (!ok && message.isEmpty())
+            message = reply->errorString();
+        cb(ok && !ticket.isEmpty(), message, ticket);
+    });
+}
+
+void ApiClient::leaveTogetherRoom(const QString &roomToken, TogetherLeaveCb cb)
+{
+    const QUrl url(QString::fromUtf8("%1/api/listen/rooms/%2/members/me")
+                       .arg(Theme::kApiBase, roomToken));
+    auto *reply = m_nam.deleteResource(QNetworkRequest(url));
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = root.value(QStringLiteral("success")).toBool()
+            || reply->error() == QNetworkReply::NoError;
+        cb(ok, root.value(QStringLiteral("message")).toString());
+    });
+}
+
+void ApiClient::closeTogetherRoom(const QString &roomToken, TogetherLeaveCb cb)
+{
+    const QUrl url(QString::fromUtf8("%1/api/listen/rooms/%2")
+                       .arg(Theme::kApiBase, roomToken));
+    auto *reply = m_nam.deleteResource(QNetworkRequest(url));
+    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
+        reply->deleteLater();
+        const QJsonObject root = QJsonDocument::fromJson(reply->readAll()).object();
+        const bool ok = root.value(QStringLiteral("success")).toBool()
+            || reply->error() == QNetworkReply::NoError;
+        cb(ok, root.value(QStringLiteral("message")).toString());
+    });
+}

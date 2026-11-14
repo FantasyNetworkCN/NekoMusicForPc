@@ -322,6 +322,26 @@ public:
     using NotificationsMessageCb = std::function<void(const QVariantMap &item)>;
     QNetworkReply *streamNotifications(NotificationsReadyCb onReady, NotificationsMessageCb onMessage);
 
+    // ─── 一起听（房间 REST 契约；实时状态走 TogetherRoomClient/QWebSocket） ───
+    using TogetherCreateCb = std::function<void(bool ok, const QString &message, const QString &url)>;
+    void createTogetherRoom(TogetherCreateCb cb);
+
+    struct TogetherJoinResult {
+        QString ticket;
+        QVariantMap room;
+    };
+    using TogetherJoinCb =
+        std::function<void(bool ok, const QString &message, const TogetherJoinResult &result)>;
+    void joinTogetherRoom(const QString &roomToken, TogetherJoinCb cb);
+
+    using TogetherTicketCb =
+        std::function<void(bool ok, const QString &message, const QString &ticket)>;
+    void issueTogetherTicket(const QString &roomToken, TogetherTicketCb cb);
+
+    using TogetherLeaveCb = std::function<void(bool ok, const QString &message)>;
+    void leaveTogetherRoom(const QString &roomToken, TogetherLeaveCb cb);
+    void closeTogetherRoom(const QString &roomToken, TogetherLeaveCb cb);
+
 private:
     NekoNetworkAccessManager m_nam;
     QString getAuthToken() const;

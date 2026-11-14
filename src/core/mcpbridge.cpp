@@ -15,6 +15,7 @@
 #include "core/playerengine.h"
 #include "core/playlistdb.h"
 #include "core/playlistmanager.h"
+#include "core/togetherroomclient.h"
 #include "core/usermanager.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
@@ -565,7 +566,11 @@ void McpBridge::initHandlers()
             done(false, QStringLiteral("播放引擎不可用"), QJsonObject());
             return;
         }
-        m_engine->play();
+        TogetherRoomClient &room = TogetherRoomClient::instance();
+        if (room.isActive())
+            room.resume();
+        else
+            m_engine->play();
         done(true, QStringLiteral("已继续播放"), QJsonObject());
     });
     m_handlers.insert(QStringLiteral("pause"), [this](const QJsonObject &, Done done) {
@@ -573,7 +578,11 @@ void McpBridge::initHandlers()
             done(false, QStringLiteral("播放引擎不可用"), QJsonObject());
             return;
         }
-        m_engine->pause();
+        TogetherRoomClient &room = TogetherRoomClient::instance();
+        if (room.isActive())
+            room.pause();
+        else
+            m_engine->pause();
         done(true, QStringLiteral("已暂停"), QJsonObject());
     });
     m_handlers.insert(QStringLiteral("toggle_playback"), [this](const QJsonObject &, Done done) {
@@ -581,10 +590,14 @@ void McpBridge::initHandlers()
             done(false, QStringLiteral("播放引擎不可用"), QJsonObject());
             return;
         }
-        if (m_engine->playbackState() == PlayerEngine::Playing)
+        TogetherRoomClient &room = TogetherRoomClient::instance();
+        if (room.isActive()) {
+            room.togglePlayPause();
+        } else if (m_engine->playbackState() == PlayerEngine::Playing) {
             m_engine->pause();
-        else
+        } else {
             m_engine->play();
+        }
         done(true, QStringLiteral("当前状态：%1").arg(stateName(m_engine->playbackState())),
              QJsonObject{{QStringLiteral("state"), stateName(m_engine->playbackState())}});
     });
@@ -593,7 +606,11 @@ void McpBridge::initHandlers()
             done(false, QStringLiteral("播放引擎不可用"), QJsonObject());
             return;
         }
-        m_engine->stop();
+        TogetherRoomClient &room = TogetherRoomClient::instance();
+        if (room.isActive())
+            room.pause();
+        else
+            m_engine->stop();
         done(true, QStringLiteral("已停止播放"), QJsonObject());
     });
     m_handlers.insert(QStringLiteral("next_track"), [this](const QJsonObject &, Done done) {
@@ -622,7 +639,11 @@ void McpBridge::initHandlers()
             done(false, QStringLiteral("缺少参数 position"), QJsonObject());
             return;
         }
-        m_engine->setPosition(static_cast<qint64>(seconds * 1000));
+        TogetherRoomClient &room = TogetherRoomClient::instance();
+        if (room.isActive())
+            room.seekTo(static_cast<qint64>(seconds * 1000));
+        else
+            m_engine->setPosition(static_cast<qint64>(seconds * 1000));
         done(true, QStringLiteral("已跳转到 %1 秒").arg(seconds),
              QJsonObject{{QStringLiteral("position_seconds"), seconds}});
     });
@@ -647,13 +668,51 @@ void McpBridge::initHandlers()
             done(false, QStringLiteral("mode 仅支持 list / single / random"), QJsonObject());
             return;
         }
-        PlaylistManager::instance().setPlayMode(mode);
+        TogetherRoomClient &room = TogetherRoomClient::instance();
+        if (room.isActive()) {
+            room.setPlayMode(mode == QLatin1String("single")
+                                 ? QStringLiteral("single_repeat")
+                                 : mode == QLatin1String("random")
+                                       ? QStringLiteral("shuffle")
+                                       : QStringLiteral("list_repeat"));
+        } else {
+            PlaylistManager::instance().setPlayMode(mode);
+        }
         done(true, QStringLiteral("播放模式已设为 %1").arg(mode),
              QJsonObject{{QStringLiteral("play_mode"), mode}});
     });
 
     // ── 播放队列 ───────────────────────────────────────
     m_handlers.insert(QStringLiteral("get_queue"), [](const QJsonObject &, Done done) {
+        TogetherRoomClient &room = TogetherRoomClient::instance();
+        if (room.isActive()) {
+            QList<MusicInfo> queue;
+            const QVariantList items =
+                room.playlist().value(QStringLiteral("items")).toList();
+            int currentIndex = -1;
+            const QString currentEntryId =
+                room.playback().value(QStringLiteral("currentEntryId")).toString();
+            for (int i = 0; i < items.size(); ++i) {
+                const QVariantMap item = items.at(i).toMap();
+                const QVariantMap track = item.value(QStringLiteral("track")).toMap();
+                MusicInfo info;
+                info.id = track.value(QStringLiteral("id")).toInt();
+                info.title = track.value(QStringLiteral("title")).toString();
+                info.artist = track.value(QStringLiteral("artist")).toString();
+                info.album = track.value(QStringLiteral("album")).toString();
+                info.duration = track.value(QStringLiteral("duration")).toInt();
+                queue.append(info);
+                if (item.value(QStringLiteral("entryId")).toString() == currentEntryId)
+                    currentIndex = i;
+            }
+            done(true, QStringLiteral("房间临时队列共 %1 首，当前第 %2 首")
+                          .arg(queue.size()).arg(currentIndex + 1),
+                 QJsonObject{{QStringLiteral("current_index"), currentIndex},
+                             {QStringLiteral("play_mode"),
+                              room.playlist().value(QStringLiteral("repeatMode")).toString()},
+                             {QStringLiteral("tracks"), tracksJson(queue)}});
+            return;
+        }
         const QList<MusicInfo> &queue = PlaylistManager::instance().playlist();
         const int index = PlaylistManager::instance().currentIndex();
         done(true, QStringLiteral("队列共 %1 首，当前第 %2 首").arg(queue.size()).arg(index + 1),
@@ -663,6 +722,21 @@ void McpBridge::initHandlers()
     });
 
     m_handlers.insert(QStringLiteral("play_queue_index"), [this](const QJsonObject &arguments, Done done) {
+        TogetherRoomClient &room = TogetherRoomClient::instance();
+        if (room.isActive()) {
+            const QVariantList items =
+                room.playlist().value(QStringLiteral("items")).toList();
+            const int index = arguments.value(QStringLiteral("index")).toInt(0);
+            if (index < 1 || index > items.size()) {
+                done(false, QStringLiteral("index 超出房间队列范围（1-%1）").arg(items.size()),
+                     QJsonObject());
+                return;
+            }
+            const QVariantMap item = items.at(index - 1).toMap();
+            room.selectEntry(item.value(QStringLiteral("entryId")).toString());
+            done(true, QStringLiteral("正在播放房间队列第 %1 首").arg(index), QJsonObject());
+            return;
+        }
         const QList<MusicInfo> &queue = PlaylistManager::instance().playlist();
         const int index = arguments.value(QStringLiteral("index")).toInt(0);
         if (index < 1 || index > queue.size()) {
@@ -692,10 +766,18 @@ void McpBridge::initHandlers()
                 done(false, err, QJsonObject());
                 return;
             }
-            PlaylistManager::instance().addToPlaylist(info);
-            done(true, QStringLiteral("已加入播放队列：%1 - %2").arg(info.title, info.artist),
-                 QJsonObject{{QStringLiteral("track"), trackJson(info)},
-                             {QStringLiteral("queue_size"), PlaylistManager::instance().count()}});
+            TogetherRoomClient &room = TogetherRoomClient::instance();
+            if (room.isActive()) {
+                room.addTrack(info.id);
+                done(true, QStringLiteral("已加入房间临时队列：%1 - %2")
+                              .arg(info.title, info.artist),
+                     QJsonObject{{QStringLiteral("track"), trackJson(info)}});
+            } else {
+                PlaylistManager::instance().addToPlaylist(info);
+                done(true, QStringLiteral("已加入播放队列：%1 - %2").arg(info.title, info.artist),
+                     QJsonObject{{QStringLiteral("track"), trackJson(info)},
+                                 {QStringLiteral("queue_size"), PlaylistManager::instance().count()}});
+            }
         });
     });
 
@@ -716,7 +798,11 @@ void McpBridge::initHandlers()
                 return;
             }
             const MusicInfo &info = tracks.at(index - 1);
-            PlaylistManager::instance().addToPlaylist(info);
+            TogetherRoomClient &room = TogetherRoomClient::instance();
+            if (room.isActive())
+                room.addTrack(info.id);
+            else
+                PlaylistManager::instance().addToPlaylist(info);
             done(true, QStringLiteral("已加入播放队列：%1 - %2").arg(info.title, info.artist),
                  QJsonObject{{QStringLiteral("track"), trackJson(info)}});
         });
@@ -2549,6 +2635,25 @@ void McpBridge::applyFavorite(int musicId, bool favorite, const Done &done)
 
 QJsonObject McpBridge::playbackStateJson() const
 {
+    TogetherRoomClient &room = TogetherRoomClient::instance();
+    if (room.isActive()) {
+        const QVariantMap playback = room.playback();
+        const qint64 position = room.estimatedPositionMs();
+        QJsonObject state{
+            {QStringLiteral("state"),
+             playback.value(QStringLiteral("playing")).toBool() ? QStringLiteral("playing")
+                                                                : QStringLiteral("paused")},
+            {QStringLiteral("volume"), static_cast<int>(m_engine->volume() * 100.0f + 0.5f)},
+            {QStringLiteral("position_seconds"), static_cast<double>(position) / 1000.0},
+            {QStringLiteral("duration_seconds"), static_cast<double>(m_engine->duration()) / 1000.0},
+            {QStringLiteral("play_mode"),
+             room.playlist().value(QStringLiteral("repeatMode")).toString()},
+        };
+        const MusicInfo &current = m_engine->currentMusic();
+        if (current.id > 0)
+            state.insert(QStringLiteral("track"), trackJson(current));
+        return state;
+    }
     const qint64 duration = m_engine->duration();
     const qint64 position = m_engine->position();
     QJsonObject state{

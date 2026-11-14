@@ -11,10 +11,12 @@
 #include <QPropertyAnimation>
 #include <QGraphicsOpacityEffect>
 #include <QHash>
+#include <QSet>
 #include <QMetaObject>
 #include <QColor>
 #include <QImage>
 #include <QPixmap>
+#include <QVariantList>
 #include "../core/audioquality.h"
 #include "../core/lyrics.h"
 #include "../core/musicinfo.h"
@@ -25,6 +27,7 @@ class AmllLyricsView;
 class QTimer;
 class QWheelEvent;
 class QSlider;
+class QHBoxLayout;
 
 class PlayerPage : public QWidget
 {
@@ -44,6 +47,8 @@ public:
     void updateLyricHighlight(qint64 positionMs);
     void updatePlayModeBtn(const QString &mode);
     void refreshTintedPalette();
+    /** 一起听顶部成员头像；只在房间激活时显示，固定不随歌词滚动。 */
+    void setTogetherState(bool active, const QVariantList &members, bool connected);
     int coverSideLength() const;
     QColor idleIconColor() const;
     QColor accentIconColor() const;
@@ -74,6 +79,10 @@ signals:
     void backRequested();
     void previousClicked();
     void nextClicked();
+    void playPauseRequested();
+    void seekRequested(qint64 positionMs);
+    void playModeClicked();
+    void leaveTogetherRequested();
     void favoriteClicked(int musicId);
     void addToPlaylistClicked(int musicId);
     void downloadClicked(int musicId);
@@ -151,6 +160,8 @@ private:
     void openVideoRenderDialog();
     void downloadRenderedVideo();
     int trackDurationSec() const;
+    void rebuildTogetherMembers();
+    void loadTogetherAvatar(int userId, QLabel *label);
 
     PlayerEngine *m_engine;
     ApiClient *m_apiClient = nullptr;
@@ -208,6 +219,7 @@ private:
     bool m_ppVolumePanelClosing = false;
     bool m_ppVolumeAppFilterInstalled = false;
     QPushButton *m_ppDesktopLrcBtn = nullptr;
+    QPushButton *m_ppLeaveTogetherBtn = nullptr;
     QPushButton *m_ppPrevBtn = nullptr;
     QPushButton *m_ppPlayBtn = nullptr;
     QPushButton *m_ppNextBtn = nullptr;
@@ -238,6 +250,17 @@ private:
     QWidget *m_lyricsContainer;
     QVBoxLayout *m_lyricsLayout;
     AmllLyricsView *m_amllLyricsView = nullptr;
+
+    QWidget *m_togetherStrip = nullptr;
+    QHBoxLayout *m_togetherAvatarLayout = nullptr;
+    QLabel *m_togetherTitleLabel = nullptr;
+    QLabel *m_togetherCountLabel = nullptr;
+    QVariantList m_togetherMembers;
+    QString m_togetherMemberSignature;
+    bool m_togetherActive = false;
+    bool m_togetherConnected = false;
+    NekoNetworkAccessManager *m_togetherAvatarNam = nullptr;
+    QHash<int, QPixmap> m_togetherAvatarCache;
 
     int m_musicId = 0;
     int m_trackDurationSec = 0;

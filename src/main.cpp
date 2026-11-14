@@ -194,6 +194,24 @@ static QUrl firstLaunchSsoUrl(int argc, char *argv[])
     return {};
 }
 
+static QUrl firstLaunchTogetherUrl(int argc, char *argv[])
+{
+    for (int i = 1; i < argc; ++i) {
+        const QUrl url(QString::fromUtf8(argv[i]));
+        if (!url.isValid())
+            continue;
+        const bool nativeLink =
+            url.scheme().compare(QStringLiteral("nekomusic"), Qt::CaseInsensitive) == 0
+            && url.host().compare(QStringLiteral("together"), Qt::CaseInsensitive) == 0;
+        const bool webLink =
+            (url.scheme() == QStringLiteral("https") || url.scheme() == QStringLiteral("http"))
+            && url.path().startsWith(QStringLiteral("/together/"));
+        if (nativeLink || webLink)
+            return url;
+    }
+    return {};
+}
+
 int main(int argc, char *argv[])
 {
 #ifdef Q_OS_LINUX
@@ -221,9 +239,14 @@ int main(int argc, char *argv[])
     if (alreadyRunning || socketConnected) {
         if (socketConnected) {
             const QUrl ssoUrl = firstLaunchSsoUrl(argc, argv);
+            const QUrl togetherUrl = firstLaunchTogetherUrl(argc, argv);
             const QString audio = firstLaunchAudioPath(argc, argv);
             if (ssoUrl.isValid()) {
                 QByteArray msg = QByteArrayLiteral("SSO\t") + ssoUrl.toString(QUrl::FullyEncoded).toUtf8() + '\n';
+                socket.write(msg);
+            } else if (togetherUrl.isValid()) {
+                QByteArray msg = QByteArrayLiteral("TOGETHER\t")
+                    + togetherUrl.toString(QUrl::FullyEncoded).toUtf8() + '\n';
                 socket.write(msg);
             } else if (!audio.isEmpty()) {
                 QByteArray msg = QByteArrayLiteral("PLAY\t") + audio.toUtf8() + '\n';
@@ -348,6 +371,7 @@ int main(int argc, char *argv[])
                     return;
                 static const QByteArray kPlayPfx = QByteArrayLiteral("PLAY\t");
                 static const QByteArray kSsoPfx = QByteArrayLiteral("SSO\t");
+                static const QByteArray kTogetherPfx = QByteArrayLiteral("TOGETHER\t");
                 if (line.startsWith(kPlayPfx)) {
                     QString path = QString::fromUtf8(line.mid(kPlayPfx.size())).trimmed();
                     path = LocalMusic::normalizeOpenPathArgument(path);
@@ -366,6 +390,14 @@ int main(int argc, char *argv[])
                     window->activateWindow();
                     QTimer::singleShot(0, window, [window, url]() {
                         window->handleSsoCallback(url);
+                    });
+                } else if (line.startsWith(kTogetherPfx)) {
+                    const QUrl url(QString::fromUtf8(line.mid(kTogetherPfx.size())).trimmed());
+                    window->show();
+                    window->raise();
+                    window->activateWindow();
+                    QTimer::singleShot(0, window, [window, url]() {
+                        window->handleTogetherLink(url);
                     });
                 } else if (line == "SHOW") {
                     window->show();
@@ -404,6 +436,12 @@ int main(int argc, char *argv[])
     if (launchSsoUrl.isValid()) {
         QTimer::singleShot(0, window, [window, launchSsoUrl]() {
             window->handleSsoCallback(launchSsoUrl);
+        });
+    }
+    const QUrl launchTogetherUrl = firstLaunchTogetherUrl(argc, argv);
+    if (launchTogetherUrl.isValid()) {
+        QTimer::singleShot(0, window, [window, launchTogetherUrl]() {
+            window->handleTogetherLink(launchTogetherUrl);
         });
     }
 

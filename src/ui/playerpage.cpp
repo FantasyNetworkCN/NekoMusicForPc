@@ -465,6 +465,25 @@ static QPixmap makeRoundedCoverPixmap(const QPixmap &source, int size)
     return rounded;
 }
 
+static QPixmap makeCircularAvatarPixmap(const QPixmap &source, int size, qreal opacity = 1.0)
+{
+    if (size < 1 || source.isNull())
+        return {};
+    QPixmap rounded(size, size);
+    rounded.fill(Qt::transparent);
+    QPainter p(&rounded);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setOpacity(qBound(0.0, opacity, 1.0));
+    QPainterPath path;
+    path.addEllipse(0, 0, size, size);
+    p.setClipPath(path);
+    const QPixmap scaled =
+        source.scaled(size, size, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+    p.drawPixmap((size - scaled.width()) / 2, (size - scaled.height()) / 2, scaled);
+    p.end();
+    return rounded;
+}
+
 /** SPlayer .bg-img：width 100%、scale(1.5)、blur(80px)，居中铺放勿拉伸铺满 */
 static void drawCoverBlurBackground(QPainter &p, const QPixmap &blur, const QRect &pageRect)
 {
@@ -734,6 +753,7 @@ PlayerPage::PlayerPage(PlayerEngine *engine, ApiClient *apiClient, QWidget *pare
             });
 
     m_qualityNam = new NekoNetworkAccessManager(this);
+    m_togetherAvatarNam = new NekoNetworkAccessManager(this);
     connect(&MusicDownloader::instance(), &MusicDownloader::downloadFinished, this,
             [this](const QString &) {
                 if (m_musicId > 0)
@@ -893,7 +913,10 @@ int PlayerPage::coverSideLength() const
     const int pageH = height() > 120 ? height() : 720;
     const int byPanel = int(panelW * 0.70);
     const int byVh = int(pageH * 0.50);
-    return qBound(200, qMin(byPanel, byVh), 480);
+    int side = qBound(200, qMin(byPanel, byVh), 480);
+    if (m_togetherActive)
+        side = qMax(160, int(side * 0.80));
+    return side;
 }
 
 void PlayerPage::refreshCoverLayout()
@@ -952,6 +975,150 @@ void PlayerPage::refreshTintedPalette()
     } else {
         updateLyricCountdown(m_engine ? m_engine->position() : 0);
     }
+}
+
+void PlayerPage::setTogetherState(bool active, const QVariantList &members, bool connected)
+{
+    const bool activeChanged = m_togetherActive != active;
+    m_togetherActive = active;
+    m_togetherConnected = connected;
+    m_togetherMembers = members;
+
+    if (m_togetherStrip)
+        m_togetherStrip->setVisible(active);
+    if (m_ppLeaveTogetherBtn)
+        m_ppLeaveTogetherBtn->setVisible(active);
+
+    QString signature;
+    int onlineCount = 0;
+    for (const QVariant &value : members) {
+        const QVariantMap member = value.toMap();
+        const int userId = member.value(QStringLiteral("userId")).toInt();
+        const bool online = member.value(QStringLiteral("online")).toBool();
+        const bool owner = member.value(QStringLiteral("owner")).toBool();
+        if (online)
+            ++onlineCount;
+        signature += QStringLiteral("%1:%2:%3:%4|")
+                         .arg(userId)
+                         .arg(online ? 1 : 0)
+                         .arg(owner ? 1 : 0)
+                         .arg(member.value(QStringLiteral("nickname")).toString());
+    }
+
+    if (m_togetherCountLabel) {
+        m_togetherCountLabel->setText(
+            QStringLiteral("%1/10%2")
+                .arg(onlineCount)
+                .arg(connected ? QString() : QStringLiteral(" · 重连中")));
+    }
+
+    if (active && signature != m_togetherMemberSignature)
+        rebuildTogetherMembers();
+
+    if (activeChanged) {
+        refreshCoverLayout();
+        layoutPlayerPageChrome();
+    }
+}
+
+void PlayerPage::rebuildTogetherMembers()
+{
+    if (!m_togetherAvatarLayout || !m_togetherStrip)
+        return;
+    while (QLayoutItem *item = m_togetherAvatarLayout->takeAt(0)) {
+        if (QWidget *widget = item->widget())
+            widget->deleteLater();
+        delete item;
+    }
+    m_togetherMemberSignature.clear();
+
+    constexpr int kAvatarSize = 36;
+    for (const QVariant &value : m_togetherMembers) {
+        const QVariantMap member = value.toMap();
+        const int userId = member.value(QStringLiteral("userId")).toInt();
+        if (userId <= 0)
+            continue;
+        const bool online = member.value(QStringLiteral("online")).toBool();
+        const bool owner = member.value(QStringLiteral("owner")).toBool();
+        const QString nickname = member.value(QStringLiteral("nickname")).toString();
+
+        auto *avatar = new QLabel(m_togetherStrip);
+        avatar->setObjectName(QStringLiteral("togetherMemberAvatar"));
+        avatar->setFixedSize(kAvatarSize, kAvatarSize);
+        avatar->setAlignment(Qt::AlignCenter);
+        avatar->setToolTip(owner ? QStringLiteral("%1 · 房主").arg(nickname) : nickname);
+        avatar->setProperty("togetherUserId", userId);
+        avatar->setProperty("togetherOnline", online);
+        avatar->setProperty("togetherSignature",
+                            QStringLiteral("%1:%2:%3:%4")
+                                .arg(userId)
+                                .arg(online ? 1 : 0)
+                                .arg(owner ? 1 : 0)
+                                .arg(nickname));
+        avatar->setStyleSheet(
+            owner ? QStringLiteral("QLabel { border: 2px solid rgba(255, 88, 112, 235); "
+                                   "border-radius: 18px; background: rgba(255,255,255,18); }")
+                  : QStringLiteral("QLabel { border: 1px solid rgba(255,255,255,55); "
+                                   "border-radius: 18px; background: rgba(255,255,255,12); }"));
+        m_togetherAvatarLayout->addWidget(avatar, 0, Qt::AlignVCenter);
+
+        const QPixmap fallback =
+            makeCircularAvatarPixmap(QPixmap(QStringLiteral(":/icons/app.png")),
+                                     kAvatarSize, online ? 1.0 : 0.42);
+        if (m_togetherAvatarCache.contains(userId)) {
+            const QPixmap cached = m_togetherAvatarCache.value(userId);
+            avatar->setPixmap(online ? cached
+                                     : makeCircularAvatarPixmap(cached, kAvatarSize, 0.42));
+        } else {
+            avatar->setPixmap(fallback);
+        }
+        loadTogetherAvatar(userId, avatar);
+
+        m_togetherMemberSignature += avatar->property("togetherSignature").toString() + QLatin1Char('|');
+    }
+    m_togetherAvatarLayout->addStretch(1);
+}
+
+void PlayerPage::loadTogetherAvatar(int userId, QLabel *label)
+{
+    if (userId <= 0 || !label || !m_togetherAvatarNam)
+        return;
+    const int size = label->width() > 0 ? label->width() : 36;
+    const bool online = label->property("togetherOnline").toBool();
+    if (m_togetherAvatarCache.contains(userId)) {
+        const QPixmap cached = m_togetherAvatarCache.value(userId);
+        label->setPixmap(online ? cached
+                                : makeCircularAvatarPixmap(cached, size, 0.42));
+        return;
+    }
+
+    const QUrl url(QString::fromUtf8("%1/api/user/avatar/%2")
+                       .arg(QString::fromUtf8(Theme::kApiBase))
+                       .arg(userId));
+    QNetworkRequest request(url);
+    request.setTransferTimeout(6000);
+    QNetworkReply *reply = m_togetherAvatarNam->get(request);
+    QPointer<QLabel> labelGuard(label);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, userId, labelGuard]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError)
+            return;
+        QPixmap source;
+        if (!source.loadFromData(reply->readAll()))
+            return;
+        const QPixmap rounded = makeCircularAvatarPixmap(source, 36);
+        if (rounded.isNull())
+            return;
+        m_togetherAvatarCache.insert(userId, rounded);
+        QLabel *label = labelGuard.data();
+        if (!label)
+            return;
+        if (label->property("togetherUserId").toInt() != userId)
+            return;
+        label->setPixmap(label->property("togetherOnline").toBool()
+                             ? rounded
+                             : makeCircularAvatarPixmap(rounded, 36, 0.42));
+    });
 }
 
 void PlayerPage::applyLyricLineStyle(QLabel *textLabel, QLabel *romanLabel,
@@ -1670,7 +1837,18 @@ void PlayerPage::applyPlayerPageStyle()
                       "#ppDesktopLrcBtn:pressed { "
                       "  background: rgba(255,255,255,14); }"
                       "#ppDesktopLrcBtn:checked { "
-                      "  background: rgba(22, 119, 184,48); color: #FFF5F7; }")
+                      "  background: rgba(22, 119, 184,48); color: #FFF5F7; }"
+                      "#ppLeaveTogetherBtn { "
+                      "  background: rgba(22, 119, 184,42); color: rgba(255,255,255,225); "
+                      "  border: 1px solid rgba(138,223,245,62); border-radius: 17px; "
+                      "  padding: 0 15px; font-size: 12px; font-weight: 600; }"
+                      "#ppLeaveTogetherBtn:hover { "
+                      "  background: rgba(22, 119, 184,78); border-color: rgba(138,223,245,105); }"
+                      "#togetherMemberStrip { background: transparent; border: none; }"
+                      "#togetherMemberTitle { color: rgba(255,255,255,205); "
+                      "  font-size: 12px; font-weight: 600; background: transparent; }"
+                      "#togetherMemberCount { color: rgba(255,255,255,145); "
+                      "  font-size: 11px; background: transparent; }")
                       .arg(backFg)
                       .arg(m_clrTitle)
                       .arg(m_clrArtist)
@@ -1796,9 +1974,7 @@ void PlayerPage::setupPlayerControl()
     m_ppPlayModeBtn->setProperty("ppPlayMode", 0);
     m_ppPlayModeBtn->setCursor(Qt::PointingHandCursor);
     m_ppPlayModeBtn->setToolTip(I18n::instance().tr("playModeList"));
-    connect(m_ppPlayModeBtn, &QPushButton::clicked, this, [this]() {
-        PlaylistManager::instance().togglePlayMode();
-    });
+    connect(m_ppPlayModeBtn, &QPushButton::clicked, this, &PlayerPage::playModeClicked);
 
     btnRow->addWidget(m_ppPlayModeBtn);
     btnRow->addWidget(m_ppPrevBtn);
@@ -1972,10 +2148,7 @@ void PlayerPage::connectPlayerControlEngine()
     setVolumePercentSynced(initialVol);
 
     connect(m_ppPlayBtn, &QPushButton::clicked, this, [this]() {
-        if (m_engine->isActuallyPlaying())
-            m_engine->fadeOut();
-        else
-            m_engine->fadeIn();
+        emit playPauseRequested();
     });
     connect(m_engine, &PlayerEngine::stateChanged, this, &PlayerPage::updatePlayControlState);
     updatePlayControlState();
@@ -2008,7 +2181,7 @@ void PlayerPage::connectPlayerControlEngine()
         if (!m_engine || m_engine->duration() <= 0)
             return;
         const qint64 position = static_cast<qint64>(m_ppProgress->value()) * m_engine->duration() / 1000;
-        m_engine->setPosition(position);
+        emit seekRequested(position);
     });
     connect(m_ppVolumeBtn, &QPushButton::clicked, this, [this]() {
         if (m_ppVolumePanel && m_ppVolumePanel->isVisible() && !m_ppVolumePanelClosing)
@@ -2536,6 +2709,16 @@ void PlayerPage::setupUi()
     menuLay->setContentsMargins(kPpMenuPad, 0, kPpMenuPad, 0);
     menuLay->addStretch(1);
 
+    m_ppLeaveTogetherBtn = new QPushButton(QStringLiteral("离开一起听"), m_menuBar);
+    m_ppLeaveTogetherBtn->setObjectName(QStringLiteral("ppLeaveTogetherBtn"));
+    m_ppLeaveTogetherBtn->setCursor(Qt::PointingHandCursor);
+    m_ppLeaveTogetherBtn->setFixedHeight(34);
+    m_ppLeaveTogetherBtn->setToolTip(QStringLiteral("离开当前一起听房间"));
+    m_ppLeaveTogetherBtn->hide();
+    connect(m_ppLeaveTogetherBtn, &QPushButton::clicked, this,
+            &PlayerPage::leaveTogetherRequested);
+    menuLay->addWidget(m_ppLeaveTogetherBtn, 0, Qt::AlignVCenter);
+
     m_ppMenuOpacity = new QGraphicsOpacityEffect(m_menuBar);
     m_ppMenuOpacity->setOpacity(0.0);
     m_menuBar->setGraphicsEffect(m_ppMenuOpacity);
@@ -2698,6 +2881,25 @@ void PlayerPage::setupUi()
     auto *lyricsCol = new QVBoxLayout(m_rightPanel);
     lyricsCol->setContentsMargins(kLyricPadLeft, 0, kLyricPadRight, 26);
     lyricsCol->setSpacing(0);
+
+    m_togetherStrip = new QWidget(m_rightPanel);
+    m_togetherStrip->setObjectName(QStringLiteral("togetherMemberStrip"));
+    m_togetherStrip->setFixedHeight(58);
+    auto *togetherLay = new QHBoxLayout(m_togetherStrip);
+    togetherLay->setContentsMargins(4, 6, 4, 6);
+    togetherLay->setSpacing(8);
+    m_togetherTitleLabel = new QLabel(QStringLiteral("一起听"), m_togetherStrip);
+    m_togetherTitleLabel->setObjectName(QStringLiteral("togetherMemberTitle"));
+    togetherLay->addWidget(m_togetherTitleLabel, 0, Qt::AlignVCenter);
+    m_togetherAvatarLayout = new QHBoxLayout();
+    m_togetherAvatarLayout->setContentsMargins(0, 0, 0, 0);
+    m_togetherAvatarLayout->setSpacing(6);
+    togetherLay->addLayout(m_togetherAvatarLayout, 1);
+    m_togetherCountLabel = new QLabel(m_togetherStrip);
+    m_togetherCountLabel->setObjectName(QStringLiteral("togetherMemberCount"));
+    togetherLay->addWidget(m_togetherCountLabel, 0, Qt::AlignVCenter);
+    m_togetherStrip->hide();
+    lyricsCol->addWidget(m_togetherStrip);
 
     m_lyricsScroll = new QScrollArea(m_rightPanel);
     m_lyricsScroll->setObjectName("lyricsScroll");

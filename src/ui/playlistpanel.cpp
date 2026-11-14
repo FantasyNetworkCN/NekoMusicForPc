@@ -162,7 +162,9 @@ public:
         connect(m_removeBtn, &QPushButton::clicked, this, [this](bool) {
             if (m_batchMode)
                 return;
-            if (removeRequested)
+            if (!m_entryId.isEmpty() && entryRemoveRequested)
+                entryRemoveRequested(m_entryId);
+            else if (removeRequested)
                 removeRequested(m_musicId);
         });
         lay->addWidget(m_removeBtn);
@@ -176,15 +178,17 @@ public:
 
     std::function<void(int)> onClicked;
     std::function<void(int)> removeRequested;
+    std::function<void(const QString &)> entryRemoveRequested;
     std::function<void(const MusicInfo &, const QPoint &)> menuRequested;
     std::function<void(const MusicInfo &)> batchToggleRequested;
 
     const MusicInfo &info() const { return m_info; }
 
-    void bind(const MusicInfo &info, int index, bool isCurrent)
+    void bind(const MusicInfo &info, int index, bool isCurrent, const QString &entryId = QString())
     {
         m_info = info;
         m_musicId = info.id;
+        m_entryId = entryId;
         m_index = index;
         m_titleLbl->setText(info.title);
         m_artistLbl->setText(info.artist);
@@ -215,6 +219,12 @@ public:
         m_removeBtn->setVisible(!readOnly);
         m_moreBtn->setVisible(!readOnly);
         setCursor(readOnly ? Qt::ArrowCursor : Qt::PointingHandCursor);
+    }
+
+    void setMenuVisible(bool visible)
+    {
+        if (m_moreBtn)
+            m_moreBtn->setVisible(visible);
     }
 
     /** 批量编辑模式：序号列换复选框，整行点击 = 切换选中，不触发播放/移除/菜单 */
@@ -451,6 +461,7 @@ private:
 
     MusicInfo m_info;
     int m_musicId;
+    QString m_entryId;
     int m_index;
     bool m_isCurrent = false;
     bool m_hover = false;
@@ -475,6 +486,7 @@ void releasePlaylistCard(PlaylistItemCard *card, QList<QWidget *> &pool)
     card->hide();
     card->onClicked = nullptr;
     card->removeRequested = nullptr;
+    card->entryRemoveRequested = nullptr;
     card->menuRequested = nullptr;
     card->batchToggleRequested = nullptr;
     card->setBatchChecked(false);
@@ -542,11 +554,14 @@ void PlaylistPanel::bindRowCard(PlaylistItemCard *card, int row)
         return;
 
     const MusicInfo &info = m_displayPlaylist[row];
-    card->bind(info, row, row == m_displayCurrentIndex);
+    const QString entryId =
+        m_togetherView && row < m_togetherEntryIds.size() ? m_togetherEntryIds.at(row) : QString();
+    card->bind(info, row, row == m_displayCurrentIndex, entryId);
     card->setReadOnly(m_remoteView);
+    card->setMenuVisible(!m_togetherView);
 
     // 远端设备的队列是只读视图：批量模式与移除/菜单都不开放
-    card->setBatchMode(m_batchMode && !m_remoteView);
+    card->setBatchMode(m_batchMode && !m_remoteView && !m_togetherView);
 
     const int musicId = info.id;
     card->onClicked = [this, musicId](int) {
@@ -556,6 +571,9 @@ void PlaylistPanel::bindRowCard(PlaylistItemCard *card, int row)
     };
     card->removeRequested = m_remoteView ? std::function<void(int)>() :
         [](int localId) { PlaylistManager::instance().removeFromPlaylist(localId); };
+    card->entryRemoveRequested = m_togetherView
+        ? [this](const QString &entryId) { emit togetherRemoveRequested(entryId); }
+        : std::function<void(const QString &)>();
     card->menuRequested = [this](const MusicInfo &song, const QPoint &pos) {
         showSongMenu(song, pos);
     };
@@ -1067,6 +1085,10 @@ void PlaylistPanel::setupUi()
     m_clearBtn->setCursor(Qt::PointingHandCursor);
     m_clearBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     connect(m_clearBtn, &QPushButton::clicked, this, [this]() {
+        if (m_togetherView) {
+            emit togetherClearRequested();
+            return;
+        }
         if (m_remoteView) {
             emit remoteReplaceRequested(false);
             return;
@@ -1111,10 +1133,13 @@ void PlaylistPanel::updateFooterButtonIcons()
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
     const QColor ic = dark ? QColor(244, 246, 255, 200) : QColor(33, 37, 41, 200);
     if (m_clearBtn) {
-        const QString label = m_remoteView
-            ? QStringLiteral("替换本机列表")
-            : I18n::instance().tr(QStringLiteral("clear"));
-        const char *icon = m_remoteView ? "AddList" : "DeleteSweep";
+        const QString label = m_togetherView
+            ? QStringLiteral("清空房间列表")
+            : m_remoteView ? QStringLiteral("替换本机列表")
+                           : I18n::instance().tr(QStringLiteral("clear"));
+        const char *icon = m_togetherView ? "DeleteSweep"
+            : m_remoteView ? "AddList"
+                           : "DeleteSweep";
         m_clearBtn->setText(label);
         m_clearBtn->setIcon(Icons::renderNamed(icon, 18, ic));
         m_clearBtn->setIconSize(QSize(18, 18));
@@ -1133,9 +1158,17 @@ void PlaylistPanel::updateFooterButtonIcons()
 void PlaylistPanel::updateCountLabel()
 {
     if (m_countLabel) {
-        m_countLabel->setText(
-            I18n::instance().tr(QStringLiteral("playlistSongCount"))
-                .arg(m_displayPlaylist.size()));
+        if (m_togetherView) {
+            m_countLabel->setText(
+                QStringLiteral("%1 首 · %2")
+                    .arg(m_displayPlaylist.size())
+                    .arg(m_togetherConnected ? QStringLiteral("实时同步")
+                                             : QStringLiteral("正在重连")));
+        } else {
+            m_countLabel->setText(
+                I18n::instance().tr(QStringLiteral("playlistSongCount"))
+                    .arg(m_displayPlaylist.size()));
+        }
     }
 }
 
@@ -1197,8 +1230,40 @@ void PlaylistPanel::refresh()
     if (m_scroll)
         scrollPos = m_scroll->verticalScrollBar()->value();
 
-    m_remoteView = !LanDeviceManager::instance().selectedDeviceId().isEmpty();
-    if (m_remoteView) {
+    m_remoteView = !m_togetherView
+        && !LanDeviceManager::instance().selectedDeviceId().isEmpty();
+    if (m_togetherView) {
+        m_displayPlaylist.clear();
+        m_togetherEntryIds.clear();
+        m_togetherCurrentEntryId =
+            m_togetherPlaylist.value(QStringLiteral("currentEntryId")).toString();
+        const QVariantList items = m_togetherPlaylist.value(QStringLiteral("items")).toList();
+        for (const QVariant &value : items) {
+            const QVariantMap item = value.toMap();
+            const QVariantMap track = item.value(QStringLiteral("track")).toMap();
+            MusicInfo info;
+            info.id = track.value(QStringLiteral("id")).toInt();
+            info.title = track.value(QStringLiteral("title")).toString();
+            info.artist = track.value(QStringLiteral("artist")).toString();
+            info.album = track.value(QStringLiteral("album")).toString();
+            info.duration = track.value(QStringLiteral("duration")).toInt();
+            if (info.id > 0) {
+                info.coverUrl = QString::fromUtf8("%1/api/music/cover/%2")
+                                    .arg(QString::fromUtf8(Theme::kApiBase))
+                                    .arg(info.id);
+            }
+            const QString entryId = item.value(QStringLiteral("entryId")).toString();
+            m_togetherEntryIds.append(entryId);
+            m_displayPlaylist.append(info);
+        }
+        m_displayCurrentIndex = -1;
+        for (int i = 0; i < m_togetherEntryIds.size(); ++i) {
+            if (m_togetherEntryIds.at(i) == m_togetherCurrentEntryId) {
+                m_displayCurrentIndex = i;
+                break;
+            }
+        }
+    } else if (m_remoteView) {
         m_displayPlaylist = LanDeviceManager::instance().remoteQueue().items;
         m_displayCurrentIndex = LanDeviceManager::instance().remoteQueue().currentIndex;
     } else {
@@ -1223,15 +1288,16 @@ void PlaylistPanel::refresh()
 
     updateCountLabel();
     updateFooterButtonIcons();
+    applyTogetherHeader();
     if (m_batchBtn) {
         // 远端设备的队列是只读视图，也没有可批量移除的东西
-        m_batchBtn->setEnabled(!m_remoteView && !m_displayPlaylist.isEmpty());
+        m_batchBtn->setEnabled(!m_remoteView && !m_togetherView && !m_displayPlaylist.isEmpty());
     }
     // 远端视图 / 空队列下批量模式不成立（切设备后要自动退出）
-    if (m_batchMode && (m_remoteView || count == 0))
+    if (m_batchMode && (m_remoteView || m_togetherView || count == 0))
         exitBatchMode();
     if (m_clearBtn)
-        m_clearBtn->setEnabled(!m_remoteView || !m_displayPlaylist.isEmpty());
+        m_clearBtn->setEnabled(m_togetherView || !m_remoteView || !m_displayPlaylist.isEmpty());
     if (m_scrollCurrentBtn)
         m_scrollCurrentBtn->setEnabled(!m_remoteView || !m_displayPlaylist.isEmpty());
 
@@ -1242,6 +1308,9 @@ void PlaylistPanel::refresh()
         if (m_emptyLabel) {
             const bool dark = Theme::ThemeManager::instance().isDarkMode();
             const QString c = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33,37,41,0.55)");
+            m_emptyLabel->setText(m_togetherView
+                                      ? QStringLiteral("房间临时播放列表为空")
+                                      : I18n::instance().tr(QStringLiteral("emptyPlaylistHint")));
             m_emptyLabel->setStyleSheet(QStringLiteral(
                 "QLabel { color: %1; font-size: 13px; padding: 48px 24px; line-height: 1.5; }")
                                             .arg(c));
@@ -1289,6 +1358,10 @@ void PlaylistPanel::refreshDevices()
 {
     if (!m_deviceCombo)
         return;
+    if (m_togetherView) {
+        m_deviceCombo->hide();
+        return;
+    }
 
     const QString selected = LanDeviceManager::instance().selectedDeviceId();
     QSignalBlocker blocker(m_deviceCombo);
@@ -1311,12 +1384,45 @@ void PlaylistPanel::refreshRemoteQueue()
         refresh();
 }
 
-void PlaylistPanel::retranslate()
+void PlaylistPanel::setTogetherState(bool active, const QVariantMap &playlist, bool connected)
+{
+    const bool changed = m_togetherView != active;
+    m_togetherView = active;
+    m_togetherConnected = connected;
+    m_togetherPlaylist = active ? playlist : QVariantMap();
+    if (changed)
+        exitBatchMode();
+    applyTogetherHeader();
+    refresh();
+}
+
+void PlaylistPanel::applyTogetherHeader()
 {
     if (m_titleLabel)
-        m_titleLabel->setText(I18n::instance().tr(QStringLiteral("playQueue")));
-    if (m_emptyLabel)
-        m_emptyLabel->setText(I18n::instance().tr(QStringLiteral("emptyPlaylistHint")));
+        m_titleLabel->setText(m_togetherView ? QStringLiteral("房间临时播放列表")
+                                            : I18n::instance().tr(QStringLiteral("playQueue")));
+    if (m_deviceCombo)
+        m_deviceCombo->setVisible(!m_togetherView);
+    if (m_actionStack)
+        m_actionStack->setVisible(!m_togetherView);
+    if (m_scrollCurrentBtn)
+        m_scrollCurrentBtn->setText(m_togetherView
+                                        ? QStringLiteral("当前播放")
+                                        : I18n::instance().tr(
+                                              QStringLiteral("scrollToCurrentPlay")));
+}
+
+void PlaylistPanel::retranslate()
+{
+    if (m_titleLabel) {
+        m_titleLabel->setText(m_togetherView ? QStringLiteral("房间临时播放列表")
+                                            : I18n::instance().tr(QStringLiteral("playQueue")));
+    }
+    if (m_emptyLabel) {
+        m_emptyLabel->setText(m_togetherView
+                                  ? QStringLiteral("房间临时播放列表为空")
+                                  : I18n::instance().tr(QStringLiteral("emptyPlaylistHint")));
+    }
     if (m_batchBtn)
         m_batchBtn->setText(I18n::instance().tr(QStringLiteral("batchManage")));
     if (m_batchBar) {

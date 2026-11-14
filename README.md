@@ -23,13 +23,13 @@
 | 依赖 | 最低版本 |
 | --- | --- |
 | CMake | ≥ 3.20 |
-| Qt 6 | ≥ 6.2（需 Multimedia、Widgets 等，与 `CMakeLists.txt` 一致） |
+| Qt 6 | ≥ 6.2（需 Multimedia、Widgets、WebSockets 等，与 `CMakeLists.txt` 一致） |
 | C++17 编译器 | GCC ≥ 9 / MSVC 2019 / Clang ≥ 10 |
 
 **Debian / Ubuntu 示例：**
 
 ```bash
-sudo apt install cmake qt6-base-dev qt6-multimedia-dev libssl-dev
+sudo apt install cmake qt6-base-dev qt6-multimedia-dev qt6-websockets-dev libssl-dev
 ```
 
 ---
@@ -96,6 +96,20 @@ QT_QPA_PLATFORM=offscreen NEKO_UI_ARTIFACT_DIR=/tmp/nekomusic-ui-preview \
   ./build-linux/tests/NekoMusicUiSmoke
 ```
 
+### 一起听
+
+播放栏右侧的「一起听」入口会直接创建一个空房间，并把当前在线歌曲加入房间临时播放列表；
+创建成功后自动复制 `https://music.nekocore.cn/together/{token}` 分享地址。PC 不提供独立房间页面：
+
+- 播放栏、沉浸播放页、桌面歌词、系统媒体控制和播放队列抽屉仍是唯一操作入口。
+- 房间内所有播放、暂停、切歌、进度跳转和播放模式操作都会先通过 WebSocket 提交给服务端，
+  再由服务端广播的权威状态驱动本机播放器；不会继续操作本机播放队列。
+- 播放队列抽屉会切换为「房间临时播放列表」，支持选曲、移除、清空，成员与列表变化由 WebSocket 实时推送。
+- 沉浸播放页歌词区域顶部固定显示房内成员头像，不随歌词滚动；房间内封面会适当缩小。
+- 房间最多 10 人，同一首歌不能重复加入；房间内禁止播放本地文件，离开房间后恢复本机播放能力。
+- `nekomusic://together/{token}` 与网页分享地址都会由单实例客户端接管；未登录时会先进入登录流程，
+  登录成功后自动加入待处理房间。
+
 ### 安装（Linux）
 
 ```bash
@@ -103,7 +117,8 @@ cmake --install build/linux-release --prefix /usr/local
 ```
 
 Debian 安装包会在安装时注册 `x-scheme-handler/nekomusic`；客户端启动后也会为当前用户刷新
-`nekomusic.desktop` 和默认协议关联。从旧版本升级后需要重新启动一次客户端，再重试网页登录回跳。
+`nekomusic.desktop` 和默认协议关联。从旧版本升级后需要重新启动一次客户端，再重试网页登录回跳
+或一起听房间邀请。
 
 ---
 

@@ -224,11 +224,8 @@ void SearchPage::setupUi()
     m_songsPlayAllBtn->setCursor(Qt::PointingHandCursor);
     m_songsPlayAllBtn->setFixedHeight(40);
     connect(m_songsPlayAllBtn, &QPushButton::clicked, this, [this]() {
-        if (!m_musicResults.isEmpty()) {
-            PlaylistManager::instance().clearPlaylist();
-            PlaylistManager::instance().addAllToPlaylist(m_musicResults);
-            emit playMusic(m_musicResults.first());
-        }
+        if (!m_musicResults.isEmpty())
+            emit playAllRequested(m_musicResults);
     });
     songsActionLay->addWidget(m_songsPlayAllBtn);
 
@@ -1000,6 +997,14 @@ void SearchPage::setupBatchBar()
         const QList<MusicInfo> picked = m_songList->batchSelectedSongs();
         if (picked.isEmpty())
             return;
+        int roomAdded = 0;
+        if (SongMenuBuilder::addManyToTogetherQueue(picked, &roomAdded)) {
+            Toast::show(this,
+                        I18n::instance().tr(QStringLiteral("batchQueueAdded")).arg(roomAdded),
+                        Toast::Success);
+            exitBatchMode();
+            return;
+        }
         PlaylistManager::instance().addAllToPlaylist(picked);
         Toast::show(this, I18n::instance().tr(QStringLiteral("batchQueueAdded")).arg(picked.size()),
                     Toast::Success);
@@ -1049,16 +1054,7 @@ void SearchPage::addAllToQueue()
         return;
     }
 
-    auto &mgr = PlaylistManager::instance();
-    const int before = mgr.count();
-    mgr.addAllToPlaylist(m_musicResults);
-    const int added = qMax(0, mgr.count() - before);
-
-    if (added <= 0)
-        Toast::show(this, I18n::instance().tr(QStringLiteral("queueAddAllNone")), Toast::Info);
-    else
-        Toast::show(this, I18n::instance().tr(QStringLiteral("addAllToQueueDone")).arg(added),
-                    Toast::Success);
+    emit addAllToQueueRequested(m_musicResults);
 }
 
 void SearchPage::retranslate()

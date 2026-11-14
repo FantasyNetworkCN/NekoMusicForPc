@@ -58,4 +58,7 @@ QList<SongContextMenuPopup::Entry> buildStandard(const MusicInfo &info, const St
 bool queueContains(int musicId);
 void toggleQueue(const MusicInfo &info);
 
+/** 房间里批量加入在线曲目到临时队列；未在房间时返回 false，由调用方走本机队列。 */
+bool addManyToTogetherQueue(const QList<MusicInfo> &songs, int *addedCount = nullptr);
+
 } // namespace SongMenuBuilder

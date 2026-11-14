@@ -18,6 +18,8 @@
 #include <QSet>
 #include <QPointer>
 #include <QPropertyAnimation>
+#include <QVariantMap>
+#include <QStringList>
 #include <functional>
 #include "core/musicinfo.h"
 #include "ui/songcontextmenu.h"
@@ -45,6 +47,8 @@ public:
     void syncToHost();
     /** 全屏播放页内打开：抽屉透明，仅靠背后模糊（对齐 SPlayer .full-player） */
     void setFullPlayerMode(bool on);
+    /** 一起听临时歌单；房间激活时抽屉只展示服务端权威列表。 */
+    void setTogetherState(bool active, const QVariantMap &playlist, bool connected);
 
     /** 收藏态查询与刷新：由 MainWindow 注入（它持有收藏缓存），与 SongListWidget 同一套写法 */
     std::function<bool(int)> isFavorited;
@@ -62,6 +66,8 @@ signals:
     void batchAddToPlaylistRequested(const QList<MusicInfo> &songs);
     void batchDownloadRequested(const QList<MusicInfo> &songs);
     void batchUnfavoriteRequested(const QList<int> &musicIds);
+    void togetherClearRequested();
+    void togetherRemoveRequested(const QString &entryId);
 
 public slots:
     void refresh();
@@ -87,6 +93,7 @@ private:
     void updateCountLabel();
     void scrollToCurrent();
     void updateFooterButtonIcons();
+    void applyTogetherHeader();
     /** 把某一行绑定到卡片（含批量模式状态回灌） */
     void bindRowCard(PlaylistItemCard *card, int row);
     /** 当前队列里已选中的曲目（按队列顺序返回） */
@@ -135,6 +142,11 @@ private:
     QList<MusicInfo> m_displayPlaylist;
     int m_displayCurrentIndex = -1;
     bool m_remoteView = false;
+    bool m_togetherView = false;
+    bool m_togetherConnected = false;
+    QVariantMap m_togetherPlaylist;
+    QStringList m_togetherEntryIds;
+    QString m_togetherCurrentEntryId;
     int m_lastPlaylistSize = 0;
     bool m_drawerOpen = false;
     bool m_animating = false;

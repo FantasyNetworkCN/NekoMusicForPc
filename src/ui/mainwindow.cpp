@@ -67,6 +67,7 @@
 #include "core/globalshortcutcontroller.h"
 #include "core/micsynccontroller.h"
 #include "core/shellbackdropsettings.h"
+#include "core/togetherroomclient.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -340,6 +341,24 @@ QString buildShareClipboardText(const MusicInfo &m)
     return t;
 }
 
+MusicInfo musicInfoFromTogetherItem(const QVariantMap &item)
+{
+    const QVariantMap track = item.value(QStringLiteral("track")).toMap();
+    MusicInfo info;
+    info.id = track.value(QStringLiteral("id")).toInt();
+    info.title = track.value(QStringLiteral("title")).toString();
+    info.artist = track.value(QStringLiteral("artist")).toString();
+    info.album = track.value(QStringLiteral("album")).toString();
+    info.duration = track.value(QStringLiteral("duration")).toInt();
+    info.maxQuality = track.value(QStringLiteral("maxQuality")).toString();
+    if (info.id > 0) {
+        info.coverUrl = QString::fromUtf8("%1/api/music/cover/%2")
+                            .arg(QString::fromUtf8(Theme::kApiBase))
+                            .arg(info.id);
+    }
+    return info;
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
@@ -358,6 +377,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     };
     m_engine = new PlayerEngine(this);
     m_downloader = &MusicDownloader::instance();
+    m_together = &TogetherRoomClient::instance();
     setupUi();
     ctorLog("setupUi");
     setupMcpServer();
@@ -382,7 +402,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_systemMedia, &SystemMediaController::playRequested, this, &MainWindow::resumePlaybackForSystemUi);
     connect(m_systemMedia, &SystemMediaController::pauseRequested, this, &MainWindow::pausePlaybackForSystemUi);
     connect(m_systemMedia, &SystemMediaController::stopRequested, this, [this]() {
-        if (m_engine)
+        if (m_together && m_together->isActive())
+            m_together->pause();
+        else if (m_engine)
             m_engine->stop();
     });
     connect(m_systemMedia, &SystemMediaController::seekRelativeUs, this, [this](qint64 us) {
@@ -391,9 +413,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         qint64 ms = m_engine->position() + us / 1000;
         if (ms < 0)
             ms = 0;
-        m_engine->setPosition(ms);
-        if (m_systemMedia)
-            m_systemMedia->notifySeeked(ms * 1000);
+        seekPlaybackForUi(ms);
     });
     connect(m_systemMedia, &SystemMediaController::seekAbsoluteUs, this, [this](qint64 us) {
         if (!m_engine)
@@ -401,11 +421,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         qint64 ms = us / 1000;
         if (ms < 0)
             ms = 0;
-        m_engine->setPosition(ms);
-        if (m_systemMedia)
-            m_systemMedia->notifySeeked(ms * 1000);
+        seekPlaybackForUi(ms);
     });
     connect(m_systemMedia, &SystemMediaController::loopStatusSetRequested, this, [this](const QString &status) {
+        if (m_together && m_together->isActive()) {
+            m_together->setPlayMode(status == QStringLiteral("Track")
+                                        ? QStringLiteral("single_repeat")
+                                        : QStringLiteral("list_repeat"));
+            return;
+        }
         auto &mgr = PlaylistManager::instance();
         if (status == QStringLiteral("Track"))
             mgr.setPlayMode(QStringLiteral("single"));
@@ -418,6 +442,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         refreshSystemMediaIntegration();
     });
     connect(m_systemMedia, &SystemMediaController::shuffleSetRequested, this, [this](bool shuffle) {
+        if (m_together && m_together->isActive()) {
+            m_together->setPlayMode(shuffle ? QStringLiteral("shuffle")
+                                            : QStringLiteral("list_repeat"));
+            return;
+        }
         auto &mgr = PlaylistManager::instance();
         if (shuffle)
             mgr.setPlayMode(QStringLiteral("random"));
@@ -638,6 +667,46 @@ void MainWindow::setupUi()
             m_playerBar->setFloatingProgressSuppressed(false);
     });
 
+    // 一起听会话：实时状态只驱动现有播放栏 / 播放页 / 播放队列抽屉，不新开房间页。
+    m_togetherSyncTimer = new QTimer(this);
+    m_togetherSyncTimer->setInterval(1500);
+    connect(m_togetherSyncTimer, &QTimer::timeout, this, &MainWindow::applyTogetherPlayback);
+    connect(m_together, &TogetherRoomClient::stateChanged, this, [this]() {
+        syncTogetherUi();
+        applyTogetherPlayback();
+    });
+    connect(m_together, &TogetherRoomClient::playbackChanged, this,
+            &MainWindow::applyTogetherPlayback);
+    connect(m_together, &TogetherRoomClient::activeChanged, this, [this](bool active) {
+        syncTogetherUi();
+        if (active) {
+            m_togetherSyncTimer->start();
+            Toast::show(this, QStringLiteral("已加入一起听房间"), Toast::Success);
+        } else {
+            m_togetherSyncTimer->stop();
+        }
+    });
+    connect(m_together, &TogetherRoomClient::connectionChanged, this, [this](bool connected) {
+        Q_UNUSED(connected);
+        syncTogetherUi();
+    });
+    connect(m_together, &TogetherRoomClient::roomUrlReady, this, [this](const QString &url) {
+        QApplication::clipboard()->setText(url);
+        Toast::show(this, QStringLiteral("一起听房间已创建，链接已复制"), Toast::Success, 5200);
+    });
+    connect(m_together, &TogetherRoomClient::errorOccurred, this, [this](const QString &message) {
+        Toast::show(this, message.isEmpty() ? QStringLiteral("一起听操作失败") : message,
+                    Toast::Error, 5200);
+    });
+    connect(m_together, &TogetherRoomClient::roomClosed, this, [this]() {
+        Toast::show(this, QStringLiteral("一起听房间已关闭"), Toast::Info);
+        syncTogetherUi();
+    });
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() {
+        if (m_together && m_together->isActive())
+            m_together->leaveRoom();
+    });
+
     // 加载播放队列
     PlaylistManager::instance().load();
     LanDeviceManager::instance().setPlayerEngine(m_engine);
@@ -732,18 +801,22 @@ void MainWindow::setupUi()
     connect(m_favoritesPage, &FavoritesPage::unfavoriteRequested, this, &MainWindow::toggleFavorite);
     connect(m_favoritesPage, &FavoritesPage::playPauseRequested, this, &MainWindow::togglePlaybackForSystemUi);
     connect(m_favoritesPage, &FavoritesPage::playAllRequested, this, [this](const QList<MusicInfo> &results) {
-        PlaylistManager::instance().clearPlaylist();
-        PlaylistManager::instance().addAllToPlaylist(results);
-        if (!results.isEmpty()) {
-            const auto &first = results.first();
-            playMusicById(first.id, first.title, first.artist, first.coverUrl);
-        }
+        playAllMusic(results);
     });
     connect(&UserManager::instance(), &UserManager::loginStateChanged, this, [this]() {
-        if (UserManager::instance().isLoggedIn())
+        if (UserManager::instance().isLoggedIn()) {
             LanDeviceManager::instance().start();
-        else
+            if (!m_pendingTogetherToken.isEmpty()) {
+                const QString token = m_pendingTogetherToken;
+                m_pendingTogetherToken.clear();
+                QTimer::singleShot(0, this, [this, token]() {
+                    if (m_together)
+                        m_together->joinRoom(token);
+                });
+            }
+        } else {
             LanDeviceManager::instance().stop();
+        }
         if (m_favoritesPage) m_favoritesPage->refresh();
         loadFavoritesCache();
         m_sidebar->loadPlaylists();
@@ -773,19 +846,13 @@ void MainWindow::setupUi()
     });
     connect(m_recentPage, &RecentPage::playRequested, this, &MainWindow::playMusicFromInfo);
     connect(m_recentPage, &RecentPage::playAllRequested, this, [this](const QList<MusicInfo> &results) {
-        PlaylistManager::instance().clearPlaylist();
-        PlaylistManager::instance().addAllToPlaylist(results);
-        if (!results.isEmpty())
-            playMusicFromInfo(results.first());
+        playAllMusic(results);
     });
     connect(m_recentPage, &RecentPage::favoriteRequested, this, &MainWindow::toggleFavorite);
     connect(m_recentPage, &RecentPage::playPauseRequested, this, &MainWindow::togglePlaybackForSystemUi);
     connect(m_downloadPage, &DownloadPage::playRequested, this, &MainWindow::playMusicFromInfo);
     connect(m_downloadPage, &DownloadPage::playAllRequested, this, [this](const QList<MusicInfo> &results) {
-        PlaylistManager::instance().clearPlaylist();
-        PlaylistManager::instance().addAllToPlaylist(results);
-        if (!results.isEmpty())
-            playMusicFromInfo(results.first());
+        playAllMusic(results);
     });
     connect(m_downloadPage, &DownloadPage::favoriteRequested, this, &MainWindow::toggleFavorite);
     connect(m_downloadPage, &DownloadPage::playPauseRequested, this, &MainWindow::togglePlaybackForSystemUi);
@@ -971,6 +1038,9 @@ void MainWindow::setupUi()
 
     // 播放完成自动切歌
     connect(m_engine, &PlayerEngine::playbackFinished, this, [this]() {
+        // 房间内的曲目推进由服务端权威状态驱动，本地播放器只负责跟随。
+        if (m_together && m_together->isActive())
+            return;
         auto& manager = PlaylistManager::instance();
         if (manager.count() == 0) return;
 
@@ -1054,6 +1124,34 @@ void MainWindow::setupUi()
     connect(m_searchPage, &SearchPage::playMusic, this, [this](const MusicInfo &info) {
         playMusicFromInfo(info);
     });
+    connect(m_searchPage, &SearchPage::playAllRequested, this,
+            [this](const QList<MusicInfo> &songs) { playAllMusic(songs); });
+    connect(m_searchPage, &SearchPage::addAllToQueueRequested, this,
+            [this](const QList<MusicInfo> &songs) {
+                if (m_together && m_together->isActive()) {
+                    QList<int> ids;
+                    for (const MusicInfo &song : songs) {
+                        if (song.id > 0 && !song.isLocalFile())
+                            ids.append(song.id);
+                    }
+                    m_together->addTracks(ids);
+                    Toast::show(this, QStringLiteral("已添加到房间临时播放列表"),
+                                Toast::Success);
+                    return;
+                }
+                auto &mgr = PlaylistManager::instance();
+                const int before = mgr.count();
+                mgr.addAllToPlaylist(songs);
+                const int added = qMax(0, mgr.count() - before);
+                if (added <= 0) {
+                    Toast::show(this, I18n::instance().tr(QStringLiteral("queueAddAllNone")),
+                                Toast::Info);
+                } else {
+                    Toast::show(this,
+                                I18n::instance().tr(QStringLiteral("addAllToQueueDone")).arg(added),
+                                Toast::Success);
+                }
+            });
     connect(m_searchPage, &SearchPage::playNextRequested, this, &MainWindow::queueAsNextTrack);
     connect(m_searchPage, &SearchPage::favoriteRequested, this, &MainWindow::toggleFavorite);
     connect(m_searchPage, &SearchPage::playPauseRequested, this,
@@ -1075,11 +1173,7 @@ void MainWindow::setupUi()
     });
     connect(m_artistDetailPage, &ArtistDetailPage::playAllRequested, this,
             [this](const QList<MusicInfo> &songs) {
-                if (songs.isEmpty())
-                    return;
-                PlaylistManager::instance().clearPlaylist();
-                PlaylistManager::instance().addAllToPlaylist(songs);
-                playMusicFromInfo(songs.first());
+                playAllMusic(songs);
             });
     connect(m_artistDetailPage, &ArtistDetailPage::favoriteRequested, this,
             &MainWindow::toggleFavorite);
@@ -1090,24 +1184,29 @@ void MainWindow::setupUi()
     connect(m_dailyMusicPage, &MusicListPage::playMusic, this, &MainWindow::playMusicFromInfo);
 
     const auto onMusicListPlayAll = [this](const QList<MusicInfo> &results) {
-        if (results.isEmpty())
-            return;
-        PlaylistManager::instance().clearPlaylist();
-        PlaylistManager::instance().addAllToPlaylist(results);
-        playMusicFromInfo(results.first());
+        playAllMusic(results);
     };
     connect(m_hotMusicPage, &MusicListPage::playAllRequested, this, onMusicListPlayAll);
     connect(m_latestMusicPage, &MusicListPage::playAllRequested, this, onMusicListPlayAll);
     connect(m_dailyMusicPage, &MusicListPage::playAllRequested, this, onMusicListPlayAll);
 
     connect(m_hotMusicPage, &MusicListPage::addToQueue, this, [this](const MusicInfo &info) {
-        PlaylistManager::instance().addToPlaylist(info);
+        if (m_together && m_together->isActive())
+            m_together->addTrack(info.id);
+        else
+            PlaylistManager::instance().addToPlaylist(info);
     });
     connect(m_latestMusicPage, &MusicListPage::addToQueue, this, [this](const MusicInfo &info) {
-        PlaylistManager::instance().addToPlaylist(info);
+        if (m_together && m_together->isActive())
+            m_together->addTrack(info.id);
+        else
+            PlaylistManager::instance().addToPlaylist(info);
     });
     connect(m_dailyMusicPage, &MusicListPage::addToQueue, this, [this](const MusicInfo &info) {
-        PlaylistManager::instance().addToPlaylist(info);
+        if (m_together && m_together->isActive())
+            m_together->addTrack(info.id);
+        else
+            PlaylistManager::instance().addToPlaylist(info);
     });
 
     connect(m_hotMusicPage, &MusicListPage::addToPlaylist, this, [this](const MusicInfo &info) {
@@ -1229,9 +1328,16 @@ void MainWindow::setupUi()
         downloadMusic(musicInfoForPlayerAction(musicId));
     });
     connect(m_playerBar, &PlayerBar::shareClicked, this, &MainWindow::copyCurrentTrackShare);
+    connect(m_playerBar, &PlayerBar::togetherClicked, this, &MainWindow::toggleTogetherRoom);
+    connect(m_playerBar, &PlayerBar::playPauseRequested, this,
+            &MainWindow::togglePlaybackForSystemUi);
+    connect(m_playerBar, &PlayerBar::seekRequested, this, &MainWindow::seekPlaybackForUi);
 
     connect(m_playerBar, &PlayerBar::playModeClicked, this, [this]() {
-        PlaylistManager::instance().togglePlayMode();
+        if (m_together && m_together->isActive())
+            m_together->togglePlayMode();
+        else
+            PlaylistManager::instance().togglePlayMode();
     });
 
     connect(m_playerPage, &PlayerPage::backRequested, this, &MainWindow::closePlayerPage);
@@ -1242,6 +1348,21 @@ void MainWindow::setupUi()
     });
     connect(m_playerPage, &PlayerPage::previousClicked, this, &MainWindow::playPrevious);
     connect(m_playerPage, &PlayerPage::nextClicked, this, &MainWindow::playNext);
+    connect(m_playerPage, &PlayerPage::playPauseRequested, this,
+            &MainWindow::togglePlaybackForSystemUi);
+    connect(m_playerPage, &PlayerPage::seekRequested, this, &MainWindow::seekPlaybackForUi);
+    connect(m_playerPage, &PlayerPage::playModeClicked, this, [this]() {
+        if (m_together && m_together->isActive())
+            m_together->togglePlayMode();
+        else
+            PlaylistManager::instance().togglePlayMode();
+    });
+    connect(m_playerPage, &PlayerPage::leaveTogetherRequested, this, [this]() {
+        if (m_together && m_together->isActive()) {
+            m_together->leaveRoom();
+            Toast::show(this, QStringLiteral("已离开一起听"), Toast::Info);
+        }
+    });
     connect(m_playerPage, &PlayerPage::playlistClicked, this, &MainWindow::togglePlaylistPanel);
     connect(m_playerPage, &PlayerPage::commentsClicked, this, &MainWindow::toggleCommentDrawer);
     connect(m_playerPage, &PlayerPage::desktopLyricsToggled, this, [this](bool enabled) {
@@ -1311,12 +1432,7 @@ void MainWindow::setupUi()
             &MainWindow::queueAsNextTrack);
     connect(m_playlistDetailPage, &PlaylistDetailPage::playAllRequested, this,
             [this](const QList<MusicInfo> &songs) {
-                if (songs.isEmpty())
-                    return;
-                PlaylistManager::instance().clearPlaylist();
-                PlaylistManager::instance().addAllToPlaylist(songs);
-                const MusicInfo &first = songs.first();
-                playMusicById(first.id, first.title, first.artist, first.coverUrl);
+                playAllMusic(songs);
             });
     connect(m_playlistDetailPage, &PlaylistDetailPage::playPauseRequested, this,
             &MainWindow::togglePlaybackForSystemUi);
@@ -1335,6 +1451,10 @@ void MainWindow::setupUi()
     });
 
     connect(m_playlistPanel, &PlaylistPanel::playRequested, this, [this](int musicId) {
+        if (m_together && m_together->isActive()) {
+            m_together->playTrack(musicId);
+            return;
+        }
         const QString selected = LanDeviceManager::instance().selectedDeviceId();
         if (!selected.isEmpty()) {
             const auto &remote = LanDeviceManager::instance().remoteQueue();
@@ -1376,6 +1496,15 @@ void MainWindow::setupUi()
             [this](const QList<MusicInfo> &songs) { downloadMusicBatch(songs); });
     connect(m_playlistPanel, &PlaylistPanel::batchUnfavoriteRequested, this,
             [this](const QList<int> &ids) { unfavoriteMusicBatch(ids); });
+    connect(m_playlistPanel, &PlaylistPanel::togetherClearRequested, this, [this]() {
+        if (m_together && m_together->isActive())
+            m_together->clearPlaylist();
+    });
+    connect(m_playlistPanel, &PlaylistPanel::togetherRemoveRequested, this,
+            [this](const QString &entryId) {
+                if (m_together && m_together->isActive())
+                    m_together->removeEntry(entryId);
+            });
 
     connect(m_vipPage, &VipPage::loginRequested, this, [this]() {
         LoginDialog dlg(this);
@@ -1414,8 +1543,7 @@ void MainWindow::setupUi()
     connect(m_desktopLrc, &DesktopLrc::playPauseRequested,
             this, &MainWindow::togglePlaybackForSystemUi);
     connect(m_desktopLrc, &DesktopLrc::seekRequested, this, [this](qint64 positionMs) {
-        if (m_engine)
-            m_engine->setPosition(positionMs);
+        seekPlaybackForUi(positionMs);
     });
     connect(m_desktopLrc, &DesktopLrc::closeRequested, this, [this]() {
         applyDesktopLyricsEnabled(false, true);
@@ -1438,6 +1566,10 @@ void MainWindow::setupMcpServer()
     m_mcpBridge->setPreviousCallback([this]() { playPrevious(); });
     m_mcpBridge->setPlayNextCallback([this](const MusicInfo &info) { queueAsNextTrack(info); });
     m_mcpBridge->setReplaceQueueCallback([this](const QList<MusicInfo> &tracks, int index) {
+        if (m_together && m_together->isActive()) {
+            playAllMusic(tracks, index);
+            return;
+        }
         PlaylistManager::instance().replacePlaylist(tracks, index);
         if (index >= 0 && index < tracks.size())
             playMusicFromInfo(tracks.at(index));
@@ -1802,6 +1934,15 @@ void MainWindow::showPlaylistDetailPage(int localId)
 
 void MainWindow::playMusicFromInfo(const MusicInfo &info)
 {
+    if (m_together && m_together->isActive()) {
+        if (info.isLocalFile() || info.id <= 0) {
+            Toast::show(this, QStringLiteral("一起听房间中无法播放本地音乐，请先离开一起听"),
+                        Toast::Info);
+            return;
+        }
+        m_together->playTrack(info.id);
+        return;
+    }
     if (info.isLocalFile()) {
         playLocalMusicInfo(info);
         return;
@@ -1809,8 +1950,48 @@ void MainWindow::playMusicFromInfo(const MusicInfo &info)
     playMusicById(info.id, info.title, info.artist, info.coverUrl);
 }
 
+void MainWindow::playAllMusic(const QList<MusicInfo> &songs, int startIndex)
+{
+    if (songs.isEmpty())
+        return;
+
+    if (m_together && m_together->isActive()) {
+        QList<int> ids;
+        int roomStart = 0;
+        for (int i = 0; i < songs.size(); ++i) {
+            const MusicInfo &song = songs.at(i);
+            if (song.id <= 0 || song.isLocalFile())
+                continue;
+            if (i == startIndex)
+                roomStart = ids.size();
+            if (!ids.contains(song.id))
+                ids.append(song.id);
+        }
+        if (ids.isEmpty()) {
+            Toast::show(this, QStringLiteral("一起听只支持在线歌曲"), Toast::Info);
+            return;
+        }
+        m_together->playTracks(ids, roomStart);
+        return;
+    }
+
+    PlaylistManager::instance().clearPlaylist();
+    PlaylistManager::instance().addAllToPlaylist(songs);
+    const int index = qBound(0, startIndex, songs.size() - 1);
+    playMusicFromInfo(songs.at(index));
+}
+
 void MainWindow::queueAsNextTrack(const MusicInfo &info)
 {
+    if (m_together && m_together->isActive()) {
+        if (info.isLocalFile() || info.id <= 0) {
+            Toast::show(this, QStringLiteral("一起听房间中无法播放本地音乐，请先离开一起听"),
+                        Toast::Info);
+            return;
+        }
+        m_together->queueAsNext(info.id);
+        return;
+    }
     if (info.id <= 0 && info.localPath.isEmpty())
         return;
 
@@ -1829,6 +2010,11 @@ void MainWindow::queueAsNextTrack(const MusicInfo &info)
 
 void MainWindow::openAudioFileFromPath(const QString &path)
 {
+    if (m_together && m_together->isActive()) {
+        Toast::show(this, QStringLiteral("一起听房间中无法播放本地音乐，请先离开一起听"),
+                    Toast::Info);
+        return;
+    }
     const QString local = LocalMusic::normalizeOpenPathArgument(path);
     if (local.isEmpty() || !LocalMusic::isSupportedLocalAudioFile(local))
         return;
@@ -1886,8 +2072,49 @@ void MainWindow::handleSsoCallback(const QUrl &url)
     });
 }
 
+void MainWindow::handleTogetherLink(const QUrl &url)
+{
+    QString token;
+    QString path = url.path();
+    while (path.endsWith(QLatin1Char('/')) && path.size() > 1)
+        path.chop(1);
+    if (url.scheme().compare(QStringLiteral("nekomusic"), Qt::CaseInsensitive) == 0
+        && url.host().compare(QStringLiteral("together"), Qt::CaseInsensitive) == 0) {
+        token = path.section(QLatin1Char('/'), 1, 1);
+    } else if ((url.scheme() == QStringLiteral("https") || url.scheme() == QStringLiteral("http"))
+               && path.startsWith(QStringLiteral("/together/"))) {
+        token = path.section(QLatin1Char('/'), -1);
+    }
+    token = token.trimmed();
+    if (token.isEmpty()) {
+        Toast::show(this, QStringLiteral("一起听房间地址无效"), Toast::Error);
+        return;
+    }
+
+    show();
+    raise();
+    activateWindow();
+
+    if (!UserManager::instance().isLoggedIn()) {
+        m_pendingTogetherToken = token;
+        Toast::show(this, QStringLiteral("登录后即可加入一起听房间"), Toast::Info);
+        LoginDialog dialog(this);
+        dialog.exec();
+        return;
+    }
+
+    m_pendingTogetherToken.clear();
+    if (m_together)
+        m_together->joinRoom(token);
+}
+
 void MainWindow::playLocalMusicInfo(const MusicInfo &info)
 {
+    if (m_together && m_together->isActive()) {
+        Toast::show(this, QStringLiteral("一起听房间中无法播放本地音乐，请先离开一起听"),
+                    Toast::Info);
+        return;
+    }
     if (!info.isLocalFile())
         return;
 
@@ -2262,6 +2489,10 @@ void MainWindow::togglePlaylistPanel()
 
 void MainWindow::playMusicFromPlaylist(int musicId)
 {
+    if (m_together && m_together->isActive()) {
+        m_together->playTrack(musicId);
+        return;
+    }
     auto& manager = PlaylistManager::instance();
     const auto& playlist = manager.playlist();
     for (int i = 0; i < playlist.size(); ++i) {
@@ -2587,6 +2818,10 @@ void MainWindow::disconnectDownloader()
 
 void MainWindow::playNext()
 {
+    if (m_together && m_together->isActive()) {
+        m_together->next();
+        return;
+    }
     qDebug() << "[MainWindow] playNext called";
     QElapsedTimer timer;
     timer.start();
@@ -2649,6 +2884,10 @@ void MainWindow::playNext()
 
 void MainWindow::playPrevious()
 {
+    if (m_together && m_together->isActive()) {
+        m_together->previous();
+        return;
+    }
     qDebug() << "[MainWindow] playPrevious called";
     auto& manager = PlaylistManager::instance();
     if (manager.count() == 0) {
@@ -2720,6 +2959,10 @@ void MainWindow::playPrevious()
 void MainWindow::playMusicById(int musicId, const QString &title, const QString &artist, const QString &coverUrl)
 {
     if (musicId <= 0) return;
+    if (m_together && m_together->isActive()) {
+        m_together->playTrack(musicId);
+        return;
+    }
 
     m_isDownloading = false;
     disconnectDownloader();
@@ -3513,7 +3756,16 @@ void MainWindow::checkForUpdates(bool showNoUpdateToast)
 
 void MainWindow::syncPlayModeUi()
 {
-    const QString mode = PlaylistManager::instance().playMode();
+    QString mode = PlaylistManager::instance().playMode();
+    if (m_together && m_together->isActive()) {
+        const QString roomMode = m_together->playlist().value(QStringLiteral("repeatMode")).toString();
+        if (roomMode == QStringLiteral("single_repeat"))
+            mode = QStringLiteral("single");
+        else if (roomMode == QStringLiteral("shuffle"))
+            mode = QStringLiteral("random");
+        else
+            mode = QStringLiteral("list");
+    }
     if (m_playerBar)
         m_playerBar->updatePlayModeBtn(mode);
     if (m_playerPage)
@@ -3544,6 +3796,35 @@ void MainWindow::refreshSystemMediaIntegration()
 {
     if (!m_systemMedia || !m_engine)
         return;
+    if (m_together && m_together->isActive()) {
+        const QVariantMap playback = m_together->playback();
+        const QString currentEntryId =
+            playback.value(QStringLiteral("currentEntryId")).toString();
+        const QVariantList items = m_together->playlist().value(QStringLiteral("items")).toList();
+        MusicInfo current;
+        for (const QVariant &value : items) {
+            const QVariantMap item = value.toMap();
+            if (item.value(QStringLiteral("entryId")).toString() == currentEntryId) {
+                current = musicInfoFromTogetherItem(item);
+                break;
+            }
+        }
+        const bool hasQueue = !items.isEmpty();
+        m_systemMedia->updateCapabilities(hasQueue, hasQueue, current.id > 0);
+        const QString roomMode =
+            m_together->playlist().value(QStringLiteral("repeatMode")).toString();
+        m_systemMedia->updateLoopShuffle(
+            roomMode == QStringLiteral("single_repeat")
+                ? QStringLiteral("single")
+                : roomMode == QStringLiteral("shuffle") ? QStringLiteral("random")
+                                                       : QStringLiteral("list"));
+        m_systemMedia->syncVolumeFromEngine(m_engine->volume());
+        m_systemMedia->updateFromEngineState(
+            playback.value(QStringLiteral("playing")).toBool() ? PlayerEngine::Playing
+                                                              : PlayerEngine::Paused);
+        m_systemMedia->updateMetadata(current, m_engine->duration());
+        return;
+    }
     auto &mgr = PlaylistManager::instance();
     const bool hasQueue = mgr.count() > 0;
     const bool canSeek = m_engine->duration() > 0;
@@ -3567,6 +3848,10 @@ void MainWindow::togglePlaybackForSystemUi()
 {
     if (!m_engine)
         return;
+    if (m_together && m_together->isActive()) {
+        m_together->togglePlayPause();
+        return;
+    }
     QElapsedTimer timer;
     timer.start();
     const bool pausing = m_engine->isActuallyPlaying() && !m_engine->isFadingOut();
@@ -3636,6 +3921,10 @@ void MainWindow::resumePlaybackForSystemUi()
 {
     if (!m_engine)
         return;
+    if (m_together && m_together->isActive()) {
+        m_together->resume();
+        return;
+    }
     if (!m_engine->isActuallyPlaying())
         m_engine->fadeIn();
 }
@@ -3644,6 +3933,154 @@ void MainWindow::pausePlaybackForSystemUi()
 {
     if (!m_engine)
         return;
+    if (m_together && m_together->isActive()) {
+        m_together->pause();
+        return;
+    }
     if (m_engine->isActuallyPlaying())
         m_engine->fadeOut();
+}
+
+void MainWindow::seekPlaybackForUi(qint64 positionMs)
+{
+    if (!m_engine)
+        return;
+    positionMs = qMax<qint64>(0, positionMs);
+    if (m_together && m_together->isActive()) {
+        m_together->seekTo(positionMs);
+        return;
+    }
+    m_engine->setPosition(positionMs);
+    if (m_systemMedia)
+        m_systemMedia->notifySeeked(positionMs * 1000);
+}
+
+void MainWindow::toggleTogetherRoom()
+{
+    if (!m_together)
+        return;
+    if (m_together->isActive()) {
+        QApplication::clipboard()->setText(m_together->roomUrl());
+        Toast::show(this, QStringLiteral("一起听房间链接已复制"), Toast::Success);
+        return;
+    }
+    if (!UserManager::instance().isLoggedIn()) {
+        Toast::show(this, I18n::instance().tr(QStringLiteral("loginRequired")), Toast::Info);
+        LoginDialog dialog(this);
+        dialog.exec();
+        return;
+    }
+
+    const MusicInfo current = m_engine ? m_engine->currentMusic() : MusicInfo{};
+    const int musicId = current.id > 0 && !current.isLocalFile() ? current.id : 0;
+    m_together->createWithMusic(musicId);
+}
+
+void MainWindow::startTogetherTrack(const QVariantMap &item, bool startPaused)
+{
+    const MusicInfo info = musicInfoFromTogetherItem(item);
+    if (info.id <= 0 || !m_engine || !m_playerBar || !m_playerPage)
+        return;
+
+    m_isDownloading = false;
+    disconnectDownloader();
+    m_downloader->cancel();
+    m_engine->stop();
+
+    ++m_enginePlaySeq;
+    const quint64 playSeq = m_enginePlaySeq;
+
+    m_playerBar->setCurrentMusicId(info.id);
+    m_playerBar->setSongInfo(info.title, info.artist, info.coverUrl);
+    const bool favorited = checkIsFavorited(info.id);
+    m_playerBar->setFavoriteStatus(favorited);
+    m_playerPage->setFavoriteStatus(favorited);
+    m_playerPage->setMusicInfo(info.id, info.title, info.artist, info.album, info.coverUrl);
+    m_playerPage->loadLyricsForTrack(info);
+    m_engine->setCurrentMusic(info);
+    refreshSystemMediaIntegration();
+
+    m_playerBar->setLoading(true);
+    const QUrl url(QString::fromUtf8("%1/api/music/file/%2")
+                       .arg(QString::fromUtf8(Theme::kApiBase))
+                       .arg(info.id));
+    startRemotePlaybackWithBackgroundCache(info.id, playSeq, url, startPaused);
+
+    QTimer::singleShot(350, this, &MainWindow::applyTogetherPlayback);
+    QTimer::singleShot(900, this, &MainWindow::applyTogetherPlayback);
+    QTimer::singleShot(1800, this, &MainWindow::applyTogetherPlayback);
+}
+
+void MainWindow::applyTogetherPlayback()
+{
+    if (!m_together || !m_together->isActive() || !m_engine)
+        return;
+
+    const QVariantMap playback = m_together->playback();
+    const QString currentEntryId =
+        playback.value(QStringLiteral("currentEntryId")).toString();
+    const QVariantList items = m_together->playlist().value(QStringLiteral("items")).toList();
+    QVariantMap currentItem;
+    for (const QVariant &value : items) {
+        const QVariantMap item = value.toMap();
+        if (item.value(QStringLiteral("entryId")).toString() == currentEntryId) {
+            currentItem = item;
+            break;
+        }
+    }
+
+    const MusicInfo currentTrack = musicInfoFromTogetherItem(currentItem);
+    if (currentTrack.id <= 0) {
+        m_playerBar->setLoading(false);
+        if (m_engine->isActuallyPlaying() && !m_engine->isFadingOut())
+            m_engine->fadeOut();
+        return;
+    }
+
+    const bool roomPlaying = playback.value(QStringLiteral("playing")).toBool();
+    const bool differentTrack =
+        m_engine->currentMusic().id != currentTrack.id
+        || m_playerBar->currentMusicId() != currentTrack.id;
+    if (differentTrack) {
+        startTogetherTrack(currentItem, !roomPlaying);
+        return;
+    }
+
+    // 远程流首帧未就绪时 duration 仍为 0，此时 setPosition 会被 Qt 后端丢弃；
+    // 等下一轮定时校正再对齐，且每次都重新计算目标进度。
+    if (m_engine->duration() <= 0)
+        return;
+
+    m_playerBar->setLoading(false);
+
+    qint64 target = m_together->estimatedPositionMs();
+    const qint64 duration = m_engine->duration();
+    target = qBound<qint64>(0, target, duration);
+    if (qAbs(m_engine->position() - target) > 500)
+        m_engine->setPosition(target);
+
+    if (roomPlaying && !m_engine->isActuallyPlaying() && !m_engine->isFadingOut())
+        m_engine->fadeIn();
+    else if (!roomPlaying && m_engine->isActuallyPlaying() && !m_engine->isFadingOut())
+        m_engine->fadeOut();
+
+    refreshSystemMediaIntegration();
+}
+
+void MainWindow::syncTogetherUi()
+{
+    const bool active = m_together && m_together->isActive();
+    const bool connected = m_together && m_together->isConnected();
+    if (m_playerBar)
+        m_playerBar->setTogetherActive(active);
+    if (m_playerPage) {
+        m_playerPage->setTogetherState(
+            active, m_together ? m_together->members() : QVariantList(), connected);
+    }
+    if (m_playlistPanel) {
+        m_playlistPanel->setTogetherState(
+            active, m_together ? m_together->playlist() : QVariantMap(), connected);
+    }
+    syncPlayModeUi();
+    refreshSystemMediaIntegration();
 }

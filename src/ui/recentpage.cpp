@@ -5,6 +5,7 @@
 
 #include "recentpage.h"
 #include "songlistwidget.h"
+#include "songmenubuilder.h"
 #include "batchactionbar.h"
 #include "core/i18n.h"
 #include "core/playlistdb.h"
@@ -205,6 +206,14 @@ void RecentPage::setupBatchBar()
         const QList<MusicInfo> picked = m_songList->batchSelectedSongs();
         if (picked.isEmpty())
             return;
+        int roomAdded = 0;
+        if (SongMenuBuilder::addManyToTogetherQueue(picked, &roomAdded)) {
+            Toast::show(this,
+                        I18n::instance().tr(QStringLiteral("batchQueueAdded")).arg(roomAdded),
+                        Toast::Success);
+            exitBatchMode();
+            return;
+        }
         PlaylistManager::instance().addAllToPlaylist(picked);
         Toast::show(this, I18n::instance().tr(QStringLiteral("batchQueueAdded")).arg(picked.size()),
                     Toast::Success);
@@ -251,6 +260,13 @@ void RecentPage::addAllToQueue()
 {
     if (m_allRecent.isEmpty()) {
         Toast::show(this, I18n::instance().tr(QStringLiteral("queueAddAllEmpty")), Toast::Info);
+        return;
+    }
+
+    int roomAdded = 0;
+    if (SongMenuBuilder::addManyToTogetherQueue(m_allRecent, &roomAdded)) {
+        Toast::show(this, I18n::instance().tr(QStringLiteral("addAllToQueueDone")).arg(roomAdded),
+                    Toast::Success);
         return;
     }
 

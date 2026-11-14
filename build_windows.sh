@@ -167,6 +167,7 @@ QT_DLLS=(
     Qt6Widgets
     Qt6Multimedia
     Qt6Network
+    Qt6WebSockets
     Qt6Sql
     Qt6Svg
     Qt6SvgWidgets

@@ -7,6 +7,7 @@
 
 #include "core/i18n.h"
 #include "core/playlistmanager.h"
+#include "core/togetherroomclient.h"
 
 namespace SongMenuBuilder {
 
@@ -64,6 +65,10 @@ void playNextNow(const MusicInfo &info)
 {
     if (info.id <= 0 && info.localPath.isEmpty())
         return;
+    if (TogetherRoomClient::instance().isActive()) {
+        TogetherRoomClient::instance().queueAsNext(info.id);
+        return;
+    }
     PlaylistManager::instance().playNext(info);
 }
 
@@ -71,6 +76,19 @@ bool queueContains(int musicId)
 {
     if (musicId <= 0)
         return false;
+    const TogetherRoomClient &room = TogetherRoomClient::instance();
+    if (room.isActive()) {
+        const QVariantList items =
+            room.playlist().value(QStringLiteral("items")).toList();
+        for (const QVariant &value : items) {
+            if (value.toMap().value(QStringLiteral("track")).toMap()
+                    .value(QStringLiteral("id")).toInt()
+                == musicId) {
+                return true;
+            }
+        }
+        return false;
+    }
     const QList<MusicInfo> &queue = PlaylistManager::instance().playlist();
     for (const MusicInfo &item : queue) {
         if (item.id == musicId)
@@ -83,11 +101,47 @@ void toggleQueue(const MusicInfo &info)
 {
     if (info.id <= 0 && info.localPath.isEmpty())
         return;
+    TogetherRoomClient &room = TogetherRoomClient::instance();
+    if (room.isActive()) {
+        if (info.id <= 0)
+            return;
+        const QVariantList items =
+            room.playlist().value(QStringLiteral("items")).toList();
+        for (const QVariant &value : items) {
+            const QVariantMap item = value.toMap();
+            if (item.value(QStringLiteral("track")).toMap()
+                    .value(QStringLiteral("id")).toInt()
+                == info.id) {
+                room.removeEntry(item.value(QStringLiteral("entryId")).toString());
+                return;
+            }
+        }
+        room.addTrack(info.id);
+        return;
+    }
     PlaylistManager &pm = PlaylistManager::instance();
     if (queueContains(info.id))
         pm.removeFromPlaylist(info.id); // PlaylistManager 内部按 music id 匹配
     else
         pm.addToPlaylist(info); // 自带去重
+}
+
+bool addManyToTogetherQueue(const QList<MusicInfo> &songs, int *addedCount)
+{
+    TogetherRoomClient &room = TogetherRoomClient::instance();
+    if (!room.isActive())
+        return false;
+    QList<int> ids;
+    for (const MusicInfo &song : songs) {
+        if (song.id > 0 && !song.isLocalFile() && !ids.contains(song.id))
+            ids.append(song.id);
+        if (ids.size() >= 200)
+            break;
+    }
+    room.addTracks(ids);
+    if (addedCount)
+        *addedCount = ids.size();
+    return true;
 }
 
 } // namespace SongMenuBuilder

@@ -509,6 +509,7 @@ enum class PbInk : int {
     Heart,
     PlaylistAdd,
     Share,
+    Together,
     Video,
     Download,
     DesktopLyric,
@@ -613,6 +614,11 @@ void PlayerBarInkButton::paintEvent(QPaintEvent *event)
     case PbInk::Share:
         pm = Icons::renderNamed("Share", px, hi ? cA : cN);
         break;
+    case PbInk::Together: {
+        const bool active = property("pbTogetherActive").toBool();
+        pm = Icons::renderNamed("Group", px, active ? kPbIconAccent : (hi ? cA : cN));
+        break;
+    }
     case PbInk::Video:
         pm = Icons::renderNamed("Video", px, hi ? cA : cN);
         break;
@@ -1116,6 +1122,19 @@ void PlayerBar::setupUi()
     connect(m_shareBtn, &QPushButton::clicked, this, [this]() { emit shareClicked(); });
     rl->addWidget(m_shareBtn);
 
+    m_togetherBtn = new PlayerBarInkButton(right);
+    m_togetherBtn->setObjectName(QStringLiteral("pbTogetherBtn"));
+    m_togetherBtn->setFixedSize(kPbCtrlBtn, kPbCtrlBtn);
+    m_togetherBtn->setIconSize(QSize(kPbCtrlIcon, kPbCtrlIcon));
+    m_togetherBtn->setProperty("pbInk", int(PbInk::Together));
+    m_togetherBtn->setProperty("pbTogetherActive", false);
+    m_togetherBtn->setCursor(Qt::PointingHandCursor);
+    m_togetherBtn->setToolTip(QStringLiteral("一起听"));
+    connect(m_togetherBtn, &QPushButton::clicked, this, [this]() { emit togetherClicked(); });
+    rl->addWidget(m_togetherBtn);
+    // 一起听入口放在普通分享左侧，保持“更多分享 → 一起听”之外的直接入口语义。
+    rl->insertWidget(rl->indexOf(m_shareBtn), m_togetherBtn);
+
     m_videoShareBtn = new PlayerBarInkButton(right);
     m_videoShareBtn->setObjectName(QStringLiteral("pbVideoShareBtn"));
     m_videoShareBtn->setFixedSize(kPbCtrlBtn, kPbCtrlBtn);
@@ -1254,8 +1273,7 @@ void PlayerBar::setupUi()
         connect(m_playBtn, &QPushButton::clicked, this, [this]() {
             if (m_isLoading)
                 return;
-            if (m_engine->isActuallyPlaying()) m_engine->fadeOut();
-            else m_engine->fadeIn();
+            emit playPauseRequested();
         });
         connect(m_engine, &PlayerEngine::stateChanged, this, [this]() { updateState(); });
         // 进度条跟随播放位置（拖动/按下时不要 setValue，否则会抢鼠标导致无法拖动）
@@ -1275,7 +1293,7 @@ void PlayerBar::setupUi()
             // 释放时应用最终位置
             if (m_engine && m_engine->duration() > 0) {
                 qint64 position = static_cast<qint64>(m_progress->value()) * m_engine->duration() / 1000;
-                m_engine->setPosition(position);
+                emit seekRequested(position);
             }
         });
         m_volumeSlider->setValue(initialVol);
@@ -1468,6 +1486,16 @@ void PlayerBar::updateVideoShareUi(bool available, bool busy, const QString &job
         m_videoShareBtn->setToolTip(I18n::instance().tr(QStringLiteral("videoRenderStatusProcessing")));
     else
         m_videoShareBtn->setToolTip(I18n::instance().tr(QStringLiteral("videoRenderButton")));
+}
+
+void PlayerBar::setTogetherActive(bool active)
+{
+    if (!m_togetherBtn)
+        return;
+    m_togetherBtn->setProperty("pbTogetherActive", active);
+    m_togetherBtn->setToolTip(active ? QStringLiteral("复制一起听房间链接")
+                                    : QStringLiteral("一起听"));
+    m_togetherBtn->update();
 }
 
 void PlayerBar::retranslate()

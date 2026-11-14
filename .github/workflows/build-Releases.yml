@@ -175,7 +175,7 @@ jobs:
           # 它不会拷，但 NSIS 里是必选文件，这里从 Qt 的 bin 兜底补齐
           $qtDlls = @(
             'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll', 'Qt6Multimedia.dll',
-            'Qt6Network.dll', 'Qt6Sql.dll', 'Qt6Svg.dll', 'Qt6SvgWidgets.dll',
+            'Qt6Network.dll', 'Qt6WebSockets.dll', 'Qt6Sql.dll', 'Qt6Svg.dll', 'Qt6SvgWidgets.dll',
             'Qt6Concurrent.dll'
           )
           foreach ($dll in $qtDlls) {

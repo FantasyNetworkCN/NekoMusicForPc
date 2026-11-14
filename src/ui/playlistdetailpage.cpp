@@ -381,6 +381,14 @@ void PlaylistDetailPage::setupBatchBar()
         const QList<MusicInfo> picked = m_songList->batchSelectedSongs();
         if (picked.isEmpty())
             return;
+        int roomAdded = 0;
+        if (SongMenuBuilder::addManyToTogetherQueue(picked, &roomAdded)) {
+            Toast::show(this,
+                        I18n::instance().tr(QStringLiteral("batchQueueAdded")).arg(roomAdded),
+                        Toast::Success);
+            exitBatchMode();
+            return;
+        }
         PlaylistManager::instance().addAllToPlaylist(picked);
         Toast::show(this, I18n::instance().tr(QStringLiteral("batchQueueAdded")).arg(picked.size()),
                     Toast::Success);
@@ -435,6 +443,13 @@ void PlaylistDetailPage::addAllToQueue()
     const QList<MusicInfo> &songs = m_allSongs;
     if (songs.isEmpty()) {
         Toast::show(this, I18n::instance().tr(QStringLiteral("queueAddAllEmpty")), Toast::Info);
+        return;
+    }
+
+    int roomAdded = 0;
+    if (SongMenuBuilder::addManyToTogetherQueue(songs, &roomAdded)) {
+        Toast::show(this, I18n::instance().tr(QStringLiteral("addAllToQueueDone")).arg(roomAdded),
+                    Toast::Success);
         return;
     }
 
