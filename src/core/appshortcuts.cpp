@@ -34,9 +34,9 @@ QKeySequence AppShortcuts::defaultSequence(Action action)
     case PreviousTrack:
         return QKeySequence(QStringLiteral("Ctrl+Alt+Left"));
     case MicSync:
-        return QKeySequence(QStringLiteral("F2"));
+        return QKeySequence(QStringLiteral("Ctrl+F2"));
     case ToggleDesktopLyrics:
-        return QKeySequence(QStringLiteral("F1"));
+        return QKeySequence(QStringLiteral("Ctrl+F1"));
     case ActionCount:
         break;
     }
