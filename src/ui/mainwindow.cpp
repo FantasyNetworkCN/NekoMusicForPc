@@ -1387,10 +1387,21 @@ void MainWindow::setupUi()
     m_desktopLrc = new DesktopLrc(nullptr);
 
     connect(m_engine, &PlayerEngine::positionChanged, m_desktopLrc, &DesktopLrc::updatePosition);
+    connect(m_engine, &PlayerEngine::durationChanged, m_desktopLrc, &DesktopLrc::setDuration);
+    connect(m_engine, &PlayerEngine::stateChanged, m_desktopLrc,
+            [this](PlayerEngine::PlaybackState state) {
+                if (!m_desktopLrc)
+                    return;
+                m_desktopLrc->setPlaybackState(state == PlayerEngine::Playing);
+                m_desktopLrc->setPlaybackAvailable(state == PlayerEngine::Playing
+                                                   || state == PlayerEngine::Paused);
+            });
 
     connect(m_engine, &PlayerEngine::musicStarted, m_desktopLrc, [this](const MusicInfo &music) {
         if (m_desktopLrc) {
             m_desktopLrc->setCurrentSong(music.title, music.artist);
+            m_desktopLrc->setDuration(m_engine->duration());
+            m_desktopLrc->setPlaybackAvailable(true);
             if (m_playerPage) {
                 m_playerPage->emitDesktopLyricsPayload();
             }
@@ -1398,6 +1409,17 @@ void MainWindow::setupUi()
     });
 
     connect(m_playerPage, &PlayerPage::lyricsPayloadReady, m_desktopLrc, &DesktopLrc::loadLrcText);
+    connect(m_desktopLrc, &DesktopLrc::previousRequested, this, [this]() { playPrevious(); });
+    connect(m_desktopLrc, &DesktopLrc::nextRequested, this, [this]() { playNext(); });
+    connect(m_desktopLrc, &DesktopLrc::playPauseRequested,
+            this, &MainWindow::togglePlaybackForSystemUi);
+    connect(m_desktopLrc, &DesktopLrc::seekRequested, this, [this](qint64 positionMs) {
+        if (m_engine)
+            m_engine->setPosition(positionMs);
+    });
+    connect(m_desktopLrc, &DesktopLrc::closeRequested, this, [this]() {
+        applyDesktopLyricsEnabled(false, true);
+    });
 
     connect(m_playerBar, &PlayerBar::desktopLyricsToggled, this, [this](bool enabled) {
         applyDesktopLyricsEnabled(enabled, true);
