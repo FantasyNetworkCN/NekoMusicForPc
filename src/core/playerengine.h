@@ -10,6 +10,8 @@
 
 class QTimer;
 class HttpMediaDevice;
+class QAudioBuffer;
+class QAudioBufferOutput;
 
 class PlayerEngine : public QObject
 {
@@ -71,6 +73,8 @@ signals:
     void playbackFinished();
     /** 播放器元数据就绪时发出（含可用码率） */
     void audioMetaReady();
+    /** 解码音频的低频能量（0..1），用于 AMLL 流动背景随鼓点起伏。 */
+    void lowFrequencyLevelChanged(qreal level);
 
 private:
     void onPlayerMetaDataChanged();
@@ -92,6 +96,7 @@ private:
     bool resumeMediaReady() const;
     void clearPendingResume();
     void cancelQualitySwitch();
+    void analyzeAudioBuffer(const QAudioBuffer &buffer);
 
     QMediaPlayer *m_player;
     QAudioOutput *m_audioOutput;
@@ -117,6 +122,11 @@ private:
     HttpMediaDevice *m_streamDevice = nullptr;
     HttpMediaDevice *m_qualitySwitchDevice = nullptr;
     quint64 m_qualitySwitchGen = 0;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    QAudioBufferOutput *m_audioBufferOutput = nullptr;
+    qreal m_audioLowPass = 0.0;
+    qreal m_audioLevel = 0.0;
+#endif
 
 public:
     void setSeekLimitMs(qint64 limitMs) { m_seekLimitMs = limitMs; }

@@ -7,6 +7,11 @@
 #include <QSignalBlocker>
 #include <QUrl>
 #include <QTimer>
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+#include <QAudioBuffer>
+#include <QAudioBufferOutput>
+#endif
+#include <cmath>
 #include <memory>
 
 PlayerEngine::PlayerEngine(QObject *parent)
@@ -15,6 +20,12 @@ PlayerEngine::PlayerEngine(QObject *parent)
     , m_audioOutput(new QAudioOutput(this))
 {
     m_player->setAudioOutput(m_audioOutput);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    m_audioBufferOutput = new QAudioBufferOutput(this);
+    connect(m_audioBufferOutput, &QAudioBufferOutput::audioBufferReceived,
+            this, &PlayerEngine::analyzeAudioBuffer);
+    m_player->setAudioBufferOutput(m_audioBufferOutput);
+#endif
 
     connectPlayerSignals(m_player);
 }
@@ -166,6 +177,10 @@ void PlayerEngine::switchSourceWithoutRestart(const QUrl &url)
     candidateOutput->setDevice(oldOutput->device());
     candidateOutput->setVolume(0.0f);
     candidate->setAudioOutput(candidateOutput);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    oldPlayer->setAudioBufferOutput(nullptr);
+    candidate->setAudioBufferOutput(m_audioBufferOutput);
+#endif
     m_qualitySwitchPlayer = candidate;
     m_qualitySwitchOutput = candidateOutput;
 
@@ -210,7 +225,7 @@ void PlayerEngine::switchSourceWithoutRestart(const QUrl &url)
             qDebug() << "[音质切换] 无感接管 position=" << handoffPosition;
         });
     connect(candidate, &QMediaPlayer::errorOccurred, this,
-        [this, candidate, candidateOutput, generation](QMediaPlayer::Error error, const QString &message) {
+        [this, candidate, candidateOutput, oldPlayer, generation](QMediaPlayer::Error error, const QString &message) {
             Q_UNUSED(error);
             if (generation != m_qualitySwitchGen)
                 return;
@@ -220,6 +235,11 @@ void PlayerEngine::switchSourceWithoutRestart(const QUrl &url)
                 m_qualitySwitchOutput = nullptr;
                 retireStreamDevice(m_qualitySwitchDevice);
                 m_qualitySwitchDevice = nullptr;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+                candidate->setAudioBufferOutput(nullptr);
+                if (m_player == oldPlayer)
+                    oldPlayer->setAudioBufferOutput(m_audioBufferOutput);
+#endif
                 candidate->deleteLater();
                 candidateOutput->deleteLater();
             }
@@ -443,6 +463,11 @@ void PlayerEngine::cancelQualitySwitch()
 {
     if (m_qualitySwitchPlayer) {
         m_qualitySwitchPlayer->stop();
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+        m_qualitySwitchPlayer->setAudioBufferOutput(nullptr);
+        if (m_player)
+            m_player->setAudioBufferOutput(m_audioBufferOutput);
+#endif
         m_qualitySwitchPlayer->deleteLater();
         m_qualitySwitchPlayer = nullptr;
     }
@@ -618,6 +643,69 @@ void PlayerEngine::connectPlayerSignals(QMediaPlayer *player)
                     emit playbackFinished();
             });
     connect(player, &QMediaPlayer::metaDataChanged, this, &PlayerEngine::onPlayerMetaDataChanged);
+}
+
+void PlayerEngine::analyzeAudioBuffer(const QAudioBuffer &buffer)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    if (!buffer.isValid())
+        return;
+    const QAudioFormat format = buffer.format();
+    const int sampleRate = format.sampleRate();
+    const int channels = format.channelCount();
+    const qsizetype frames = buffer.frameCount();
+    if (sampleRate <= 0 || channels <= 0 || frames <= 0)
+        return;
+
+    const uchar *data = buffer.constData<uchar>();
+    if (!data)
+        return;
+    const int bytesPerSample = format.bytesPerSample();
+    if (bytesPerSample <= 0)
+        return;
+
+    // 120 Hz 一阶低通，再对滤波结果求 RMS。比逐帧 FFT 便宜，且足以把
+    // 鼓点/贝斯包络喂给 AMLL 背景的 lowFreqVolume。
+    const qreal alpha = 1.0 - std::exp(
+        -2.0 * 3.14159265358979323846 * 120.0 / sampleRate);
+    qreal sumSquares = 0;
+    for (qsizetype frame = 0; frame < frames; ++frame) {
+        qreal mixed = 0;
+        const uchar *frameData = data + frame * channels * bytesPerSample;
+        for (int channel = 0; channel < channels; ++channel) {
+            const uchar *sampleData =
+                frameData + channel * bytesPerSample;
+            switch (format.sampleFormat()) {
+            case QAudioFormat::UInt8:
+                mixed += (qreal(*sampleData) - 128.0) / 128.0;
+                break;
+            case QAudioFormat::Int16:
+                mixed += qreal(*reinterpret_cast<const qint16 *>(sampleData))
+                    / 32768.0;
+                break;
+            case QAudioFormat::Int32:
+                mixed += qreal(*reinterpret_cast<const qint32 *>(sampleData))
+                    / 2147483648.0;
+                break;
+            case QAudioFormat::Float:
+                mixed += qreal(*reinterpret_cast<const float *>(sampleData));
+                break;
+            default:
+                return;
+            }
+        }
+        mixed /= channels;
+        m_audioLowPass += alpha * (mixed - m_audioLowPass);
+        sumSquares += m_audioLowPass * m_audioLowPass;
+    }
+
+    const qreal rms = std::sqrt(sumSquares / frames);
+    const qreal target = qBound<qreal>(0.0, rms * 4.0, 1.0);
+    m_audioLevel += (target - m_audioLevel) * 0.42;
+    emit lowFrequencyLevelChanged(m_audioLevel);
+#else
+    Q_UNUSED(buffer)
+#endif
 }
 
 float PlayerEngine::volume() const

@@ -1,5 +1,6 @@
 #include "playerpage.h"
 #include "playerprogressslider.h"
+#include "amllbackgroundwidget.h"
 #include "amlllyricsview.h"
 #include "videorenderdialog.h"
 #include "toast.h"
@@ -33,6 +34,7 @@
 #include <QAbstractSlider>
 #include <QWindow>
 #include <QPointer>
+#include <QGuiApplication>
 #include <QTimer>
 #include <QtConcurrent>
 
@@ -704,6 +706,24 @@ PlayerPage::PlayerPage(PlayerEngine *engine, ApiClient *apiClient, QWidget *pare
     setMouseTracking(true);
     setupUi();
 
+    // Web 端 AlbumBackground 在桌面端使用 AMLL MeshGradientRenderer。
+    // offscreen/minimal 平台没有真实 OpenGL surface，保持静态封面降级。
+    const QString platformName = QGuiApplication::platformName();
+    if (platformName != QLatin1String("offscreen")
+        && platformName != QLatin1String("minimal")
+        && qEnvironmentVariableIsEmpty("NEKO_DISABLE_AMLL_BACKGROUND")) {
+        m_amllBackgroundWidget = new AmllBackgroundWidget(this);
+        m_amllBackgroundWidget->setObjectName(QStringLiteral("amllBackground"));
+        m_amllBackgroundWidget->lower();
+        connect(m_amllBackgroundWidget, &AmllBackgroundWidget::rendererUnavailable,
+                this, [this]() {
+                    if (!m_amllBackgroundWidget)
+                        return;
+                    m_amllBackgroundWidget->hide();
+                    update();
+                });
+    }
+
     m_controlHideTimer = new QTimer(this);
     m_controlHideTimer->setSingleShot(true);
     m_controlHideTimer->setInterval(kControlHideMs);
@@ -806,6 +826,12 @@ void PlayerPage::setOpenTransitionActive(bool active)
     if (m_openTransitionActive == active)
         return;
     m_openTransitionActive = active;
+    if (m_amllBackgroundWidget) {
+        if (active)
+            m_amllBackgroundWidget->hide();
+        else if (m_amllBackgroundWidget->isRendererAvailable())
+            m_amllBackgroundWidget->show();
+    }
     update();
 }
 
@@ -2173,10 +2199,17 @@ void PlayerPage::connectPlayerControlEngine()
             QTimer::singleShot(300, this, [this]() { refreshAudioQuality(); });
         if (m_amllLyricsView)
             m_amllLyricsView->setPlaying(st == PlayerEngine::Playing);
+        if (m_amllBackgroundWidget)
+            m_amllBackgroundWidget->setPlaying(st == PlayerEngine::Playing);
         // 暂停期间歌词不做自动定位，恢复播放时重新定位回当前行
         if (st == PlayerEngine::Playing)
             QTimer::singleShot(0, this, [this]() { scrollLyricsToActiveLine(m_currentLyricLine); });
     });
+    connect(m_engine, &PlayerEngine::lowFrequencyLevelChanged, this,
+            [this](qreal level) {
+                if (m_amllBackgroundWidget)
+                    m_amllBackgroundWidget->setLowFreqVolume(level);
+            });
     connect(m_ppProgress, &QSlider::sliderReleased, this, [this]() {
         if (!m_engine || m_engine->duration() <= 0)
             return;
@@ -2253,9 +2286,13 @@ void PlayerPage::updateCoverPlayScale(bool playing)
 
 void PlayerPage::updatePlayControlState()
 {
-    if (!m_ppPlayBtn || !m_engine)
+    if (!m_engine)
         return;
     const bool playing = m_engine->isActuallyPlaying();
+    if (m_amllBackgroundWidget)
+        m_amllBackgroundWidget->setPlaying(playing);
+    if (!m_ppPlayBtn)
+        return;
     if (m_ppPlayBtn->property("ppPlaying").toBool() != playing) {
         m_ppPlayBtn->setProperty("ppPlaying", playing);
         m_ppPlayBtn->update();
@@ -2268,6 +2305,14 @@ void PlayerPage::layoutPlayerPageChrome()
 {
     const int menuH = m_menuBar ? kPlayerMenuH : 0;
     const int controlH = m_controlBar ? kPlayerControlH : 0;
+    if (m_amllBackgroundWidget) {
+        m_amllBackgroundWidget->setGeometry(0, 0, width(), height());
+        m_amllBackgroundWidget->lower();
+        if (!m_openTransitionActive
+            && m_amllBackgroundWidget->isRendererAvailable()) {
+            m_amllBackgroundWidget->show();
+        }
+    }
     if (m_menuBar) {
         m_menuBar->setGeometry(0, 0, width(), menuH);
         m_menuBar->raise();
@@ -2277,6 +2322,7 @@ void PlayerPage::layoutPlayerPageChrome()
         const int contentH = qMax(0, height() - menuH - controlH);
         m_contentHost->setGeometry(0, menuH, width(), contentH);
         m_contentHost->show();
+        m_contentHost->raise();
     }
     if (m_controlBar) {
         m_controlBar->setFixedHeight(controlH);
@@ -2291,6 +2337,8 @@ void PlayerPage::layoutPlayerPageChrome()
 void PlayerPage::updateCoverBackdrop(const QPixmap &source)
 {
     if (source.isNull()) {
+        if (m_amllBackgroundWidget)
+            m_amllBackgroundWidget->clearAlbum(m_coverMainColor);
         ++m_coverBlurGen;
         m_bgBlurPixmap = QPixmap();
         update();
@@ -2298,6 +2346,8 @@ void PlayerPage::updateCoverBackdrop(const QPixmap &source)
     }
     m_coverMainColor = pixmapAverageColor(source);
     m_coverSecondColor = QColor(m_coverMainColor.red(), m_coverMainColor.green(), m_coverMainColor.blue(), 32);
+    if (m_amllBackgroundWidget)
+        m_amllBackgroundWidget->setAlbum(source, m_coverMainColor);
     const QSize pageSize = size().isEmpty() ? QSize(1280, 720) : size();
     refreshTintedPalette();
     applyPlayerPageStyle();
@@ -2919,6 +2969,8 @@ void PlayerPage::setupUi()
     m_lyricsContainer = m_amllLyricsView;
     m_lyricsContainer->setObjectName(QStringLiteral("lyricsContainer"));
     m_lyricsLayout = nullptr;
+    connect(m_amllLyricsView, &AmllLyricsView::seekRequested, this,
+            [this](qint64 positionMs) { emit seekRequested(positionMs); });
 
     m_lyricsScroll->setWidget(m_lyricsContainer);
     nekoPolishScrollAreaViewport(m_lyricsScroll);
@@ -3200,6 +3252,8 @@ void PlayerPage::applyCoverUnknownLarge()
     ++m_coverBlurGen;
     m_bgBlurPixmap = QPixmap();
     m_coverMainColor = QColor(38, 75, 110);
+    if (m_amllBackgroundWidget)
+        m_amllBackgroundWidget->clearAlbum(m_coverMainColor);
     applyPlayerPageStyle();
     update();
 }

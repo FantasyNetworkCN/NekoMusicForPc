@@ -23,6 +23,7 @@
 #include "../core/playerengine.h"
 
 class ApiClient;
+class AmllBackgroundWidget;
 class AmllLyricsView;
 class QTimer;
 class QWheelEvent;
@@ -249,6 +250,7 @@ private:
     QScrollArea *m_lyricsScroll;
     QWidget *m_lyricsContainer;
     QVBoxLayout *m_lyricsLayout;
+    AmllBackgroundWidget *m_amllBackgroundWidget = nullptr;
     AmllLyricsView *m_amllLyricsView = nullptr;
 
     QWidget *m_togetherStrip = nullptr;

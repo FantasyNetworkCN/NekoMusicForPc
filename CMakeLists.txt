@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(NekoMusic
-        VERSION 2026.1114.67
+        VERSION 2026.1115.68
         LANGUAGES CXX
 )
 
@@ -41,7 +41,7 @@ endif()
 message(STATUS "NEKO target: WINDOWS=${NEKO_TARGET_WINDOWS} APPLE=${NEKO_TARGET_APPLE} UNIX=${NEKO_TARGET_UNIX} SYSTEM=${CMAKE_SYSTEM_NAME}")
 
 # Qt6
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Multimedia Network WebSockets SvgWidgets Sql Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGLWidgets Multimedia Network WebSockets SvgWidgets Sql Concurrent)
 if(NEKO_TARGET_UNIX)
     find_package(Qt6 REQUIRED COMPONENTS DBus)
 endif()
@@ -156,6 +156,7 @@ set(SOURCES
         src/ui/playlistcard.cpp
         src/ui/playerbar.cpp
         src/ui/playerprogressslider.cpp
+        src/ui/amllbackgroundwidget.cpp
         src/ui/amlllyricsview.cpp
         src/ui/svgicon.cpp
         src/ui/settingspage.cpp
@@ -252,6 +253,7 @@ set(HEADERS
         src/ui/playlistcard.h
         src/ui/playerbar.h
         src/ui/playerprogressslider.h
+        src/ui/amllbackgroundwidget.h
         src/ui/amlllyricsview.h
         src/ui/svgicon.h
         src/ui/settingspage.h
@@ -397,6 +399,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Widgets
+        Qt6::OpenGLWidgets
         Qt6::Multimedia
         Qt6::Network
         Qt6::WebSockets
@@ -543,6 +546,7 @@ if(LINUX)
             libqt6core6
             libqt6gui6
             libqt6widgets6
+            libqt6openglwidgets6
             libqt6multimedia6
             libqt6network6
             libqt6websockets6
