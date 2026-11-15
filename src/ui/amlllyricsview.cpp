@@ -1,5 +1,7 @@
 #include "amlllyricsview.h"
 
+#include "core/lyriceffectsettings.h"
+
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QFont>
@@ -28,16 +30,22 @@
 
 namespace {
 
-constexpr qreal kAlignPosition = 0.35;
 constexpr qreal kLinePadEm = 0.40;
 constexpr qreal kSubGapEm = 0.25;
-constexpr qreal kScaleInactive = 0.97;
 constexpr qreal kBlurMax = 5.0;
 constexpr qint64 kTailMs = 8000;
 constexpr qint64 kInterludeMinGapMs = 7000;
 constexpr qint64 kAutoAlignResumeDelayMs = 500;
 constexpr qreal kMaxFrameDeltaSecs = 0.10;
 constexpr qreal kPi = 3.14159265358979323846;
+
+int effectiveFontPx(int baseFontPx)
+{
+    return qBound(16,
+                  qRound(baseFontPx
+                         * LyricEffectSettings::instance().fontScale()),
+                  96);
+}
 
 struct Spring {
     Spring() = default;
@@ -401,23 +409,28 @@ QImage blurImage(const QImage &source, qreal radius)
 void setPosYSpringPolicy(LineLayout &line, bool seeking, bool interlude,
                          qint64 intervalMs, bool endOfSong)
 {
+    const auto &fx = LyricEffectSettings::instance();
+    const auto apply = [&fx](LineLayout &target, qreal stiffness, qreal damping) {
+        target.y.setParams(stiffness * fx.springStrength(),
+                           damping * fx.springDamping(), 0.9);
+    };
     if (seeking || interlude) {
-        line.y.setParams(90, 15, 0.9);
+        apply(line, 90, 15);
         return;
     }
     if (endOfSong) {
-        line.y.setParams(140, 22, 0.9);
+        apply(line, 140, 22);
         return;
     }
     if (intervalMs <= 0) {
-        line.y.setParams(90, 15, 0.9);
+        apply(line, 90, 15);
         return;
     }
     const qreal clamped = std::clamp<qreal>(qreal(intervalMs), 100.0, 800.0);
     qreal ratio = 1.0 - (clamped - 100.0) / 700.0;
     ratio = std::pow(ratio, 0.2);
     const qreal stiffness = 170.0 + ratio * 50.0;
-    line.y.setParams(stiffness, std::sqrt(stiffness) * 2.2, 0.9);
+    apply(line, stiffness, std::sqrt(stiffness) * 2.2);
 }
 
 } // namespace
@@ -505,6 +518,17 @@ AmllLyricsView::AmllLyricsView(QWidget *parent)
             m_impl->frameTimer->stop();
         }
     });
+
+    auto &fx = LyricEffectSettings::instance();
+    connect(&fx, &LyricEffectSettings::layoutChanged, this, [this]() {
+        rebuildLayout(true);
+        updateTimeline(m_impl->positionMs, true);
+        update();
+    });
+    connect(&fx, &LyricEffectSettings::effectsChanged, this, [this]() {
+        updateLineTargets(false, false);
+        update();
+    });
 }
 
 AmllLyricsView::~AmllLyricsView() = default;
@@ -563,7 +587,9 @@ void AmllLyricsView::rebuildLayout(bool preservePosition)
         }
     }
 
-    const int fontPx = qBound(24, m_impl->mainFontPx, 64);
+    const auto &fx = LyricEffectSettings::instance();
+    const int fontPx = qBound(
+        16, qRound(m_impl->mainFontPx * fx.fontScale()), 96);
     const qreal sidePadding = qBound<qreal>(16.0, fontPx, 34.0);
     const qreal contentWidth = qMax<qreal>(120.0, width() - sidePadding * 2.0);
     QFont mainFont = font();
@@ -575,8 +601,8 @@ void AmllLyricsView::rebuildLayout(bool preservePosition)
     QFont romanFont = subFont;
     romanFont.setItalic(true);
 
-    const qreal padY = fontPx * kLinePadEm;
-    const qreal subGap = fontPx * kSubGapEm;
+    const qreal padY = fontPx * kLinePadEm * fx.lineSpacing();
+    const qreal subGap = fontPx * kSubGapEm * fx.lineSpacing();
     qreal cursorY = 0;
     m_impl->lines.clear();
     m_impl->lines.reserve(static_cast<std::size_t>(m_impl->lyrics.size()));
@@ -626,7 +652,8 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
     if (m_impl->lines.empty() || height() <= 0)
         return;
 
-    const qreal fontPx = qBound(24, m_impl->mainFontPx, 64);
+    const auto &fx = LyricEffectSettings::instance();
+    const qreal fontPx = effectiveFontPx(m_impl->mainFontPx);
     const qreal interludeHeight = fontPx * 1.2;
     const int lineCount = static_cast<int>(m_impl->lines.size());
     const bool hasInterlude = m_impl->activeInterlude >= 0;
@@ -650,7 +677,7 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
         focalTop += focusLine.height;
         focalHeight = interludeHeight;
     }
-    const qreal anchorBase = height() * kAlignPosition
+    const qreal anchorBase = height() * fx.alignPosition()
         - focalTop
         - focalHeight * 0.5;
     const qreal contentBottom = anchorBase + m_impl->lines.back().top
@@ -672,8 +699,10 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
         LineLayout &line = m_impl->lines[static_cast<std::size_t>(i)];
         setPosYSpringPolicy(line, seeking, hasInterlude, intervalMs,
                             m_impl->endOfSong);
-        if (m_impl->autoAlignSuspended)
-            line.y.setParams(190, 29, 1.0);
+        if (m_impl->autoAlignSuspended) {
+            line.y.setParams(190 * fx.springStrength(),
+                             29 * fx.springDamping(), 1.0);
+        }
         const qreal extra = hasInterlude && i > interludeAnchor
             ? interludeHeight
             : 0.0;
@@ -681,7 +710,7 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
         line.y.setTarget(target, delay);
         const qreal scaleTarget = line.highlighted
             ? 1.0
-            : (m_impl->playing ? kScaleInactive : 1.0);
+            : (m_impl->playing && fx.lyricsEnabled() ? fx.inactiveScale() : 1.0);
         line.scale.setParams(100, 25, 2.0);
         line.scale.setTarget(scaleTarget, delay);
 
@@ -814,8 +843,11 @@ bool AmllLyricsView::updateTimeline(qint64 positionMs, bool seek)
     if (needsTargets)
         updateLineTargets(!jumped, jumped);
     else if (m_impl->playing) {
+        const auto &fx = LyricEffectSettings::instance();
         for (LineLayout &line : m_impl->lines)
-            line.scale.setTarget(line.highlighted ? 1.0 : kScaleInactive);
+            line.scale.setTarget(
+                line.highlighted ? 1.0
+                                 : (fx.lyricsEnabled() ? fx.inactiveScale() : 1.0));
     }
 
     if (!m_impl->frameTimer->isActive() && isVisible())
@@ -837,8 +869,12 @@ void AmllLyricsView::setPlaying(bool playing)
         return;
     m_impl->playing = playing;
     m_impl->frameClock.restart();
+    const auto &fx = LyricEffectSettings::instance();
     for (LineLayout &line : m_impl->lines)
-        line.scale.setTarget(playing && !line.highlighted ? kScaleInactive : 1.0);
+        line.scale.setTarget(
+            playing && !line.highlighted && fx.lyricsEnabled()
+                ? fx.inactiveScale()
+                : 1.0);
     if (playing && isVisible())
         m_impl->frameTimer->start();
     update();
@@ -883,7 +919,8 @@ QImage AmllLyricsView::sharpLineImage(int index)
     if (index < 0 || index >= static_cast<int>(m_impl->lines.size()))
         return {};
     LineLayout &line = m_impl->lines[static_cast<std::size_t>(index)];
-    const qreal fontPx = qBound(24, m_impl->mainFontPx, 64);
+    const auto &fx = LyricEffectSettings::instance();
+    const qreal fontPx = effectiveFontPx(m_impl->mainFontPx);
     const qreal sidePadding = qBound<qreal>(16.0, fontPx, 34.0);
     const int logicalWidth = qMax(1, qRound(width() - sidePadding * 2.0));
     const int logicalHeight = qMax(1, qCeil(line.height));
@@ -904,20 +941,20 @@ QImage AmllLyricsView::sharpLineImage(int index)
 
     QColor secondary = m_impl->secondaryColor;
     secondary.setAlphaF(qMin<qreal>(secondary.alphaF(), 0.30));
-    qreal y = fontPx * kLinePadEm;
+    qreal y = fontPx * kLinePadEm * fx.lineSpacing();
     if (line.main.layout) {
         painter.setPen(m_impl->activeColor);
         line.main.layout->draw(&painter, QPointF(0, y));
         y += qMax<qreal>(fontPx * 1.2, line.main.height);
     }
     if (line.romanization.layout) {
-        y += fontPx * kSubGapEm;
+        y += fontPx * kSubGapEm * fx.lineSpacing();
         painter.setPen(secondary);
         line.romanization.layout->draw(&painter, QPointF(0, y));
         y += line.romanization.height;
     }
     if (line.translation.layout) {
-        y += fontPx * kSubGapEm;
+        y += fontPx * kSubGapEm * fx.lineSpacing();
         painter.setPen(secondary);
         line.translation.layout->draw(&painter, QPointF(0, y));
     }
@@ -935,12 +972,36 @@ void AmllLyricsView::drawKaraokeLine(QPainter &painter, int index)
     if (index < 0 || index >= static_cast<int>(m_impl->lines.size()))
         return;
     LineLayout &line = m_impl->lines[static_cast<std::size_t>(index)];
-    const qreal fontPx = qBound(24, m_impl->mainFontPx, 64);
-    const qreal padY = fontPx * kLinePadEm;
+    const auto &fx = LyricEffectSettings::instance();
+    const qreal fontPx = effectiveFontPx(m_impl->mainFontPx);
+    const qreal padY = fontPx * kLinePadEm * fx.lineSpacing();
     if (!line.main.layout)
         return;
 
     painter.setFont(line.main.font);
+    const auto drawSubLines = [&]() {
+        QColor secondary = m_impl->secondaryColor;
+        secondary.setAlphaF(qMin<qreal>(secondary.alphaF(), 0.30));
+        qreal y = padY + qMax<qreal>(fontPx * 1.2, line.main.height);
+        if (line.romanization.layout) {
+            y += fontPx * kSubGapEm * fx.lineSpacing();
+            painter.setPen(secondary);
+            line.romanization.layout->draw(&painter, QPointF(0, y));
+            y += line.romanization.height;
+        }
+        if (line.translation.layout) {
+            y += fontPx * kSubGapEm * fx.lineSpacing();
+            painter.setPen(secondary);
+            line.translation.layout->draw(&painter, QPointF(0, y));
+        }
+    };
+    if (!fx.lyricsEnabled() || !fx.wordSweep()) {
+        painter.setPen(m_impl->activeColor);
+        line.main.layout->draw(&painter, QPointF(0, padY));
+        drawSubLines();
+        return;
+    }
+
     QVector<int> graphemeOffsets;
     const QVector<QString> graphemes =
         graphemeSegments(line.main.text, &graphemeOffsets);
@@ -983,8 +1044,10 @@ void AmllLyricsView::drawKaraokeLine(QPainter &painter, int index)
                         / qMax<qint64>(1000, wordEnd - wordStart),
                     0.0,
                     1.0);
-                floatY = -0.05 * fontPx * easeOutCubic(floatProgress)
-                    * (line.source.background ? 2.0 : 1.0);
+                if (fx.wordFloat()) {
+                    floatY = -0.05 * fontPx * easeOutCubic(floatProgress)
+                        * (line.source.background ? 2.0 : 1.0);
+                }
                 if (cachedWord != word) {
                     cachedWord = word;
                     cachedWordFirstGrapheme = qMax(
@@ -1008,7 +1071,8 @@ void AmllLyricsView::drawKaraokeLine(QPainter &painter, int index)
 
                 const QString wordText =
                     line.main.text.mid(word->start, word->length);
-                const bool emphasize = (wordEnd - wordStart) >= 1000
+                const bool emphasize = fx.emphasisGlow()
+                    && (wordEnd - wordStart) >= 1000
                     && (isCjkText(wordText)
                         || (wordText.trimmed().size() <= 7
                             && wordText.trimmed().size() > 1));
@@ -1038,20 +1102,7 @@ void AmllLyricsView::drawKaraokeLine(QPainter &painter, int index)
         }
     }
 
-    QColor secondary = m_impl->secondaryColor;
-    secondary.setAlphaF(qMin<qreal>(secondary.alphaF(), 0.30));
-    qreal y = padY + qMax<qreal>(fontPx * 1.2, line.main.height);
-    if (line.romanization.layout) {
-        y += fontPx * kSubGapEm;
-        painter.setPen(secondary);
-        line.romanization.layout->draw(&painter, QPointF(0, y));
-        y += line.romanization.height;
-    }
-    if (line.translation.layout) {
-        y += fontPx * kSubGapEm;
-        painter.setPen(secondary);
-        line.translation.layout->draw(&painter, QPointF(0, y));
-    }
+    drawSubLines();
 }
 
 void AmllLyricsView::paintEvent(QPaintEvent *event)
@@ -1086,7 +1137,8 @@ void AmllLyricsView::paintEvent(QPaintEvent *event)
         return;
     }
 
-    const qreal fontPx = qBound(24, m_impl->mainFontPx, 64);
+    const qreal fontPx = effectiveFontPx(m_impl->mainFontPx);
+    const auto &fx = LyricEffectSettings::instance();
     const qreal sidePadding = qBound<qreal>(16.0, fontPx, 34.0);
     const bool hasInterlude = m_impl->activeInterlude >= 0;
     const int interludeAnchor = hasInterlude
@@ -1125,7 +1177,8 @@ void AmllLyricsView::paintEvent(QPaintEvent *event)
         line.screenRect = QRectF(0, y, width(), qMax<qreal>(1.0, scaledHeight));
         const bool hovered = m_impl->pointerInside && m_impl->hoveredIndex == i;
         qreal blur = 0;
-        if (!m_impl->pointerInside && !m_impl->autoAlignSuspended && !hovered) {
+        if (!m_impl->pointerInside && !m_impl->autoAlignSuspended && !hovered
+            && fx.lyricsEnabled() && fx.distanceBlur()) {
             if (line.highlighted) {
                 blur = 0;
             } else {
@@ -1135,9 +1188,10 @@ void AmllLyricsView::paintEvent(QPaintEvent *event)
                 const int distance = i < m_impl->scrollToIndex
                     ? qAbs(m_impl->scrollToIndex - i) + 1
                     : qAbs(i - latest);
-                blur = qMin<qreal>(
-                    kBlurMax,
-                    (width() <= 1024 ? 0.8 : 1.0) * (1.0 + distance));
+                blur = fx.blurStrength()
+                    * qMin<qreal>(
+                        kBlurMax,
+                        (width() <= 1024 ? 0.8 : 1.0) * (1.0 + distance));
             }
         }
         line.blur = blur;

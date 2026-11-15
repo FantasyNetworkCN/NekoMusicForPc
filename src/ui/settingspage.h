@@ -6,6 +6,7 @@
  */
 
 #include <QWidget>
+#include <QHash>
 #include "core/appshortcuts.h"
 #include "theme/thememanager.h"
 
@@ -19,6 +20,7 @@ class QPixmap;
 class QPushButton;
 class QResizeEvent;
 class QScrollArea;
+class QSlider;
 class QStackedWidget;
 class QVBoxLayout;
 class QWidget;
@@ -61,6 +63,10 @@ private:
     void refreshShortcutEditors();
     void refreshMicSyncRow();
     void setupPersonalizationSection(QVBoxLayout *cardLay, QWidget *cardBody);
+    void setupLyricEffectSection(QVBoxLayout *cardLay, QWidget *cardBody);
+    void refreshLyricEffectControls();
+    QLabel *createBoundLabel(const QString &key, QWidget *parent,
+                             const char *objectName = "settingsLabel");
     void setupMcpSection(QVBoxLayout *cardLay, QWidget *cardBody);
     void persistMcpSettings();
     void refreshMcpStatus();
@@ -106,6 +112,54 @@ private:
     QLabel *m_titleLabel = nullptr;
     QLabel *m_descLabel = nullptr;
     QLabel *m_themeLabel = nullptr;
+    QLabel *m_lyricEffectsSectionLabel = nullptr;
+    QLabel *m_lyricEffectsEnabledLabel = nullptr;
+    QLabel *m_lyricEffectsHintLabel = nullptr;
+    QLabel *m_lyricFontScaleLabel = nullptr;
+    QLabel *m_lyricLineSpacingLabel = nullptr;
+    QLabel *m_lyricAlignLabel = nullptr;
+    QLabel *m_lyricInactiveScaleLabel = nullptr;
+    QLabel *m_lyricDistanceBlurLabel = nullptr;
+    QLabel *m_lyricBlurStrengthLabel = nullptr;
+    QLabel *m_lyricWordSweepLabel = nullptr;
+    QLabel *m_lyricWordFloatLabel = nullptr;
+    QLabel *m_lyricEmphasisGlowLabel = nullptr;
+    QLabel *m_lyricSpringStrengthLabel = nullptr;
+    QLabel *m_lyricSpringDampingLabel = nullptr;
+    QLabel *m_amllBackgroundSectionLabel = nullptr;
+    QLabel *m_amllBackgroundEnabledLabel = nullptr;
+    QLabel *m_amllBackgroundHintLabel = nullptr;
+    QLabel *m_amllFlowSpeedLabel = nullptr;
+    QLabel *m_amllBassReactivityLabel = nullptr;
+    QLabel *m_amllScrimStrengthLabel = nullptr;
+    QLabel *m_lyricFontScaleValue = nullptr;
+    QLabel *m_lyricLineSpacingValue = nullptr;
+    QLabel *m_lyricAlignValue = nullptr;
+    QLabel *m_lyricInactiveScaleValue = nullptr;
+    QLabel *m_lyricBlurStrengthValue = nullptr;
+    QLabel *m_lyricSpringStrengthValue = nullptr;
+    QLabel *m_lyricSpringDampingValue = nullptr;
+    QLabel *m_amllFlowSpeedValue = nullptr;
+    QLabel *m_amllBassReactivityValue = nullptr;
+    QLabel *m_amllScrimStrengthValue = nullptr;
+    ToggleSwitch *m_lyricEffectsToggle = nullptr;
+    ToggleSwitch *m_lyricDistanceBlurToggle = nullptr;
+    ToggleSwitch *m_lyricWordSweepToggle = nullptr;
+    ToggleSwitch *m_lyricWordFloatToggle = nullptr;
+    ToggleSwitch *m_lyricEmphasisGlowToggle = nullptr;
+    ToggleSwitch *m_amllBackgroundToggle = nullptr;
+    QSlider *m_lyricFontScaleSlider = nullptr;
+    QSlider *m_lyricLineSpacingSlider = nullptr;
+    QSlider *m_lyricAlignSlider = nullptr;
+    QSlider *m_lyricInactiveScaleSlider = nullptr;
+    QSlider *m_lyricBlurStrengthSlider = nullptr;
+    QSlider *m_lyricSpringStrengthSlider = nullptr;
+    QSlider *m_lyricSpringDampingSlider = nullptr;
+    QSlider *m_amllFlowSpeedSlider = nullptr;
+    QSlider *m_amllBassReactivitySlider = nullptr;
+    QSlider *m_amllScrimStrengthSlider = nullptr;
+    QPushButton *m_lyricEffectsResetBtn = nullptr;
+    QHash<QLabel *, QString> m_boundLabels;
     QLabel *m_personalizeSectionLabel = nullptr;
     QLabel *m_backdropKindLabel = nullptr;
     QComboBox *m_backdropKindCombo = nullptr;

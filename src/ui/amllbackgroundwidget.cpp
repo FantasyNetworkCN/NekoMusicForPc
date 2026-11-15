@@ -147,7 +147,9 @@ AmllBackgroundWidget::AmllBackgroundWidget(QWidget *parent)
             m_layers.begin(), m_layers.end(), [](const Layer &layer) {
                 return qAbs(layer.alpha - layer.targetAlpha) > 0.002;
             });
-        if (m_playing || m_pendingTextureDirty || fading) {
+        const bool animated = m_playing
+            && (m_flowSpeed > 0.001 || m_bassGain > 0.001);
+        if (animated || m_pendingTextureDirty || fading) {
             update();
         } else {
             m_frameTimer->stop();
@@ -199,6 +201,18 @@ void AmllBackgroundWidget::setFlowSpeed(qreal speed)
 void AmllBackgroundWidget::setLowFreqVolume(qreal volume)
 {
     m_lowFreqVolume = std::clamp<qreal>(volume, 0.0, 1.0);
+    scheduleFrame();
+}
+
+void AmllBackgroundWidget::setBassGain(qreal gain)
+{
+    m_bassGain = std::clamp<qreal>(gain, 0.0, 2.5);
+    scheduleFrame();
+}
+
+void AmllBackgroundWidget::setScrimStrength(qreal strength)
+{
+    m_scrimStrength = std::clamp<qreal>(strength, 0.20, 0.95);
     scheduleFrame();
 }
 
@@ -367,12 +381,14 @@ void main() {
 varying vec2 v_uv;
 uniform sampler2D u_texture;
 uniform float u_alpha;
+uniform float u_scrim;
 void main() {
     vec4 color = texture2D(u_texture, v_uv);
     float edgeY = smoothstep(0.20, 0.0, v_uv.y)
         + smoothstep(0.20, 0.0, 1.0 - v_uv.y);
     vec3 scrim = vec3(4.0, 9.0, 11.0) / 255.0;
-    color.rgb = mix(color.rgb, scrim, clamp(0.68 + edgeY * 0.16, 0.0, 1.0));
+    color.rgb = mix(color.rgb, scrim,
+                    clamp(u_scrim + edgeY * (1.0 - u_scrim) * 0.50, 0.0, 1.0));
     gl_FragColor = vec4(color.rgb, color.a * u_alpha);
 }
 )");
@@ -491,7 +507,8 @@ void AmllBackgroundWidget::updateAnimation()
     if (m_playing)
         m_flowTimeMs += deltaSecs * 1000.0 * m_flowSpeed;
 
-    const qreal volumeTarget = m_playing ? m_lowFreqVolume / 10.0 : 0.0;
+    const qreal volumeTarget =
+        m_playing ? m_lowFreqVolume * m_bassGain / 10.0 : 0.0;
     const qreal lerp = std::min<qreal>(1.0, deltaSecs / 0.10);
     m_smoothedVolume += (volumeTarget - m_smoothedVolume) * lerp;
 
@@ -588,6 +605,7 @@ void AmllBackgroundWidget::paintGL()
         m_quadProgram->bind();
         m_quadProgram->setUniformValue("u_texture", 0);
         m_quadProgram->setUniformValue("u_alpha", float(eased));
+        m_quadProgram->setUniformValue("u_scrim", float(m_scrimStrength));
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, m_fbo->texture());
         m_quadBuffer->bind();

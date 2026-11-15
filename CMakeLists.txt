@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(NekoMusic
-        VERSION 2026.1115.68
+        VERSION 2026.1115.69
         LANGUAGES CXX
 )
 
@@ -218,6 +218,7 @@ set(SOURCES
         src/core/audioquality.cpp
         src/core/embeddedlyrics.cpp
         src/core/lyrics.cpp
+        src/core/lyriceffectsettings.cpp
         src/core/playlistmanager.cpp
         src/core/shufflebag.cpp
         src/core/landevicemanager.cpp
@@ -312,6 +313,7 @@ set(HEADERS
         src/core/audioquality.h
         src/core/embeddedlyrics.h
         src/core/lyrics.h
+        src/core/lyriceffectsettings.h
         src/core/playlistdb.h
         src/core/musicdownloadmanager.h
         src/core/playlistmanager.h

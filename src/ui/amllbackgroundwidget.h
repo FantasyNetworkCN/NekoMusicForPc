@@ -36,6 +36,8 @@ public:
     void setPlaying(bool playing);
     void setFlowSpeed(qreal speed);
     void setLowFreqVolume(qreal volume);
+    void setBassGain(qreal gain);
+    void setScrimStrength(qreal strength);
     bool isRendererAvailable() const { return m_available; }
 
 signals:
@@ -81,6 +83,8 @@ private:
     bool m_playing = false;
     qreal m_flowSpeed = 1.0;
     qreal m_lowFreqVolume = 0.0;
+    qreal m_bassGain = 1.0;
+    qreal m_scrimStrength = 0.68;
     qreal m_smoothedVolume = 0.0;
     qreal m_flowTimeMs = 0;
     QElapsedTimer m_frameClock;

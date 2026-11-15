@@ -16,6 +16,7 @@
 #include "../core/musicdownloader.h"
 #include "../core/musicurlresolver.h"
 #include "../core/playlistmanager.h"
+#include "../core/lyriceffectsettings.h"
 #include "../theme/theme.h"
 #include "../theme/thememanager.h"
 #include "glasspaint.h"
@@ -723,6 +724,20 @@ PlayerPage::PlayerPage(PlayerEngine *engine, ApiClient *apiClient, QWidget *pare
                     update();
                 });
     }
+    const auto applyBackgroundSettings = [this]() {
+        if (!m_amllBackgroundWidget)
+            return;
+        const auto &fx = LyricEffectSettings::instance();
+        m_amllBackgroundWidget->setFlowSpeed(fx.backgroundFlowSpeed());
+        m_amllBackgroundWidget->setBassGain(fx.backgroundBassReactivity());
+        m_amllBackgroundWidget->setScrimStrength(fx.backgroundScrimStrength());
+        layoutPlayerPageChrome();
+        update();
+    };
+    connect(&LyricEffectSettings::instance(),
+            &LyricEffectSettings::backgroundChanged, this,
+            applyBackgroundSettings);
+    applyBackgroundSettings();
 
     m_controlHideTimer = new QTimer(this);
     m_controlHideTimer->setSingleShot(true);
@@ -829,7 +844,8 @@ void PlayerPage::setOpenTransitionActive(bool active)
     if (m_amllBackgroundWidget) {
         if (active)
             m_amllBackgroundWidget->hide();
-        else if (m_amllBackgroundWidget->isRendererAvailable())
+        else if (LyricEffectSettings::instance().backgroundEnabled()
+                 && m_amllBackgroundWidget->isRendererAvailable())
             m_amllBackgroundWidget->show();
     }
     update();
@@ -2309,8 +2325,11 @@ void PlayerPage::layoutPlayerPageChrome()
         m_amllBackgroundWidget->setGeometry(0, 0, width(), height());
         m_amllBackgroundWidget->lower();
         if (!m_openTransitionActive
+            && LyricEffectSettings::instance().backgroundEnabled()
             && m_amllBackgroundWidget->isRendererAvailable()) {
             m_amllBackgroundWidget->show();
+        } else {
+            m_amllBackgroundWidget->hide();
         }
     }
     if (m_menuBar) {

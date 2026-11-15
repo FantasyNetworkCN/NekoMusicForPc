@@ -10,6 +10,7 @@
 #include "core/appshortcuts.h"
 #include "core/micsynccontroller.h"
 #include "core/shellbackdropsettings.h"
+#include "core/lyriceffectsettings.h"
 #include "core/usermanager.h"
 #include "ui/logindialog.h"
 #include "ui/legaldialog.h"
@@ -39,6 +40,8 @@
 #include <QScrollArea>
 #include <QStackedWidget>
 #include <QScrollBar>
+#include <QSlider>
+#include <QSignalBlocker>
 #include <QFrame>
 #include <QSettings>
 #include <QCheckBox>
@@ -59,6 +62,8 @@
 #include <QResizeEvent>
 #include <QSizePolicy>
 #include <QFontMetrics>
+
+#include <functional>
 
 namespace {
 
@@ -473,6 +478,12 @@ void SettingsPage::setupUi()
     themeRow->addWidget(m_themeCombo);
     appearanceLay->addLayout(themeRow);
 
+    auto *lineEffects = new QFrame(appearanceBody);
+    lineEffects->setFrameShape(QFrame::HLine);
+    lineEffects->setObjectName("settingsDivider");
+    appearanceLay->addWidget(lineEffects);
+    setupLyricEffectSection(appearanceLay, appearanceBody);
+
     auto *linePersonalize = new QFrame(appearanceBody);
     linePersonalize->setFrameShape(QFrame::HLine);
     linePersonalize->setObjectName("settingsDivider");
@@ -612,6 +623,359 @@ void SettingsPage::setupUi()
     updateTabBarGeometry();
     applyScrollbarStyle();
     refreshMicSyncRow();
+}
+
+QLabel *SettingsPage::createBoundLabel(const QString &key, QWidget *parent,
+                                       const char *objectName)
+{
+    auto *label = new QLabel(I18n::instance().tr(key), parent);
+    label->setObjectName(QString::fromLatin1(objectName));
+    m_boundLabels.insert(label, key);
+    return label;
+}
+
+void SettingsPage::setupLyricEffectSection(QVBoxLayout *cardLay, QWidget *cardBody)
+{
+    auto &fx = LyricEffectSettings::instance();
+
+    m_lyricEffectsSectionLabel =
+        createBoundLabel(QStringLiteral("lyricEffectsSection"), cardBody);
+    cardLay->addWidget(m_lyricEffectsSectionLabel);
+
+    auto *enabledRow = new QHBoxLayout();
+    m_lyricEffectsEnabledLabel =
+        createBoundLabel(QStringLiteral("lyricEffectsEnabled"), cardBody);
+    enabledRow->addWidget(m_lyricEffectsEnabledLabel, 1);
+    m_lyricEffectsToggle = new ToggleSwitch(cardBody);
+    m_lyricEffectsToggle->setChecked(fx.lyricsEnabled());
+    connect(m_lyricEffectsToggle, &QAbstractButton::toggled, this, [this](bool on) {
+        LyricEffectSettings::instance().setLyricsEnabled(on);
+        refreshLyricEffectControls();
+    });
+    enabledRow->addWidget(m_lyricEffectsToggle, 0, Qt::AlignRight);
+    cardLay->addLayout(enabledRow);
+
+    m_lyricEffectsHintLabel =
+        createBoundLabel(QStringLiteral("lyricEffectsHint"), cardBody,
+                         "settingsInfo");
+    m_lyricEffectsHintLabel->setWordWrap(true);
+    cardLay->addWidget(m_lyricEffectsHintLabel);
+
+    const auto addSliderRow =
+        [this, cardLay, cardBody](const QString &key, QLabel **labelOut,
+                                  QSlider **sliderOut, QLabel **valueOut,
+                                  int minimum, int maximum, int value) {
+        auto *row = new QWidget(cardBody);
+        auto *rowLay = new QVBoxLayout(row);
+        rowLay->setContentsMargins(0, 0, 0, 0);
+        rowLay->setSpacing(6);
+        auto *head = new QHBoxLayout();
+        *labelOut = createBoundLabel(key, row);
+        head->addWidget(*labelOut, 1);
+        *valueOut = new QLabel(row);
+        (*valueOut)->setObjectName("settingsInfo");
+        (*valueOut)->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        (*valueOut)->setMinimumWidth(68);
+        head->addWidget(*valueOut);
+        rowLay->addLayout(head);
+
+        *sliderOut = new QSlider(Qt::Horizontal, row);
+        (*sliderOut)->setObjectName("settingsSlider");
+        (*sliderOut)->setRange(minimum, maximum);
+        (*sliderOut)->setValue(value);
+        (*sliderOut)->setFixedHeight(22);
+        rowLay->addWidget(*sliderOut);
+        cardLay->addWidget(row);
+    };
+
+    addSliderRow(QStringLiteral("lyricFontScale"), &m_lyricFontScaleLabel,
+                 &m_lyricFontScaleSlider, &m_lyricFontScaleValue, 60, 220,
+                 qRound(fx.fontScale() * 100.0));
+    connect(m_lyricFontScaleSlider, &QSlider::valueChanged, this, [](int value) {
+        LyricEffectSettings::instance().setFontScale(value / 100.0);
+    });
+
+    addSliderRow(QStringLiteral("lyricLineSpacing"), &m_lyricLineSpacingLabel,
+                 &m_lyricLineSpacingSlider, &m_lyricLineSpacingValue, 65, 200,
+                 qRound(fx.lineSpacing() * 100.0));
+    connect(m_lyricLineSpacingSlider, &QSlider::valueChanged, this, [](int value) {
+        LyricEffectSettings::instance().setLineSpacing(value / 100.0);
+    });
+
+    addSliderRow(QStringLiteral("lyricAlignPosition"), &m_lyricAlignLabel,
+                 &m_lyricAlignSlider, &m_lyricAlignValue, 15, 85,
+                 qRound(fx.alignPosition() * 100.0));
+    connect(m_lyricAlignSlider, &QSlider::valueChanged, this, [](int value) {
+        LyricEffectSettings::instance().setAlignPosition(value / 100.0);
+    });
+
+    addSliderRow(QStringLiteral("lyricInactiveScale"),
+                 &m_lyricInactiveScaleLabel, &m_lyricInactiveScaleSlider,
+                 &m_lyricInactiveScaleValue, 80, 100,
+                 qRound(fx.inactiveScale() * 100.0));
+    connect(m_lyricInactiveScaleSlider, &QSlider::valueChanged, this, [](int value) {
+        LyricEffectSettings::instance().setInactiveScale(value / 100.0);
+    });
+
+    auto *blurRow = new QHBoxLayout();
+    m_lyricDistanceBlurLabel =
+        createBoundLabel(QStringLiteral("lyricDistanceBlur"), cardBody);
+    blurRow->addWidget(m_lyricDistanceBlurLabel, 1);
+    m_lyricDistanceBlurToggle = new ToggleSwitch(cardBody);
+    m_lyricDistanceBlurToggle->setChecked(fx.distanceBlur());
+    connect(m_lyricDistanceBlurToggle, &QAbstractButton::toggled, this, [this](bool on) {
+        LyricEffectSettings::instance().setDistanceBlur(on);
+        refreshLyricEffectControls();
+    });
+    blurRow->addWidget(m_lyricDistanceBlurToggle, 0, Qt::AlignRight);
+    cardLay->addLayout(blurRow);
+
+    addSliderRow(QStringLiteral("lyricBlurStrength"),
+                 &m_lyricBlurStrengthLabel, &m_lyricBlurStrengthSlider,
+                 &m_lyricBlurStrengthValue, 0, 250,
+                 qRound(fx.blurStrength() * 100.0));
+    connect(m_lyricBlurStrengthSlider, &QSlider::valueChanged, this, [](int value) {
+        LyricEffectSettings::instance().setBlurStrength(value / 100.0);
+    });
+
+    const auto addToggleRow =
+        [this, cardLay, cardBody](const QString &key, QLabel **labelOut,
+                                  ToggleSwitch **toggleOut, bool checked,
+                                  const std::function<void(bool)> &setter) {
+        auto *row = new QHBoxLayout();
+        *labelOut = createBoundLabel(key, cardBody);
+        row->addWidget(*labelOut, 1);
+        *toggleOut = new ToggleSwitch(cardBody);
+        (*toggleOut)->setChecked(checked);
+        connect(*toggleOut, &QAbstractButton::toggled, this,
+                [setter](bool on) { setter(on); });
+        row->addWidget(*toggleOut, 0, Qt::AlignRight);
+        cardLay->addLayout(row);
+    };
+
+    addToggleRow(
+        QStringLiteral("lyricWordSweep"), &m_lyricWordSweepLabel,
+        &m_lyricWordSweepToggle, fx.wordSweep(),
+        [](bool on) { LyricEffectSettings::instance().setWordSweep(on); });
+    addToggleRow(
+        QStringLiteral("lyricWordFloat"), &m_lyricWordFloatLabel,
+        &m_lyricWordFloatToggle, fx.wordFloat(),
+        [](bool on) { LyricEffectSettings::instance().setWordFloat(on); });
+    addToggleRow(
+        QStringLiteral("lyricEmphasisGlow"), &m_lyricEmphasisGlowLabel,
+        &m_lyricEmphasisGlowToggle, fx.emphasisGlow(),
+        [](bool on) { LyricEffectSettings::instance().setEmphasisGlow(on); });
+
+    addSliderRow(QStringLiteral("lyricSpringStrength"),
+                 &m_lyricSpringStrengthLabel, &m_lyricSpringStrengthSlider,
+                 &m_lyricSpringStrengthValue, 30, 250,
+                 qRound(fx.springStrength() * 100.0));
+    connect(m_lyricSpringStrengthSlider, &QSlider::valueChanged, this, [](int value) {
+        LyricEffectSettings::instance().setSpringStrength(value / 100.0);
+    });
+    addSliderRow(QStringLiteral("lyricSpringDamping"),
+                 &m_lyricSpringDampingLabel, &m_lyricSpringDampingSlider,
+                 &m_lyricSpringDampingValue, 30, 250,
+                 qRound(fx.springDamping() * 100.0));
+    connect(m_lyricSpringDampingSlider, &QSlider::valueChanged, this, [](int value) {
+        LyricEffectSettings::instance().setSpringDamping(value / 100.0);
+    });
+
+    auto *backgroundDivider = new QFrame(cardBody);
+    backgroundDivider->setFrameShape(QFrame::HLine);
+    backgroundDivider->setObjectName("settingsDivider");
+    cardLay->addWidget(backgroundDivider);
+
+    m_amllBackgroundSectionLabel =
+        createBoundLabel(QStringLiteral("amllBackgroundSection"), cardBody);
+    cardLay->addWidget(m_amllBackgroundSectionLabel);
+
+    auto *backgroundRow = new QHBoxLayout();
+    m_amllBackgroundEnabledLabel =
+        createBoundLabel(QStringLiteral("amllBackgroundEnabled"), cardBody);
+    backgroundRow->addWidget(m_amllBackgroundEnabledLabel, 1);
+    m_amllBackgroundToggle = new ToggleSwitch(cardBody);
+    m_amllBackgroundToggle->setChecked(fx.backgroundEnabled());
+    connect(m_amllBackgroundToggle, &QAbstractButton::toggled, this, [this](bool on) {
+        LyricEffectSettings::instance().setBackgroundEnabled(on);
+        refreshLyricEffectControls();
+    });
+    backgroundRow->addWidget(m_amllBackgroundToggle, 0, Qt::AlignRight);
+    cardLay->addLayout(backgroundRow);
+
+    m_amllBackgroundHintLabel =
+        createBoundLabel(QStringLiteral("amllBackgroundHint"), cardBody,
+                         "settingsInfo");
+    m_amllBackgroundHintLabel->setWordWrap(true);
+    cardLay->addWidget(m_amllBackgroundHintLabel);
+
+    addSliderRow(QStringLiteral("amllFlowSpeed"), &m_amllFlowSpeedLabel,
+                 &m_amllFlowSpeedSlider, &m_amllFlowSpeedValue, 0, 250,
+                 qRound(fx.backgroundFlowSpeed() * 100.0));
+    connect(m_amllFlowSpeedSlider, &QSlider::valueChanged, this, [](int value) {
+        LyricEffectSettings::instance().setBackgroundFlowSpeed(value / 100.0);
+    });
+    addSliderRow(QStringLiteral("amllBassReactivity"),
+                 &m_amllBassReactivityLabel, &m_amllBassReactivitySlider,
+                 &m_amllBassReactivityValue, 0, 250,
+                 qRound(fx.backgroundBassReactivity() * 100.0));
+    connect(m_amllBassReactivitySlider, &QSlider::valueChanged, this, [](int value) {
+        LyricEffectSettings::instance().setBackgroundBassReactivity(value / 100.0);
+    });
+    addSliderRow(QStringLiteral("amllScrimStrength"),
+                 &m_amllScrimStrengthLabel, &m_amllScrimStrengthSlider,
+                 &m_amllScrimStrengthValue, 20, 95,
+                 qRound(fx.backgroundScrimStrength() * 100.0));
+    connect(m_amllScrimStrengthSlider, &QSlider::valueChanged, this, [](int value) {
+        LyricEffectSettings::instance().setBackgroundScrimStrength(value / 100.0);
+    });
+
+    const auto bindPercentLabel = [this](QSlider *slider, QLabel *label) {
+        connect(slider, &QSlider::valueChanged, this, [label](int value) {
+            label->setText(QStringLiteral("%1%").arg(value));
+        });
+    };
+    const auto bindScaleLabel = [this](QSlider *slider, QLabel *label) {
+        connect(slider, &QSlider::valueChanged, this, [label](int value) {
+            label->setText(
+                QStringLiteral("×%1").arg(value / 100.0, 0, 'f', 2));
+        });
+    };
+    bindPercentLabel(m_lyricFontScaleSlider, m_lyricFontScaleValue);
+    bindPercentLabel(m_lyricLineSpacingSlider, m_lyricLineSpacingValue);
+    bindPercentLabel(m_lyricAlignSlider, m_lyricAlignValue);
+    bindPercentLabel(m_lyricInactiveScaleSlider, m_lyricInactiveScaleValue);
+    bindPercentLabel(m_lyricBlurStrengthSlider, m_lyricBlurStrengthValue);
+    bindScaleLabel(m_lyricSpringStrengthSlider, m_lyricSpringStrengthValue);
+    bindScaleLabel(m_lyricSpringDampingSlider, m_lyricSpringDampingValue);
+    bindPercentLabel(m_amllFlowSpeedSlider, m_amllFlowSpeedValue);
+    bindPercentLabel(m_amllBassReactivitySlider, m_amllBassReactivityValue);
+    bindPercentLabel(m_amllScrimStrengthSlider, m_amllScrimStrengthValue);
+
+    m_lyricEffectsResetBtn =
+        new QPushButton(I18n::instance().tr(QStringLiteral("effectsResetDefaults")),
+                        cardBody);
+    m_lyricEffectsResetBtn->setObjectName("settingsLinkBtn");
+    m_lyricEffectsResetBtn->setCursor(Qt::PointingHandCursor);
+    m_lyricEffectsResetBtn->setFlat(true);
+    connect(m_lyricEffectsResetBtn, &QPushButton::clicked, this, [this]() {
+        LyricEffectSettings::instance().resetToDefaults();
+        refreshLyricEffectControls();
+    });
+    cardLay->addWidget(m_lyricEffectsResetBtn, 0, Qt::AlignLeft);
+
+    refreshLyricEffectControls();
+}
+
+void SettingsPage::refreshLyricEffectControls()
+{
+    const auto &fx = LyricEffectSettings::instance();
+    const auto setPercent = [](QLabel *label, int value) {
+        if (label)
+            label->setText(QStringLiteral("%1%").arg(value));
+    };
+    const auto setScale = [](QLabel *label, int value) {
+        if (label)
+            label->setText(QStringLiteral("×%1").arg(value / 100.0, 0, 'f', 2));
+    };
+
+    const QList<QSlider *> sliders = {
+        m_lyricFontScaleSlider, m_lyricLineSpacingSlider,
+        m_lyricAlignSlider, m_lyricInactiveScaleSlider,
+        m_lyricBlurStrengthSlider, m_lyricSpringStrengthSlider,
+        m_lyricSpringDampingSlider, m_amllFlowSpeedSlider,
+        m_amllBassReactivitySlider, m_amllScrimStrengthSlider,
+    };
+    for (QSlider *slider : sliders) {
+        if (slider)
+            slider->blockSignals(true);
+    }
+    const QList<ToggleSwitch *> toggles = {
+        m_lyricEffectsToggle, m_lyricDistanceBlurToggle,
+        m_lyricWordSweepToggle, m_lyricWordFloatToggle,
+        m_lyricEmphasisGlowToggle, m_amllBackgroundToggle,
+    };
+    for (ToggleSwitch *toggle : toggles) {
+        if (toggle)
+            toggle->blockSignals(true);
+    }
+
+    if (m_lyricEffectsToggle)
+        m_lyricEffectsToggle->setChecked(fx.lyricsEnabled());
+    if (m_lyricFontScaleSlider)
+        m_lyricFontScaleSlider->setValue(qRound(fx.fontScale() * 100.0));
+    if (m_lyricLineSpacingSlider)
+        m_lyricLineSpacingSlider->setValue(qRound(fx.lineSpacing() * 100.0));
+    if (m_lyricAlignSlider)
+        m_lyricAlignSlider->setValue(qRound(fx.alignPosition() * 100.0));
+    if (m_lyricInactiveScaleSlider)
+        m_lyricInactiveScaleSlider->setValue(qRound(fx.inactiveScale() * 100.0));
+    if (m_lyricDistanceBlurToggle)
+        m_lyricDistanceBlurToggle->setChecked(fx.distanceBlur());
+    if (m_lyricBlurStrengthSlider)
+        m_lyricBlurStrengthSlider->setValue(qRound(fx.blurStrength() * 100.0));
+    if (m_lyricWordSweepToggle)
+        m_lyricWordSweepToggle->setChecked(fx.wordSweep());
+    if (m_lyricWordFloatToggle)
+        m_lyricWordFloatToggle->setChecked(fx.wordFloat());
+    if (m_lyricEmphasisGlowToggle)
+        m_lyricEmphasisGlowToggle->setChecked(fx.emphasisGlow());
+    if (m_lyricSpringStrengthSlider)
+        m_lyricSpringStrengthSlider->setValue(qRound(fx.springStrength() * 100.0));
+    if (m_lyricSpringDampingSlider)
+        m_lyricSpringDampingSlider->setValue(qRound(fx.springDamping() * 100.0));
+    if (m_amllBackgroundToggle)
+        m_amllBackgroundToggle->setChecked(fx.backgroundEnabled());
+    if (m_amllFlowSpeedSlider)
+        m_amllFlowSpeedSlider->setValue(qRound(fx.backgroundFlowSpeed() * 100.0));
+    if (m_amllBassReactivitySlider)
+        m_amllBassReactivitySlider->setValue(
+            qRound(fx.backgroundBassReactivity() * 100.0));
+    if (m_amllScrimStrengthSlider)
+        m_amllScrimStrengthSlider->setValue(
+            qRound(fx.backgroundScrimStrength() * 100.0));
+
+    for (QSlider *slider : sliders) {
+        if (slider)
+            slider->blockSignals(false);
+    }
+    for (ToggleSwitch *toggle : toggles) {
+        if (toggle)
+            toggle->blockSignals(false);
+    }
+
+    setPercent(m_lyricFontScaleValue, m_lyricFontScaleSlider->value());
+    setPercent(m_lyricLineSpacingValue, m_lyricLineSpacingSlider->value());
+    setPercent(m_lyricAlignValue, m_lyricAlignSlider->value());
+    setPercent(m_lyricInactiveScaleValue, m_lyricInactiveScaleSlider->value());
+    setPercent(m_lyricBlurStrengthValue, m_lyricBlurStrengthSlider->value());
+    setScale(m_lyricSpringStrengthValue, m_lyricSpringStrengthSlider->value());
+    setScale(m_lyricSpringDampingValue, m_lyricSpringDampingSlider->value());
+    setPercent(m_amllFlowSpeedValue, m_amllFlowSpeedSlider->value());
+    setPercent(m_amllBassReactivityValue, m_amllBassReactivitySlider->value());
+    setPercent(m_amllScrimStrengthValue, m_amllScrimStrengthSlider->value());
+
+    const bool lyricsOn = fx.lyricsEnabled();
+    const bool blurOn = lyricsOn && fx.distanceBlur();
+    if (m_lyricFontScaleSlider) m_lyricFontScaleSlider->setEnabled(lyricsOn);
+    if (m_lyricLineSpacingSlider) m_lyricLineSpacingSlider->setEnabled(lyricsOn);
+    if (m_lyricAlignSlider) m_lyricAlignSlider->setEnabled(lyricsOn);
+    if (m_lyricInactiveScaleSlider) m_lyricInactiveScaleSlider->setEnabled(lyricsOn);
+    if (m_lyricDistanceBlurToggle) m_lyricDistanceBlurToggle->setEnabled(lyricsOn);
+    if (m_lyricBlurStrengthSlider) m_lyricBlurStrengthSlider->setEnabled(blurOn);
+    if (m_lyricWordSweepToggle) m_lyricWordSweepToggle->setEnabled(lyricsOn);
+    if (m_lyricWordFloatToggle) m_lyricWordFloatToggle->setEnabled(lyricsOn);
+    if (m_lyricEmphasisGlowToggle) m_lyricEmphasisGlowToggle->setEnabled(lyricsOn);
+    if (m_lyricSpringStrengthSlider) m_lyricSpringStrengthSlider->setEnabled(lyricsOn);
+    if (m_lyricSpringDampingSlider) m_lyricSpringDampingSlider->setEnabled(lyricsOn);
+
+    const bool backgroundOn = fx.backgroundEnabled();
+    if (m_amllFlowSpeedSlider)
+        m_amllFlowSpeedSlider->setEnabled(backgroundOn);
+    if (m_amllBassReactivitySlider)
+        m_amllBassReactivitySlider->setEnabled(backgroundOn);
+    if (m_amllScrimStrengthSlider)
+        m_amllScrimStrengthSlider->setEnabled(backgroundOn);
 }
 
 void SettingsPage::setupPersonalizationSection(QVBoxLayout *cardLay, QWidget *cardBody)
@@ -967,6 +1331,15 @@ void SettingsPage::retranslate()
         m_themeCombo->setItemText(1, I18n::instance().tr("themeDark"));
         m_themeCombo->setItemText(2, I18n::instance().tr("themeLight"));
     }
+    for (auto it = m_boundLabels.cbegin(); it != m_boundLabels.cend(); ++it) {
+        if (it.key())
+            it.key()->setText(I18n::instance().tr(it.value()));
+    }
+    if (m_lyricEffectsResetBtn) {
+        m_lyricEffectsResetBtn->setText(
+            I18n::instance().tr(QStringLiteral("effectsResetDefaults")));
+    }
+    refreshLyricEffectControls();
     if (m_personalizeSectionLabel)
         m_personalizeSectionLabel->setText(I18n::instance().tr("personalization"));
     if (m_backdropKindLabel)
