@@ -446,7 +446,10 @@ struct AmllLyricsView::Impl {
     bool pointerInside = false;
 
     qreal manualScroll = 0;
+    qreal manualScrollMin = 0;
+    qreal manualScrollMax = 0;
     bool autoAlignSuspended = false;
+    int frozenFocusIndex = -1;
     qint64 interactionEndMs = 0;
     qreal inertiaVelocity = 0;
     bool touchScrolling = false;
@@ -487,8 +490,6 @@ AmllLyricsView::AmllLyricsView(QWidget *parent)
             m_impl->inertiaVelocity *= std::pow(0.95, delta * 60.0);
             if (qAbs(m_impl->inertiaVelocity) < 4.0)
                 m_impl->inertiaVelocity = 0;
-            const qreal limit = qMax<qreal>(height() * 2.0, 1.0);
-            m_impl->manualScroll = std::clamp(m_impl->manualScroll, -limit, limit);
             updateLineTargets(false, false);
         }
 
@@ -519,6 +520,7 @@ void AmllLyricsView::setLyrics(const QVector<LyricLine> &lyrics)
     m_impl->manualScroll = 0;
     m_impl->inertiaVelocity = 0;
     m_impl->autoAlignSuspended = false;
+    m_impl->frozenFocusIndex = -1;
     m_impl->hoveredIndex = -1;
     m_impl->endOfSong = false;
 
@@ -634,7 +636,9 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
         : -1;
 
     int focus = qBound(0, m_impl->scrollToIndex, lineCount - 1);
-    if (hasInterlude)
+    if (m_impl->autoAlignSuspended && m_impl->frozenFocusIndex >= 0)
+        focus = qBound(0, m_impl->frozenFocusIndex, lineCount - 1);
+    else if (hasInterlude)
         focus = qMax(0, interludeAnchor);
     else if (m_impl->endOfSong)
         focus = lineCount - 1;
@@ -646,10 +650,17 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
         focalTop += focusLine.height;
         focalHeight = interludeHeight;
     }
-    const qreal base = height() * kAlignPosition
+    const qreal anchorBase = height() * kAlignPosition
         - focalTop
-        - focalHeight * 0.5
-        + m_impl->manualScroll;
+        - focalHeight * 0.5;
+    const qreal contentBottom = anchorBase + m_impl->lines.back().top
+        + m_impl->lines.back().height
+        + (hasInterlude ? interludeHeight : 0.0);
+    m_impl->manualScrollMax = height() * 0.78 - anchorBase;
+    m_impl->manualScrollMin = height() * 0.22 - contentBottom;
+    m_impl->manualScroll = std::clamp(
+        m_impl->manualScroll, m_impl->manualScrollMin, m_impl->manualScrollMax);
+    const qreal base = anchorBase + m_impl->manualScroll;
 
     qreal delay = 0;
     qreal delayStep = stagger ? 0.05 : 0.0;
@@ -661,6 +672,8 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
         LineLayout &line = m_impl->lines[static_cast<std::size_t>(i)];
         setPosYSpringPolicy(line, seeking, hasInterlude, intervalMs,
                             m_impl->endOfSong);
+        if (m_impl->autoAlignSuspended)
+            line.y.setParams(190, 29, 1.0);
         const qreal extra = hasInterlude && i > interludeAnchor
             ? interludeHeight
             : 0.0;
@@ -674,7 +687,7 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
 
         if (target + line.height >= 0) {
             delay += delayStep;
-            if (i >= m_impl->scrollToIndex)
+            if (i >= focus)
                 delayStep /= 1.05;
         }
     }
@@ -778,10 +791,12 @@ bool AmllLyricsView::updateTimeline(qint64 positionMs, bool seek)
         && now - m_impl->interactionEndMs >= kAutoAlignResumeDelayMs) {
         m_impl->manualScroll = 0;
         m_impl->autoAlignSuspended = false;
+        m_impl->frozenFocusIndex = -1;
     }
     if (jumped && !m_impl->touchScrolling) {
         m_impl->manualScroll = 0;
         m_impl->autoAlignSuspended = false;
+        m_impl->frozenFocusIndex = -1;
     }
 
     bool highlightedChanged = false;
@@ -1211,9 +1226,10 @@ void AmllLyricsView::wheelEvent(QWheelEvent *event)
     const qreal delta = !pixelDelta.isNull()
         ? pixelDelta.y()
         : event->angleDelta().y() * 0.55;
-    m_impl->manualScroll -= delta;
-    const qreal limit = qMax<qreal>(height() * 2.0, 1.0);
-    m_impl->manualScroll = std::clamp(m_impl->manualScroll, -limit, limit);
+    // 与原生滚动方向一致：滚轮向上看更早的歌词（内容向下），向下看后续歌词。
+    if (!m_impl->autoAlignSuspended)
+        m_impl->frozenFocusIndex = m_impl->scrollToIndex;
+    m_impl->manualScroll += delta;
     m_impl->autoAlignSuspended = true;
     m_impl->interactionEndMs = QDateTime::currentMSecsSinceEpoch();
     m_impl->inertiaVelocity = 0;
@@ -1278,6 +1294,8 @@ bool AmllLyricsView::event(QEvent *event)
         auto *touch = static_cast<QTouchEvent *>(event);
         const auto points = touch->points();
         if (event->type() == QEvent::TouchBegin && !points.isEmpty()) {
+            if (!m_impl->autoAlignSuspended)
+                m_impl->frozenFocusIndex = m_impl->scrollToIndex;
             m_impl->touchScrolling = true;
             m_impl->touchStart = points.first().position();
             m_impl->touchLastY = m_impl->touchStart.y();
@@ -1295,7 +1313,8 @@ bool AmllLyricsView::event(QEvent *event)
             const qreal dt = qMax<qreal>(1.0, now - m_impl->touchLastTimeMs) / 1000.0;
             m_impl->manualScroll =
                 m_impl->touchStartScroll + (y - m_impl->touchStart.y());
-            m_impl->touchVelocity = (m_impl->touchLastY - y) / dt;
+            // 手指上推时内容继续向上滑，惯性方向必须与最后一帧位移一致。
+            m_impl->touchVelocity = (y - m_impl->touchLastY) / dt;
             m_impl->touchLastY = y;
             m_impl->touchLastTimeMs = now;
             m_impl->interactionEndMs = now;

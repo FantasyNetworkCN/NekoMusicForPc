@@ -36,13 +36,23 @@ protected:
         if (event->type() != QEvent::Wheel)
             return QObject::eventFilter(watched, event);
 
+        auto *watchedWidget = qobject_cast<QWidget *>(watched);
+        if (watchedWidget
+            && watchedWidget->property("nekoDisableSmoothScroll").toBool()) {
+            return false;
+        }
+
         auto *area = qobject_cast<QAbstractScrollArea *>(watched);
         if (!area) {
-            auto *widget = qobject_cast<QWidget *>(watched);
-            area = widget ? qobject_cast<QAbstractScrollArea *>(widget->parentWidget()) : nullptr;
+            area = watchedWidget
+                ? qobject_cast<QAbstractScrollArea *>(
+                      watchedWidget->parentWidget())
+                : nullptr;
         }
         if (!area || watched != area->viewport())
             return QObject::eventFilter(watched, event);
+        if (area->property("nekoDisableSmoothScroll").toBool())
+            return false;
 
         auto *wheel = static_cast<QWheelEvent *>(event);
         const QPoint pixelDelta = wheel->pixelDelta();

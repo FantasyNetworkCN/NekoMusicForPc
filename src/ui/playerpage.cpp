@@ -2668,6 +2668,13 @@ bool PlayerPage::eventFilter(QObject *watched, QEvent *event)
                                   || (lyricVp && watchedWidget && lyricVp->isAncestorOf(watchedWidget));
         if (inLyricsArea) {
             if (event->type() == QEvent::Wheel) {
+                // QScrollArea 会先按自己的隐藏滚动条消费滚轮，和 AMLL 画布内部
+                // 的滚动叠加后会出现“滚到一半停住”。歌词滚动完全由画布接管。
+                if (watched == lyricVp && m_amllLyricsView) {
+                    QCoreApplication::sendEvent(m_amllLyricsView, event);
+                    pauseLyricAutoScroll();
+                    return true;
+                }
                 // 每次滚轮都重新起算 3 秒（QTimer::start 会重置单次计时器），
                 // 即连续滚动期间一直暂停自动定位，停手 3 秒后才回到当前播放行
                 pauseLyricAutoScroll();
@@ -2960,6 +2967,7 @@ void PlayerPage::setupUi()
 
     m_lyricsScroll = new QScrollArea(m_rightPanel);
     m_lyricsScroll->setObjectName("lyricsScroll");
+    m_lyricsScroll->setProperty("nekoDisableSmoothScroll", true);
     m_lyricsScroll->setWidgetResizable(true);
     m_lyricsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_lyricsScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
