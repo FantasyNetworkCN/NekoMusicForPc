@@ -1266,8 +1266,16 @@ void AmllLyricsView::mousePressEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton) {
         const int index = lineIndexAt(event->position());
         if (index >= 0) {
-            emit seekRequested(
-                m_impl->lines[static_cast<std::size_t>(index)].startMs);
+            const qint64 targetMs =
+                m_impl->lines[static_cast<std::size_t>(index)].startMs;
+            // 先在本画布内建立目标并启动弹簧动画，避免等待音频引擎异步
+            // 回传 positionChanged 时先出现一帧无动画瞬移。
+            m_impl->inertiaVelocity = 0;
+            m_impl->touchScrolling = false;
+            m_impl->autoAlignSuspended = false;
+            m_impl->frozenFocusIndex = -1;
+            setPosition(targetMs, true);
+            emit seekRequested(targetMs);
             event->accept();
             return;
         }
