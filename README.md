@@ -8,6 +8,33 @@
 # 本平台唯一官网 https://music.nekocore.cn
 - ## 请勿通过非官方渠道获取安装包。本站被大量非法黑产生成盗版客户端诈骗，如你通过第三方平台获取安装包导致被骗本站拒绝一切赔偿
 
+<p align="center">
+  <img src="docs/images/readme/pc-hero.png" alt="Neko 歌姬计划 PC 首页与沉浸播放页" width="100%">
+</p>
+
+## 项目介绍
+
+Neko 歌姬计划 PC 客户端基于 Qt 6 与 C++ 构建，面向 Windows、Linux 与 macOS。
+客户端连接 Neko 自托管曲库，在同一套桌面界面中提供在线播放、本地曲库、收藏、歌单、
+逐字歌词、下载、外部歌单导入和一起听。
+
+- **桌面级播放体验**：沉浸播放页、桌面歌词、系统媒体控制、播放队列与音质切换。
+- **本地与在线统一**：在线歌曲、本地文件、最近播放和下载管理共用同一播放队列。
+- **外观自定义**：浅色 / 深色 / 跟随系统，支持自定义图片、纯色背景与玻璃效果。
+- **外部歌单迁移**：从网易云音乐、QQ 音乐、酷狗音乐导入歌单并匹配站内曲库。
+- **一起听**：服务端统一同步房间播放状态，支持成员头像与房间临时播放列表。
+- **内置 MCP 服务**：可让支持 MCP 的 AI 客户端查询和控制播放。
+
+### 界面预览
+
+| 发现音乐 | 沉浸播放页 |
+| --- | --- |
+| ![PC 首页](docs/images/readme/pc-home.png) | ![PC 播放页](docs/images/readme/pc-player.png) |
+
+| 热门音乐列表 | 设置与外观 |
+| --- | --- |
+| ![PC 歌曲列表](docs/images/readme/pc-songs.png) | ![PC 设置页](docs/images/readme/pc-settings.png) |
+
 ### 获取外部歌单api
 获取qq歌单列表`https://music.nekocore.cn/loser1/getSongListDetail?disstid=歌单id`
 获取网易云歌单列表`https://music.nekocore.cn/loser/playlist/track/all?id=歌单id`
