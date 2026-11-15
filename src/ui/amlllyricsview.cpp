@@ -1125,7 +1125,7 @@ void AmllLyricsView::paintEvent(QPaintEvent *event)
         line.screenRect = QRectF(0, y, width(), qMax<qreal>(1.0, scaledHeight));
         const bool hovered = m_impl->pointerInside && m_impl->hoveredIndex == i;
         qreal blur = 0;
-        if (!hovered) {
+        if (!m_impl->pointerInside && !m_impl->autoAlignSuspended && !hovered) {
             if (line.highlighted) {
                 blur = 0;
             } else {
