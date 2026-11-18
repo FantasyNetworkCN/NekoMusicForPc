@@ -50,12 +50,13 @@ jobs:
           chmod 600 "$HOME/.ssh/aur"
 
           # AUR 的 SSH 主机公钥不是机密，固定在仓库中防止中间人攻击。
-          cat > "$HOME/.ssh/known_hosts" <<'EOF'
-          aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN
-          EOF
+          known_hosts="$HOME/.ssh/known_hosts"
+          printf '%s\n' \
+            'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' \
+            > "$known_hosts"
           chmod 644 "$HOME/.ssh/known_hosts"
 
-          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes"
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o UserKnownHostsFile=$known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes"
           export GIT_TERMINAL_PROMPT=0
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
