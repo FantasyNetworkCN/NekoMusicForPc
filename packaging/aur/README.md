@@ -28,24 +28,19 @@ cat "$HOME/.ssh/aur_nekomusic.pub"
 
 登录 AUR，在 **My Account → SSH Public Key** 中添加公钥内容。
 
-### 2. 配置 GitHub Secrets
+### 2. 配置 GitHub Secret
 
-在仓库 **Settings → Secrets and variables → Actions** 中添加：
+AUR 的 SSH 主机公钥不是机密，已经固定在
+`.github/workflows/sync-aur.yml` 中并启用严格主机校验，无需另配 Secret。
 
-- `AUR_SSH_PRIVATE_KEY`：`$HOME/.ssh/aur_nekomusic` 的完整内容；
-- `AUR_KNOWN_HOSTS`：AUR 的 SSH 主机公钥。
+在仓库 **Settings → Secrets and variables → Actions** 中添加
+`AUR_SSH_PRIVATE_KEY`：`$HOME/.ssh/aur_nekomusic` 的完整内容。
 
 可用以下命令写入 GitHub（需要已安装并登录 `gh`）：
 
 ```bash
 gh secret set AUR_SSH_PRIVATE_KEY < "$HOME/.ssh/aur_nekomusic"
-
-ssh-keyscan -t ed25519 aur.archlinux.org \
-  | gh secret set AUR_KNOWN_HOSTS
 ```
-
-写入前应先核对 `ssh-keyscan` 返回的主机密钥指纹。工作流启用了
-`StrictHostKeyChecking=yes`，不会静默信任未知主机。
 
 ### 3. 验证
 
