@@ -46,7 +46,7 @@ fi
 # makepkg 拒绝以 root 运行；CI 容器默认是 root，因此仅在生成元数据时
 # 切换到 nobody，输出重定向仍由当前用户执行。
 if [[ "$(id -u)" -eq 0 ]]; then
-  runuser -u nobody -- env HOME=/tmp makepkg --printsrcinfo > .SRCINFO
+  runuser -u nobody -- env HOME=/tmp BUILDDIR=/tmp makepkg --printsrcinfo > .SRCINFO
 else
   makepkg --printsrcinfo > .SRCINFO
 fi
