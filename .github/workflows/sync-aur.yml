@@ -1,0 +1,112 @@
+name: Sync AUR
+
+# AUR 只跟踪默认开发分支 qt6。每次推送到该分支都会固定到新的提交，
+# 重新生成 .SRCINFO 并推送到 aur@aur.archlinux.org。
+on:
+  push:
+    branches:
+      - qt6
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-aur
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Update AUR package
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    timeout-minutes: 20
+
+    steps:
+      # actions/checkout 需要容器内已有 git，因此先安装基础工具。
+      - name: Install git and OpenSSH
+        run: pacman -Syu --noconfirm --needed git openssh
+
+      - name: Checkout source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Update and push AUR package
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_KNOWN_HOSTS: ${{ secrets.AUR_KNOWN_HOSTS }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${AUR_SSH_PRIVATE_KEY}" ]]; then
+            echo "::error::缺少仓库 Secret：AUR_SSH_PRIVATE_KEY"
+            exit 1
+          fi
+          if [[ -z "${AUR_KNOWN_HOSTS}" ]]; then
+            echo "::error::缺少仓库 Secret：AUR_KNOWN_HOSTS"
+            exit 1
+          fi
+
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "${AUR_SSH_PRIVATE_KEY}" > "$HOME/.ssh/aur"
+          chmod 600 "$HOME/.ssh/aur"
+          printf '%s\n' "${AUR_KNOWN_HOSTS}" > "$HOME/.ssh/known_hosts"
+          chmod 644 "$HOME/.ssh/known_hosts"
+
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes"
+          export GIT_TERMINAL_PROMPT=0
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if ! git clone --quiet "ssh://aur@aur.archlinux.org/neko-cloud-music.git" aur; then
+            echo "::error::无法克隆 AUR 仓库。请确认包 neko-cloud-music 已存在，且 AUR SSH 公钥已添加。"
+            exit 1
+          fi
+
+          current_commit="$(sed -n 's/^_commit=//p' aur/PKGBUILD)"
+          if [[ "${current_commit}" == "${SOURCE_COMMIT}" ]]; then
+            echo "AUR 仓库已指向 ${SOURCE_COMMIT}，无需更新。"
+            exit 0
+          fi
+
+          current_pkgver="$(sed -n 's/^pkgver=//p' aur/PKGBUILD)"
+          current_pkgrel="$(sed -n 's/^pkgrel=//p' aur/PKGBUILD)"
+          next_pkgver="$(
+            sed -n 's/^[[:space:]]*VERSION[[:space:]]*\([0-9.]*\).*/\1/p' CMakeLists.txt \
+              | head -1
+          )"
+          if [[ -z "${next_pkgver}" ]]; then
+            echo "::error::无法从 CMakeLists.txt 读取 VERSION"
+            exit 1
+          fi
+
+          # 上游版本不变时递增 pkgrel，确保 AUR 助手能识别到新包。
+          if [[ "${current_pkgver}" == "${next_pkgver}" ]]; then
+            if [[ ! "${current_pkgrel}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::AUR PKGBUILD 中的 pkgrel 无效：${current_pkgrel}"
+              exit 1
+            fi
+            next_pkgrel=$((current_pkgrel + 1))
+          else
+            next_pkgrel=1
+          fi
+
+          bash packaging/aur/sync-aur.sh "${SOURCE_COMMIT}" "${next_pkgrel}"
+
+          cp PKGBUILD .SRCINFO aur/
+          cd aur
+
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "AUR 仓库已是最新，无需提交。"
+            exit 0
+          fi
+
+          pkgver="$(sed -n 's/^pkgver=//p' PKGBUILD)"
+          pkgrel="$(sed -n 's/^pkgrel=//p' PKGBUILD)"
+          git commit -m "upgpkg: neko-cloud-music ${pkgver}-${pkgrel} (${SOURCE_COMMIT:0:7})"
+          git push origin HEAD:master
