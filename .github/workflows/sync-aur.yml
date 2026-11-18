@@ -20,7 +20,8 @@ jobs:
     name: Update AUR package
     runs-on: ubuntu-latest
     container:
-      image: archlinux:base-devel
+      # 固定 digest，避免 mutable tag 被替换后读取到 AUR 私钥。
+      image: archlinux:base-devel@sha256:fa2d4ce3310ddd90a4208e5168be8ad367da5129af1245f38fd2d803bcbe3239
     timeout-minutes: 20
 
     steps:
@@ -29,7 +30,8 @@ jobs:
         run: pacman -Syu --noconfirm --needed git openssh
 
       - name: Checkout source
-        uses: actions/checkout@v7
+        # v7；固定到完整提交 SHA，避免 tag 被移动。
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
           persist-credentials: false
