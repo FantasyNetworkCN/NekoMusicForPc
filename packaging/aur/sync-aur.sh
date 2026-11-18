@@ -43,6 +43,12 @@ if [[ -n "$pkgrel" ]] && ! grep -q "^pkgrel=${pkgrel}$" PKGBUILD; then
   exit 1
 fi
 
-makepkg --printsrcinfo > .SRCINFO
+# makepkg 拒绝以 root 运行；CI 容器默认是 root，因此仅在生成元数据时
+# 切换到 nobody，输出重定向仍由当前用户执行。
+if [[ "$(id -u)" -eq 0 ]]; then
+  runuser -u nobody -- env HOME=/tmp makepkg --printsrcinfo > .SRCINFO
+else
+  makepkg --printsrcinfo > .SRCINFO
+fi
 
 echo "Synced AUR pkgver=${pkgver}, commit=${commit}"
