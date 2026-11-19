@@ -8,6 +8,7 @@
 #include "batchactionbar.h"
 #include "coverlistcard.h"
 #include "core/apiclient.h"
+#include "core/appearancesettings.h"
 #include "core/i18n.h"
 #include "core/covercache.h"
 #include "core/musicdownloadmanager.h"
@@ -19,6 +20,7 @@
 #include "ui/songcontextmenu.h"
 #include "ui/songmenubuilder.h"
 #include "ui/toast.h"
+#include "ui/liquidglass.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -71,6 +73,14 @@ public:
             countLbl->setStyleSheet(QStringLiteral("QLabel { font-size: 11px; color: rgba(128,128,128,0.9); }"));
             lay->addWidget(countLbl);
         }
+        m_liquidProgress = AppearanceSettings::instance().liquidGlassProgress();
+        connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+                this, [this](qreal progress) {
+                    m_liquidProgress = progress;
+                    if (progress <= 0)
+                        m_surface.clear();
+                    update();
+                });
     }
 
     std::function<void(const QVariantMap &)> onClicked;
@@ -83,12 +93,43 @@ protected:
         QWidget::mousePressEvent(e);
     }
 
-    void enterEvent(QEnterEvent *) override
+    void paintEvent(QPaintEvent *) override
     {
-        setStyleSheet(QStringLiteral("SearchArtistTile { background: rgba(22, 119, 184,0.08); border-radius: 16px; }"));
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        const QRectF bounds = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+        const bool dark = Theme::ThemeManager::instance().isDarkMode();
+        bool glassPainted = false;
+        if (m_liquidProgress > 0) {
+            const QPoint origin = mapTo(window(), QPoint());
+            painter.save();
+            painter.setOpacity(m_liquidProgress);
+            glassPainted = m_surface.paint(
+                painter, bounds, LiquidGlass::shellBackdrop(this),
+                QRectF(origin, size()), 12, dark, LiquidGlass::Material::Chrome,
+                1.0 - (m_hovered ? 0.18 : 0.0));
+            painter.restore();
+        }
+        if (m_hovered) {
+            QPainterPath path;
+            path.addRoundedRect(bounds, 12, 12);
+            painter.fillPath(path, QColor(22, 119, 184, glassPainted ? 20 : 28));
+        }
     }
 
-    void leaveEvent(QEvent *) override { setStyleSheet(QString()); }
+    void enterEvent(QEnterEvent *event) override
+    {
+        m_hovered = true;
+        update();
+        QWidget::enterEvent(event);
+    }
+
+    void leaveEvent(QEvent *event) override
+    {
+        m_hovered = false;
+        update();
+        QWidget::leaveEvent(event);
+    }
 
 private:
     void loadAvatar()
@@ -107,6 +148,9 @@ private:
 
     QVariantMap m_artist;
     QLabel *m_cover = nullptr;
+    bool m_hovered = false;
+    qreal m_liquidProgress = 0;
+    LiquidGlass::Surface m_surface;
 };
 
 QString playlistCoverUrl(const QVariantMap &pl)

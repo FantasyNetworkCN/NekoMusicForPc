@@ -23,7 +23,7 @@ private:
     QImage m_image;
 };
 
-enum class Material { Chrome, Popup, SwitchTrack, SwitchThumb };
+enum class Material { Chrome, Popup, ListItem, SwitchTrack, SwitchThumb };
 
 struct ControlRecipe {
     QRectF track;

@@ -5,6 +5,7 @@
 #include <functional>
 
 #include "core/musicinfo.h"
+#include "ui/liquidglass.h"
 
 class QLabel;
 class QPushButton;
@@ -108,6 +109,7 @@ private:
     /** 批量模式下本次按下是否落在整行上（松手时才算切换，避免误触） */
     bool m_batchPressRow = false;
     bool m_downloadActive = false;
+    qreal m_liquidProgress = 0;
     qint64 m_progressReceived = 0;
     qint64 m_progressTotal = 0;
     QString m_coverKey;
@@ -137,4 +139,5 @@ private:
     int m_durationWidth = 50;
 
     QMetaObject::Connection m_coverConn;
+    LiquidGlass::Surface m_liquidSurface;
 };

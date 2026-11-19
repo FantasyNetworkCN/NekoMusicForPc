@@ -5,7 +5,9 @@
 #include "core/audioquality.h"
 #include "core/i18n.h"
 #include "core/listmetaformat.h"
+#include "core/appearancesettings.h"
 #include "ui/localmusicbadgelabel.h"
+#include "ui/liquidglass.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
 #include "ui/svgicon.h"
@@ -159,6 +161,14 @@ SongCardWidget::SongCardWidget(QWidget *parent)
     setAttribute(Qt::WA_StyledBackground, false);
     rebuildLayout();
     applyTheme();
+    m_liquidProgress = AppearanceSettings::instance().liquidGlassProgress();
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+            this, [this](qreal progress) {
+                m_liquidProgress = progress;
+                if (progress <= 0)
+                    m_liquidSurface.clear();
+                update();
+            });
 }
 
 void SongCardWidget::setDurationColumnWidth(int width)
@@ -915,14 +925,35 @@ void SongCardWidget::paintEvent(QPaintEvent *)
     path.addRoundedRect(r, 12, 12);
 
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    if (m_batchMode && m_batchChecked) {
-        p.fillPath(path, batchFill(dark));
-        p.setPen(QPen(batchBorder(), 2));
-        p.drawPath(path);
-        return;
+    const QColor normalFill = songFill(dark, m_playing,
+                                       !m_batchMode && m_hover && !m_playing);
+    bool glassPainted = false;
+    if (m_liquidProgress > 0) {
+        if (m_liquidProgress < 1.0)
+            p.fillPath(path, (m_batchMode && m_batchChecked) ? batchFill(dark) : normalFill);
+        const QPoint sourceOrigin = mapTo(window(), body.topLeft().toPoint());
+        p.save();
+        p.setOpacity(m_liquidProgress);
+        glassPainted = m_liquidSurface.paint(
+            p, body, LiquidGlass::shellBackdrop(this),
+            QRectF(sourceOrigin, body.size()), 12, dark, LiquidGlass::Material::ListItem,
+            1.0 - (m_hover ? 0.18 : 0.0));
+        p.restore();
     }
-    p.fillPath(path, songFill(dark, m_playing, !m_batchMode && m_hover && !m_playing));
-    p.setPen(QPen(songBorder(m_playing, !m_batchMode && m_hover && !m_playing), 1));
+
+    if (!glassPainted)
+        p.fillPath(path, (m_batchMode && m_batchChecked) ? batchFill(dark) : normalFill);
+    else if (m_batchMode && m_batchChecked)
+        p.fillPath(path, QColor(kPrimary.red(), kPrimary.green(), kPrimary.blue(), 38));
+    else if (m_playing)
+        p.fillPath(path, QColor(kPrimary.red(), kPrimary.green(), kPrimary.blue(), 34));
+    else if (m_hover)
+        p.fillPath(path, QColor(kPrimary.red(), kPrimary.green(), kPrimary.blue(), 20));
+
+    const QPen border = m_batchMode && m_batchChecked
+        ? QPen(batchBorder(), 2)
+        : QPen(songBorder(m_playing, !m_batchMode && m_hover && !m_playing), 1);
+    p.setPen(border);
     p.drawPath(path);
 }
 

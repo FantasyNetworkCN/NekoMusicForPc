@@ -6,8 +6,10 @@
 #include "coverlistcard.h"
 #include "core/covercache.h"
 #include "core/i18n.h"
+#include "core/appearancesettings.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
+#include "ui/liquidglass.h"
 #include "ui/svgicon.h"
 
 #include <QVBoxLayout>
@@ -129,6 +131,14 @@ CoverListCard::CoverListCard(const CoverListItemData &data, QWidget *parent)
     loadCover();
     applyTheme();
     setCellWidth(160);
+    m_liquidProgress = AppearanceSettings::instance().liquidGlassProgress();
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+            this, [this](qreal progress) {
+                m_liquidProgress = progress;
+                if (progress <= 0)
+                    m_liquidSurface.clear();
+                update();
+            });
 }
 
 void CoverListCard::setCellWidth(int width)
@@ -296,8 +306,23 @@ void CoverListCard::paintEvent(QPaintEvent *)
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, true);
 
+    bool glassPainted = false;
+    if (m_liquidProgress > 0) {
+        const QPoint sourceOrigin = mapTo(window(), QPoint());
+        if (m_liquidProgress < 1.0 && m_hovered)
+            p.fillRect(rect(), QColor(22, 119, 184, 18));
+        p.save();
+        p.setOpacity(m_liquidProgress);
+        glassPainted = m_liquidSurface.paint(
+            p, QRectF(rect()), LiquidGlass::shellBackdrop(this),
+            QRectF(sourceOrigin, size()), 16, Theme::ThemeManager::instance().isDarkMode(),
+            LiquidGlass::Material::Chrome, 1.0 - (m_hovered ? 0.16 : 0.0));
+        p.restore();
+    }
     if (m_hovered) {
-        p.fillRect(rect(), QColor(22, 119, 184, 31));
+        QPainterPath hoverPath;
+        hoverPath.addRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 16, 16);
+        p.fillPath(hoverPath, QColor(22, 119, 184, glassPainted ? 16 : 31));
     }
 
     const QRect coverRect(0, 0, m_coverSide, m_coverSide);

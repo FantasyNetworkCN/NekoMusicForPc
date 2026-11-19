@@ -10,6 +10,8 @@
 #include <QPixmap>
 #include <QMetaObject>
 
+#include "ui/liquidglass.h"
+
 class QLabel;
 class QPushButton;
 
@@ -64,6 +66,8 @@ private:
     QLabel *m_nameLbl = nullptr;
     QLabel *m_creatorLbl = nullptr;
     QMetaObject::Connection m_coverConn;
+    qreal m_liquidProgress = 0;
+    LiquidGlass::Surface m_liquidSurface;
 };
 
 /** 供搜索页网格在 resize 时重排 */

@@ -40,6 +40,14 @@ Optics opticsFor(qreal radius, bool dark, Material material, qreal morph)
                 0.17f, dark ? 0.92f : 1.0f};
     }
 
+    if (material == Material::ListItem) {
+        const float energy = float(1.0 + (1.0 - morph) * 0.24);
+        return {float(radius), 5.5f * energy, 2.8f * energy, 0.12f, 0.12f,
+                {dark ? 0.26f : 0.78f, dark ? 0.38f : 0.87f, dark ? 0.54f : 0.96f,
+                 dark ? 0.20f : 0.24f},
+                0.12f, dark ? 0.44f : 0.52f};
+    }
+
     const bool popup = material == Material::Popup;
     const float energy = float(1.0 + (1.0 - morph) * 0.42);
     return {float(radius), (popup ? 26.0f : 22.0f) * energy,
