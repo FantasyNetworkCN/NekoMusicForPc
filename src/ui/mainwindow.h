@@ -283,4 +283,5 @@ private:
     QTimer *m_shellBackdropRebuildTimer = nullptr;
     QPixmap m_shellBackdropCache;
     QSize m_shellBackdropCacheSize;
+    QPixmap m_shellLiquidBackdropCache;
 };

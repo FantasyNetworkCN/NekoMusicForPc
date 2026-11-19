@@ -27,6 +27,18 @@ QRectF textureRect(const QRect &source, const QRect &bounds, const QSize &imageS
 
 Optics opticsFor(qreal radius, bool dark, Material material, qreal morph)
 {
+    if (material == Material::SwitchTrack) {
+        return {float(radius), 6.0f, 3.1f, 0.50f, 0.24f,
+                {dark ? 0.24f : 0.76f, dark ? 0.34f : 0.85f, dark ? 0.46f : 0.94f, 0.40f},
+                0.20f, dark ? 0.78f : 0.86f};
+    }
+    if (material == Material::SwitchThumb) {
+        const float pressure = float(1.0 - morph);
+        return {float(radius), 5.5f, 4.8f + 2.2f * pressure, 0.85f, 0.18f,
+                {0.78f, 0.92f, 1.0f, dark ? 0.58f : 0.65f},
+                0.17f, dark ? 0.92f : 1.0f};
+    }
+
     const bool popup = material == Material::Popup;
     const float energy = float(1.0 + (1.0 - morph) * 0.42);
     return {float(radius), (popup ? 26.0f : 22.0f) * energy,
@@ -116,7 +128,7 @@ void Backdrop::setImage(const QImage &image, const QRect &bounds)
     m_image.setDevicePixelRatio(1.0);
 }
 
-bool Surface::paint(QPainter &painter, const QRect &target, const Backdrop &backdrop,
+bool Surface::paint(QPainter &painter, const QRectF &target, const Backdrop &backdrop,
                     const QRectF &sourceArea, qreal radius, bool dark, Material material, qreal morph)
 {
     if (backdrop.isEmpty() || target.isEmpty() || sourceArea.isEmpty()

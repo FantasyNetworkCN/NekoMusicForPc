@@ -7,6 +7,7 @@
 #include "core/landevicemanager.h"
 #include "core/musicdownloadmanager.h"
 #include "core/i18n.h"
+#include "core/appearancesettings.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
 #include "ui/scrollareafix.h"
@@ -517,6 +518,8 @@ PlaylistPanel::PlaylistPanel(QWidget *parent)
 
     setupUi();
     applyPanelChrome();
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+            this, [this]() { update(); });
 
     connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged, this,
             [this](Theme::ThemeMode) {
@@ -1582,13 +1585,21 @@ void PlaylistPanel::paintEvent(QPaintEvent *event)
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
     const auto *host = parentWidget();
     const qreal reveal = host ? qBound(0.0, qreal(host->width() - x()) / qMax(1, width()), 1.0) : 1.0;
-    if (m_liquidSurface.paint(p, rect(), m_liquidBackdrop, geometry(),
-                              18.0 + (1.0 - reveal) * 12.0, dark,
-                              LiquidGlass::Material::Popup, reveal)) {
+    const qreal progress = AppearanceSettings::instance().liquidGlassProgress();
+    const auto drawGlass = [&]() {
+        return m_liquidSurface.paint(p, rect(), m_liquidBackdrop, geometry(),
+                                     18.0 + (1.0 - reveal) * 12.0, dark,
+                                     LiquidGlass::Material::Popup, reveal);
+    };
+    if (progress >= 1 && drawGlass())
+        return;
+    if (m_fullPlayerMode) {
+        if (progress > 0) {
+            p.setOpacity(progress);
+            drawGlass();
+        }
         return;
     }
-    if (m_fullPlayerMode)
-        return;
 
     p.setRenderHint(QPainter::Antialiasing);
 
@@ -1606,4 +1617,8 @@ void PlaylistPanel::paintEvent(QPaintEvent *event)
     p.fillPath(clip, dark ? QColor(22, 32, 50, 248) : QColor(246, 250, 255, 248));
     p.setPen(QPen(dark ? QColor(255, 255, 255, 22) : QColor(0, 0, 0, 30), 1.0));
     p.drawPath(clip);
+    if (progress > 0 && progress < 1) {
+        p.setOpacity(progress);
+        drawGlass();
+    }
 }

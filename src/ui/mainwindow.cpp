@@ -98,6 +98,8 @@ public:
         m_opacityFx = new QGraphicsOpacityEffect(this);
         m_opacityFx->setOpacity(0.0);
         setGraphicsEffect(m_opacityFx);
+        connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+                this, [this]() { update(); });
         hide();
     }
 
@@ -115,25 +117,22 @@ public:
     {
         if (!host)
             return;
-        m_liquidGlass = AppearanceSettings::instance().liquidGlassEnabled();
-        if (m_liquidGlass && drawerPanel) {
+        const auto &appearance = AppearanceSettings::instance();
+        const bool hasGlass = appearance.liquidGlassEnabled() || appearance.liquidGlassProgress() > 0;
+        if (appearance.liquidGlassEnabled() && drawerPanel) {
             const QRect area = host->rect().adjusted(
                 qMax(0, host->width() - drawerPanel->width() - LiquidGlass::kCaptureMargin),
                 0, 0, 0);
             const QImage frame = LiquidGlass::capture(host, area, this);
-            m_blurPixmap = QPixmap();
             drawerPanel->setLiquidGlassBackdrop(frame, area);
             update();
             return;
         }
-        if (drawerPanel)
+        if (!hasGlass && drawerPanel)
             drawerPanel->setLiquidGlassBackdrop({}, {});
-        QList<QWidget *> exclude;
-        exclude.append(this);
-        if (drawerPanel)
-            exclude.append(drawerPanel);
         const qreal blurRadius = m_fullPlayerMode ? 80.0 : 48.0;
-        m_blurPixmap = GlassPaint::grabBlurredBackdrop(host, exclude, blurRadius);
+        const auto frame = QPixmap::fromImage(LiquidGlass::capture(host, host->rect(), this));
+        m_blurPixmap = GlassPaint::blurredPixmap(frame, host->size(), blurRadius);
         update();
     }
 
@@ -178,10 +177,12 @@ protected:
         Q_UNUSED(event);
         QPainter p(this);
         p.setRenderHint(QPainter::SmoothPixmapTransform, true);
-        if (m_liquidGlass) {
+        const qreal progress = AppearanceSettings::instance().liquidGlassProgress();
+        if (progress > 0)
             p.fillRect(rect(), QColor(0, 0, 0, m_fullPlayerMode ? 25 : 62));
+        if (progress >= 1)
             return;
-        }
+        p.setOpacity(1 - progress);
         if (!m_blurPixmap.isNull())
             p.drawPixmap(rect(), m_blurPixmap);
         else if (!m_fullPlayerMode)
@@ -210,7 +211,6 @@ private:
 
     QPixmap m_blurPixmap;
     bool m_fullPlayerMode = false;
-    bool m_liquidGlass = false;
     QGraphicsOpacityEffect *m_opacityFx = nullptr;
     // QPointer：动画在 DeleteWhenStopped 下由 Qt 自行回收，裸指针会悬垂
     QPointer<QPropertyAnimation> m_fadeAnim;
@@ -508,16 +508,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_shellBackdropRebuildTimer, &QTimer::timeout, this, &MainWindow::rebuildShellBackdropCache);
     connect(&ShellBackdropSettings::instance(), &ShellBackdropSettings::changed, this, [this]() {
         m_shellBackdropCache = QPixmap();
+        m_shellLiquidBackdropCache = QPixmap();
         m_shellBackdropCacheSize = QSize();
         scheduleShellBackdropRebuild(0);
         updateChromeForShellBackdrop();
     });
     connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassChanged,
             this, [this](bool enabled) {
-                if (enabled) {
-                    m_shellBackdropCacheSize = QSize();
+                if (enabled)
                     rebuildShellBackdropCache();
-                }
                 if (m_playlistScrim && m_playlistPanel && m_playlistPanel->isDrawerOpen()) {
                     static_cast<PlaylistDrawerScrim *>(m_playlistScrim)
                         ->refreshBackdrop(playlistDrawerHost(), m_playlistPanel);
@@ -529,9 +528,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
             });
     connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
             this, [this](qreal progress) {
+                m_shellBackdrop->update();
                 if (progress <= 0 && !AppearanceSettings::instance().liquidGlassEnabled()) {
-                    m_shellBackdropCacheSize = QSize();
-                    rebuildShellBackdropCache();
+                    m_shellLiquidBackdropCache = QPixmap();
+                    setProperty("nekoLiquidBackdrop", QPixmap());
+                    if (m_playlistPanel)
+                        m_playlistPanel->setLiquidGlassBackdrop({}, {});
                 }
             });
 
@@ -1741,6 +1743,7 @@ void MainWindow::applyTheme()
     if (m_shellBackdrop)
         m_shellBackdrop->update();
     m_shellBackdropCache = QPixmap();
+    m_shellLiquidBackdropCache = QPixmap();
     m_shellBackdropCacheSize = QSize();
     scheduleShellBackdropRebuild(0);
     updateChromeForShellBackdrop();
@@ -1777,46 +1780,53 @@ void MainWindow::rebuildShellBackdropCache()
         return;
 
     const auto &appearance = AppearanceSettings::instance();
-    const bool liquidGlass = appearance.liquidGlassEnabled() || appearance.liquidGlassProgress() > 0;
-    QSize target = liquidGlass ? m_shellBackdrop->size() * m_shellBackdrop->devicePixelRatioF()
-                               : cappedBackdropCacheSize(m_shellBackdrop->size());
-    if (liquidGlass && qMax(target.width(), target.height()) > 4096)
-        target.scale(4096, 4096, Qt::KeepAspectRatio);
-    if (target.isEmpty())
+    const bool useLiquid = appearance.liquidGlassEnabled() || appearance.liquidGlassProgress() > 0;
+    const QSize classicSize = cappedBackdropCacheSize(m_shellBackdrop->size());
+    if (classicSize.isEmpty())
         return;
-    if (m_shellBackdropCacheSize == target && !m_shellBackdropCache.isNull())
+    QSize glassSize = m_shellBackdrop->size() * m_shellBackdrop->devicePixelRatioF();
+    if (qMax(glassSize.width(), glassSize.height()) > 4096)
+        glassSize.scale(4096, 4096, Qt::KeepAspectRatio);
+    const bool rebuildClassic = m_shellBackdropCacheSize != classicSize || m_shellBackdropCache.isNull();
+    const bool rebuildLiquid = useLiquid && m_shellLiquidBackdropCache.size() != glassSize;
+    if (!rebuildClassic && !rebuildLiquid)
         return;
 
     auto &settings = ShellBackdropSettings::instance();
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    QPixmap cover(target);
-    cover.fill(Qt::transparent);
-    {
+    const auto renderCover = [&](const QSize &size, bool liquid) {
+        QPixmap cover(size);
+        cover.fill(Qt::transparent);
         QPainter painter(&cover);
         if (settings.kind() == ShellBackdropSettings::Kind::SolidColor) {
             GlassPaint::paintMainWindowSolidBackdrop(painter, cover.rect(), settings.solidColor());
         } else if (settings.kind() == ShellBackdropSettings::Kind::CustomImage) {
             const QPixmap source = settings.cachedSourcePixmap();
-            const QPixmap image = liquidGlass && !source.isNull()
-                ? source.scaled(target, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation)
-                : GlassPaint::blurredPixmap(source, target, 16);
+            const QPixmap image = liquid && !source.isNull()
+                ? source.scaled(size, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation)
+                : GlassPaint::blurredPixmap(source, size, 16);
             GlassPaint::paintMainWindowPagesImageBackdrop(painter, cover.rect(),
-                image.size() != target && !image.isNull()
-                    ? image.copy((image.width() - target.width()) / 2,
-                                 (image.height() - target.height()) / 2,
-                                 target.width(), target.height())
+                image.size() != size && !image.isNull()
+                    ? image.copy((image.width() - size.width()) / 2,
+                                 (image.height() - size.height()) / 2,
+                                 size.width(), size.height())
                     : image, dark);
         } else {
             GlassPaint::paintMainWindowDeepBackdrop(painter, cover.rect(), dark);
         }
+        painter.end();
+        return cover;
+    };
+    if (rebuildClassic) {
+        m_shellBackdropCache = renderCover(classicSize, false);
+        m_shellBackdropCacheSize = classicSize;
+        setProperty("nekoFrostedBackdrop", settings.kind() == ShellBackdropSettings::Kind::SolidColor
+                    ? m_shellBackdropCache : GlassPaint::blurredPixmap(m_shellBackdropCache, classicSize, 32));
     }
-
-    m_shellBackdropCache = cover;
-    m_shellBackdropCacheSize = target;
-    setProperty("nekoLiquidBackdrop", liquidGlass ? cover : QPixmap());
-    setProperty("nekoFrostedBackdrop",
-                liquidGlass || settings.kind() == ShellBackdropSettings::Kind::SolidColor
-                    ? cover : GlassPaint::blurredPixmap(cover, target, 32));
+    if (rebuildLiquid) {
+        m_shellLiquidBackdropCache = renderCover(glassSize, true);
+        setProperty("nekoLiquidBackdrop", m_shellLiquidBackdropCache);
+    }
     m_shellBackdrop->update();
     updateChromeForShellBackdrop();
     centralWidget()->update();
@@ -1870,7 +1880,16 @@ void MainWindow::paintShellBackdrop(QPainter &p, const QRect &r) const
         GlassPaint::paintMainWindowDeepBackdrop(p, r, dark);
         return;
     }
-    p.drawPixmap(r, m_shellBackdropCache);
+    const qreal progress = AppearanceSettings::instance().liquidGlassProgress();
+    const bool hasGlass = !m_shellLiquidBackdropCache.isNull();
+    if (progress < 1 || !hasGlass)
+        p.drawPixmap(r, m_shellBackdropCache);
+    if (progress > 0 && hasGlass) {
+        p.save();
+        p.setOpacity(progress);
+        p.drawPixmap(r, m_shellLiquidBackdropCache);
+        p.restore();
+    }
 }
 
 void MainWindow::updateChromeForShellBackdrop()

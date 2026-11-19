@@ -37,13 +37,18 @@ class SongContextMenuPanel final : public QWidget
 {
 public:
     explicit SongContextMenuPanel(QWidget *parent) : QWidget(parent) {}
+    void setMaterialProgress(qreal progress)
+    {
+        update();
+        if (progress <= 0 && !AppearanceSettings::instance().liquidGlassEnabled())
+            setBackdrop({}, {}, {});
+    }
 
     void setBackdrop(const QImage &image, const QRect &bounds, const QRect &source)
     {
         m_backdrop.setImage(image, bounds);
         m_source = source;
         m_surface.clear();
-        setAttribute(Qt::WA_StyledBackground, m_backdrop.isEmpty());
         update();
     }
 
@@ -59,16 +64,25 @@ public:
 protected:
     void paintEvent(QPaintEvent *) override
     {
-        if (!hasGlass())
-            return;
         QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const bool dark = Theme::ThemeManager::instance().isDarkMode();
         const qreal t = qBound(0.0, m_reveal, 1.0);
         const QSize size(qRound(width() * (0.84 + 0.16 * t)),
                          qRound(height() * (0.60 + 0.40 * t)));
         const QPoint origin((width() - size.width()) / 2, m_upwards ? height() - size.height() : 0);
-        m_surface.paint(painter, QRect(origin, size), m_backdrop,
-                        QRect(m_source.topLeft() + origin, size),
-                        12.0 + 7.0 * (1.0 - t), Theme::ThemeManager::instance().isDarkMode(),
+        const QRect shape(origin, size);
+        const qreal radius = 12.0 + 7.0 * (1.0 - t);
+        const qreal progress = hasGlass() ? AppearanceSettings::instance().liquidGlassProgress() : 0;
+        if (progress < 1) {
+            painter.setBrush(dark ? QColor(40, 40, 44) : QColor(Qt::white));
+            painter.setPen(dark ? QColor(255, 255, 255, 25) : QColor(0, 0, 0, 20));
+            painter.drawRoundedRect(QRectF(shape).adjusted(0.5, 0.5, -0.5, -0.5), radius, radius);
+        }
+        if (progress <= 0)
+            return;
+        painter.setOpacity(progress);
+        m_surface.paint(painter, shape, m_backdrop, QRect(m_source.topLeft() + origin, size), radius, dark,
                         LiquidGlass::Material::Popup, t);
     }
 
@@ -230,7 +244,12 @@ SongContextMenuPopup::SongContextMenuPopup(QWidget *anchor, const QList<Entry> &
     connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged, this,
             [this]() { applyTheme(); });
     connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassChanged,
-            this, &SongContextMenuPopup::refreshGlassBackdrop);
+            this, [this](bool enabled) {
+                if (enabled)
+                    refreshGlassBackdrop();
+            });
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+            static_cast<SongContextMenuPanel *>(m_panel), &SongContextMenuPanel::setMaterialProgress);
 }
 
 /** 按 entries 重建行部件并重算固定宽高（构造与 setEntries 共用，保证两处口径一致） */
@@ -344,10 +363,10 @@ void SongContextMenuPopup::animateGlass(qreal end)
             static_cast<SongContextMenuPanel *>(m_panel)->setReveal(m_glassProgress, m_openUpwards);
             if (auto *fade = qobject_cast<QGraphicsOpacityEffect *>(graphicsEffect()))
                 fade->setOpacity(qBound(0.0, m_glassProgress, 1.0));
-            const bool revealRows = m_glassProgress > 0.86 && !m_glassClosing;
+            const qreal rowOpacity = qBound(0.0, (m_glassProgress - 0.86) / 0.14, 1.0);
             for (QWidget *row : m_rowWidgets) {
                 if (auto *rowFade = qobject_cast<QGraphicsOpacityEffect *>(row->graphicsEffect()))
-                    rowFade->setOpacity(revealRows ? (m_glassProgress - 0.86) / 0.14 : 0.0);
+                    rowFade->setOpacity(rowOpacity);
             }
         });
         connect(m_glassAnimation, &QVariantAnimation::finished, this, [this]() {
@@ -367,7 +386,7 @@ void SongContextMenuPopup::animateGlass(qreal end)
     setGraphicsEffect(fade);
     for (QWidget *row : m_rowWidgets) {
         auto *rowFade = new QGraphicsOpacityEffect(row);
-        rowFade->setOpacity(m_glassClosing ? m_glassProgress : 0.0);
+        rowFade->setOpacity(qBound(0.0, (m_glassProgress - 0.86) / 0.14, 1.0));
         row->setGraphicsEffect(rowFade);
     }
     static_cast<SongContextMenuPanel *>(m_panel)->setReveal(m_glassProgress, m_openUpwards);
@@ -393,27 +412,7 @@ void SongContextMenuPopup::closeEvent(QCloseEvent *event)
 
 void SongContextMenuPopup::applyTheme()
 {
-    const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    if (!m_panel)
-        return;
-    if (static_cast<SongContextMenuPanel *>(m_panel)->hasGlass()) {
-        m_panel->setStyleSheet(QString());
-    } else if (dark) {
-        m_panel->setStyleSheet(QStringLiteral(
-            "QWidget#songContextMenuPanel {"
-            "  background: rgb(40, 40, 44);"
-            "  border: 1px solid rgba(255, 255, 255, 0.1);"
-            "  border-radius: 12px;"
-            "}"));
-    } else {
-        m_panel->setStyleSheet(QStringLiteral(
-            "QWidget#songContextMenuPanel {"
-            "  background: #ffffff;"
-            "  border: 1px solid rgba(0, 0, 0, 0.08);"
-            "  border-radius: 12px;"
-            "}"));
-    }
-
+    m_panel->update();
     for (QWidget *w : m_rowWidgets)
         static_cast<SongContextMenuRow *>(w)->applyTheme();
 }

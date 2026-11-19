@@ -205,7 +205,6 @@ public:
     }
 
     QPixmap blurPixmap;
-    bool liquidGlass = false;
     qreal scrimOpacity = 0.0;
     std::function<void()> onClicked;
 
@@ -214,15 +213,15 @@ protected:
     {
         QPainter p(this);
         p.setRenderHint(QPainter::SmoothPixmapTransform, true);
-        p.setOpacity(scrimOpacity);
-        if (liquidGlass) {
-            p.fillRect(rect(), QColor(0, 0, 0, 72));
-            return;
+        const qreal progress = AppearanceSettings::instance().liquidGlassProgress();
+        if (progress < 1) {
+            p.setOpacity(scrimOpacity * (1 - progress));
+            if (!blurPixmap.isNull())
+                p.drawPixmap(rect(), blurPixmap);
+            else
+                p.fillRect(rect(), QColor(36, 36, 36, 220));
         }
-        if (!blurPixmap.isNull())
-            p.drawPixmap(rect(), blurPixmap);
-        else
-            p.fillRect(rect(), QColor(36, 36, 36, 220));
+        p.setOpacity(scrimOpacity);
         p.fillRect(rect(), QColor(0, 0, 0, 72));
     }
 
@@ -246,25 +245,39 @@ public:
         update();
     }
 
-    bool hasLiquidBackdrop() const { return !m_backdrop.isEmpty(); }
+    void updateMaterial(qreal progress)
+    {
+        if (progress <= 0 && !AppearanceSettings::instance().liquidGlassEnabled())
+            setLiquidBackdrop({}, {});
+        else
+            update();
+    }
 
     void setGlassProgress(qreal progress)
     {
         m_glassProgress = progress;
-        if (hasLiquidBackdrop())
-            update();
+        update();
     }
 
 protected:
     void paintEvent(QPaintEvent *) override
     {
-        if (m_backdrop.isEmpty())
-            return;
         QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const bool dark = Theme::ThemeManager::instance().isDarkMode();
+        const qreal progress = m_backdrop.isEmpty() ? 0 : AppearanceSettings::instance().liquidGlassProgress();
+        if (progress < 1) {
+            painter.setBrush(dark ? QColor(36, 36, 36) : QColor(Qt::white));
+            painter.setPen(dark ? QColor(255, 255, 255, 20) : QColor(0, 0, 0, 20));
+            painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 14, 14);
+        }
+        if (progress <= 0)
+            return;
+        painter.setOpacity(progress);
         const QPoint origin = mapTo(parentWidget()->parentWidget(), QPoint());
         m_surface.paint(painter, rect(), m_backdrop, QRect(origin, size()),
                         18.0 + 8.0 * (1.0 - m_glassProgress),
-                        Theme::ThemeManager::instance().isDarkMode(), LiquidGlass::Material::Popup,
+                        dark, LiquidGlass::Material::Popup,
                         m_glassProgress);
     }
 
@@ -374,27 +387,19 @@ void AddToPlaylistDialog::refreshBackdrop()
         return;
     auto *body = static_cast<PlaylistAddCardBody *>(m_cardBody);
     auto *backdrop = static_cast<PlaylistAddBackdrop *>(m_backdrop);
-    backdrop->liquidGlass = AppearanceSettings::instance().liquidGlassEnabled();
-    if (backdrop->liquidGlass) {
+    const auto &appearance = AppearanceSettings::instance();
+    if (appearance.liquidGlassEnabled()) {
         const int margin = LiquidGlass::kCaptureMargin;
         const QRect area = m_card->geometry().adjusted(-margin, -margin, margin, margin)
                                .intersected(m_host->rect());
         body->setLiquidBackdrop(LiquidGlass::capture(m_host, area, this), area);
-        backdrop->blurPixmap = QPixmap();
         backdrop->update();
-        applyTheme();
         return;
     }
-    if (body->hasLiquidBackdrop()) {
+    if (appearance.liquidGlassProgress() <= 0)
         body->setLiquidBackdrop({}, {});
-        applyTheme();
-    }
-    QList<QWidget *> exclude;
-    exclude.append(this);
-    if (m_card)
-        exclude.append(m_card);
-    const QPixmap blur = GlassPaint::grabBlurredBackdrop(m_host, exclude, kBlurRadius);
-    backdrop->blurPixmap = blur;
+    const auto frame = QPixmap::fromImage(LiquidGlass::capture(m_host, m_host->rect(), this));
+    backdrop->blurPixmap = GlassPaint::blurredPixmap(frame, m_host->size(), kBlurRadius);
     backdrop->update();
 }
 
@@ -622,6 +627,10 @@ void AddToPlaylistDialog::setupUi()
                 if (isVisible())
                     refreshBackdrop();
             });
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+            static_cast<PlaylistAddCardBody *>(m_cardBody), &PlaylistAddCardBody::updateMaterial);
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+            m_backdrop, [backdrop = m_backdrop]() { backdrop->update(); });
     auto *shadow = new QGraphicsDropShadowEffect(m_cardBody);
     shadow->setBlurRadius(40);
     shadow->setOffset(0, 10);
@@ -692,36 +701,21 @@ void AddToPlaylistDialog::applyTheme()
     const QString emptyFg = metaFg;
 
     if (m_cardBody) {
-        const bool liquid = static_cast<PlaylistAddCardBody *>(m_cardBody)->hasLiquidBackdrop();
-        QString chrome;
         if (dark) {
-            chrome = QStringLiteral(
-                "QWidget#playlistAddCardBody {"
-                "  background: rgb(36, 36, 36);"
-                "  border: 1px solid rgba(255, 255, 255, 0.08);"
-                "  border-radius: 14px;"
-                "}"
+            m_cardBody->setStyleSheet(QStringLiteral(
                 "QPushButton#playlistAddClose {"
                 "  color: #c8c8c8; font-size: 22px; border: none; border-radius: 8px;"
                 "  background: transparent;"
                 "}"
-                "QPushButton#playlistAddClose:hover { background: rgba(255,255,255,0.1); }");
+                "QPushButton#playlistAddClose:hover { background: rgba(255,255,255,0.1); }"));
         } else {
-            chrome = QStringLiteral(
-                "QWidget#playlistAddCardBody {"
-                "  background: #ffffff;"
-                "  border: 1px solid rgba(0, 0, 0, 0.08);"
-                "  border-radius: 14px;"
-                "}"
+            m_cardBody->setStyleSheet(QStringLiteral(
                 "QPushButton#playlistAddClose {"
                 "  color: #666; font-size: 22px; border: none; border-radius: 8px;"
                 "  background: transparent;"
                 "}"
-                "QPushButton#playlistAddClose:hover { background: rgba(0,0,0,0.06); }");
+                "QPushButton#playlistAddClose:hover { background: rgba(0,0,0,0.06); }"));
         }
-        if (liquid)
-            chrome.remove(0, chrome.indexOf(QLatin1Char('}')) + 1);
-        m_cardBody->setStyleSheet(chrome);
     }
     if (m_titleLbl) {
         m_titleLbl->setStyleSheet(

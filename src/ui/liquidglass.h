@@ -22,13 +22,13 @@ private:
     QImage m_image;
 };
 
-enum class Material { Chrome, Popup };
+enum class Material { Chrome, Popup, SwitchTrack, SwitchThumb };
 
 /** 每块玻璃各自缓存合成图，控件的文字和图标仍独立绘制。 */
 class Surface
 {
 public:
-    bool paint(QPainter &painter, const QRect &target, const Backdrop &backdrop,
+    bool paint(QPainter &painter, const QRectF &target, const Backdrop &backdrop,
                const QRectF &sourceArea, qreal radius, bool dark,
                Material material = Material::Chrome, qreal morph = 1.0);
     void clear() { m_image = QImage(); }
@@ -38,7 +38,7 @@ private:
     qint64 m_sourceKey = 0;
     QRect m_backdropBounds;
     QRectF m_sourceArea;
-    QSize m_size;
+    QSizeF m_size;
     qreal m_radius = 0;
     qreal m_scale = 0;
     qreal m_morph = 1;
