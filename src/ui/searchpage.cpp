@@ -203,14 +203,15 @@ SearchPage::SearchPage(ApiClient *apiClient, QWidget *parent)
 void SearchPage::setupUi()
 {
     auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(24, 12, 24, 24);
-    root->setSpacing(0);
+    root->setContentsMargins(24, 16, 24, 24);
+    root->setSpacing(14);
 
     auto *titleRow = new QWidget(this);
     auto *titleLay = new QHBoxLayout(titleRow);
     titleLay->setContentsMargins(0, 0, 0, 0);
-    titleLay->setSpacing(8);
+    titleLay->setSpacing(10);
     titleLay->setAlignment(Qt::AlignBottom);
+    titleRow->setFixedHeight(44);
 
     m_keywordLbl = new QLabel(titleRow);
     m_suffixLbl = new QLabel(I18n::instance().tr(QStringLiteral("searchRelatedSuffix")), titleRow);
@@ -221,9 +222,10 @@ void SearchPage::setupUi()
 
     auto *tabBar = new QWidget(this);
     tabBar->setObjectName(QStringLiteral("searchTabBar"));
+    tabBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     auto *tabLay = new QHBoxLayout(tabBar);
-    tabLay->setContentsMargins(0, 12, 0, 12);
-    tabLay->setSpacing(0);
+    tabLay->setContentsMargins(4, 4, 4, 4);
+    tabLay->setSpacing(3);
 
     auto *tabGroup = new QButtonGroup(this);
     tabGroup->setExclusive(true);
@@ -232,7 +234,8 @@ void SearchPage::setupUi()
         auto *btn = new QPushButton(I18n::instance().tr(key), tabBar);
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setFixedHeight(32);
+        btn->setMinimumWidth(68);
+        btn->setFixedHeight(34);
         tabGroup->addButton(btn);
         tabLay->addWidget(btn);
         return btn;
@@ -242,12 +245,11 @@ void SearchPage::setupUi()
     m_tabPlaylists = makeTab(QStringLiteral("searchPlaylist"));
     m_tabArtists = makeTab(QStringLiteral("artist"));
     m_tabSongs->setChecked(true);
-    tabLay->addStretch();
 
     connect(m_tabSongs, &QPushButton::clicked, this, [this]() { setActiveTab(Songs); });
     connect(m_tabPlaylists, &QPushButton::clicked, this, [this]() { setActiveTab(Playlists); });
     connect(m_tabArtists, &QPushButton::clicked, this, [this]() { setActiveTab(Artists); });
-    root->addWidget(tabBar);
+    root->addWidget(tabBar, 0, Qt::AlignLeft);
 
     m_tabStack = new QStackedWidget(this);
 
@@ -258,14 +260,15 @@ void SearchPage::setupUi()
     songsLay->setSpacing(0);
 
     m_songsActionRow = new QWidget(songsPage);
+    m_songsActionRow->setObjectName(QStringLiteral("searchActionRow"));
     m_songsActionRow->setFixedHeight(40);
     auto *songsActionLay = new QHBoxLayout(m_songsActionRow);
-    songsActionLay->setContentsMargins(0, 0, 0, 12);
-    songsActionLay->setSpacing(12);
+    songsActionLay->setContentsMargins(0, 0, 0, 10);
+    songsActionLay->setSpacing(8);
 
     m_songsPlayAllBtn = new QPushButton(I18n::instance().tr(QStringLiteral("playAll")), m_songsActionRow);
     m_songsPlayAllBtn->setCursor(Qt::PointingHandCursor);
-    m_songsPlayAllBtn->setFixedHeight(40);
+    m_songsPlayAllBtn->setFixedHeight(34);
     connect(m_songsPlayAllBtn, &QPushButton::clicked, this, [this]() {
         if (!m_musicResults.isEmpty())
             emit playAllRequested(m_musicResults);
@@ -275,7 +278,7 @@ void SearchPage::setupUi()
     m_songsDownloadAllBtn = new QPushButton(I18n::instance().tr(QStringLiteral("downloadAll")),
                                             m_songsActionRow);
     m_songsDownloadAllBtn->setCursor(Qt::PointingHandCursor);
-    m_songsDownloadAllBtn->setFixedHeight(40);
+    m_songsDownloadAllBtn->setFixedHeight(34);
     connect(m_songsDownloadAllBtn, &QPushButton::clicked, this, [this]() {
         if (!m_musicResults.isEmpty())
             emit downloadAllRequested(m_musicResults);
@@ -286,7 +289,7 @@ void SearchPage::setupUi()
     m_songsAddAllToQueueBtn = new QPushButton(I18n::instance().tr(QStringLiteral("addAllToQueue")),
                                               m_songsActionRow);
     m_songsAddAllToQueueBtn->setCursor(Qt::PointingHandCursor);
-    m_songsAddAllToQueueBtn->setFixedHeight(40);
+    m_songsAddAllToQueueBtn->setFixedHeight(34);
     connect(m_songsAddAllToQueueBtn, &QPushButton::clicked, this, &SearchPage::addAllToQueue);
     songsActionLay->addWidget(m_songsAddAllToQueueBtn);
 
@@ -294,7 +297,7 @@ void SearchPage::setupUi()
     m_songsBatchManageBtn = new QPushButton(I18n::instance().tr(QStringLiteral("batchManage")),
                                             m_songsActionRow);
     m_songsBatchManageBtn->setCursor(Qt::PointingHandCursor);
-    m_songsBatchManageBtn->setFixedHeight(40);
+    m_songsBatchManageBtn->setFixedHeight(34);
     connect(m_songsBatchManageBtn, &QPushButton::clicked, this, &SearchPage::enterBatchMode);
     songsActionLay->addWidget(m_songsBatchManageBtn);
 
@@ -442,33 +445,47 @@ void SearchPage::applyPageStyle()
 
     if (m_keywordLbl) {
         m_keywordLbl->setStyleSheet(QStringLiteral(
-            "QLabel { font-size: 36px; font-weight: 700; color: %1; }").arg(titleFg));
+            "QLabel { font-size: 30px; font-weight: 700; color: %1; }").arg(titleFg));
     }
     if (m_suffixLbl) {
         m_suffixLbl->setStyleSheet(QStringLiteral(
-            "QLabel { font-size: 22px; color: %1; padding-bottom: 4px; }").arg(metaFg));
+            "QLabel { font-size: 16px; color: %1; padding-bottom: 5px; }").arg(metaFg));
     }
 
     const QString tabStyle = QStringLiteral(
         "QPushButton {"
         "  background: transparent;"
-        "  border: none;"
-        "  border-radius: 8px;"
+        "  border: 1px solid transparent;"
+        "  border-radius: 9px;"
         "  color: %1;"
-        "  font-size: 14px;"
-        "  font-weight: 500;"
-        "  padding: 0 16px;"
+        "  font-size: 13px;"
+        "  font-weight: 600;"
+        "  padding: 0 15px;"
         "}"
         "QPushButton:checked {"
         "  background: %2;"
+        "  border-color: %4;"
         "  color: %3;"
         "}"
-        "QPushButton:hover:!checked { color: %3; }")
-                                .arg(metaFg, tabSelBg, titleFg);
+        "QPushButton:hover:!checked { background: %5; color: %3; }"
+        "QPushButton:focus { border-color: %4; }")
+                                .arg(metaFg, tabSelBg, titleFg,
+                                     dark ? QStringLiteral("rgba(138,223,245,90)")
+                                          : QStringLiteral("rgba(22,119,184,80)"),
+                                     dark ? QStringLiteral("rgba(255,255,255,12)")
+                                          : QStringLiteral("rgba(22,119,184,12)"));
 
     if (auto *bar = findChild<QWidget *>(QStringLiteral("searchTabBar"))) {
-        bar->setStyleSheet(QStringLiteral("QWidget#searchTabBar { background: %1; border-radius: 10px; }")
-                              .arg(tabBg));
+        bar->setStyleSheet(QStringLiteral(
+            "QWidget#searchTabBar {"
+            "  background: %1;"
+            "  border: 1px solid %2;"
+            "  border-radius: 12px;"
+            "}")
+                               .arg(dark ? QStringLiteral("rgba(20,34,55,170)")
+                                         : QStringLiteral("rgba(255,255,255,155)"),
+                                    dark ? QStringLiteral("rgba(168,211,242,42)")
+                                         : QStringLiteral("rgba(66,105,148,45)")));
     }
     if (m_tabSongs)
         m_tabSongs->setStyleSheet(tabStyle);
@@ -512,14 +529,15 @@ void SearchPage::applyPageStyle()
             "QPushButton {"
             "  background: #1677B8;"
             "  color: #ffffff;"
-            "  border: none;"
-            "  border-radius: 20px;"
-            "  font-size: 14px;"
-            "  font-weight: 500;"
-            "  padding: 0 20px;"
+            "  border: 1px solid rgba(138,223,245,110);"
+            "  border-radius: 10px;"
+            "  font-size: 13px;"
+            "  font-weight: 600;"
+            "  padding: 0 16px;"
             "}"
             "QPushButton:hover { background: #218CC8; }"
-            "QPushButton:disabled { background: rgba(22, 119, 184,0.35); color: rgba(255,255,255,0.6); }"));
+            "QPushButton:pressed { background: #126497; }"
+            "QPushButton:disabled { background: rgba(22,119,184,90); color: rgba(255,255,255,0.6); }"));
     }
     if (m_songsDownloadAllBtn) {
         m_songsDownloadAllBtn->setIcon(Icons::renderNamed("Download", 18, secondaryIc));
@@ -528,15 +546,26 @@ void SearchPage::applyPageStyle()
             "QPushButton {"
             "  background: %1;"
             "  color: %2;"
-            "  border: none;"
-            "  border-radius: 20px;"
-            "  font-size: 14px;"
-            "  font-weight: 500;"
-            "  padding: 0 20px;"
+            "  border: 1px solid %3;"
+            "  border-radius: 10px;"
+            "  font-size: 13px;"
+            "  font-weight: 600;"
+            "  padding: 0 14px;"
             "}"
-            "QPushButton:hover { background: rgba(22, 119, 184,0.15); }"
+            "QPushButton:hover { background: %4; border-color: %5; }"
+            "QPushButton:pressed { background: %6; }"
             "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
-                                             .arg(tabBg, titleFg));
+                                             .arg(dark ? QStringLiteral("rgba(24,42,67,175)")
+                                                       : QStringLiteral("rgba(255,255,255,155)"),
+                                                  titleFg,
+                                                  dark ? QStringLiteral("rgba(168,211,242,55)")
+                                                       : QStringLiteral("rgba(66,105,148,55)"),
+                                                  dark ? QStringLiteral("rgba(55,90,125,190)")
+                                                       : QStringLiteral("rgba(22,119,184,18)"),
+                                                  dark ? QStringLiteral("rgba(138,223,245,90)")
+                                                       : QStringLiteral("rgba(22,119,184,90)"),
+                                                  dark ? QStringLiteral("rgba(22,119,184,120)")
+                                                       : QStringLiteral("rgba(22,119,184,28)")));
     }
     if (m_songsBatchManageBtn) {
         m_songsBatchManageBtn->setIcon(Icons::renderNamed("Batch", 18, secondaryIc));
@@ -545,15 +574,26 @@ void SearchPage::applyPageStyle()
             "QPushButton {"
             "  background: %1;"
             "  color: %2;"
-            "  border: none;"
-            "  border-radius: 20px;"
-            "  font-size: 14px;"
-            "  font-weight: 500;"
-            "  padding: 0 20px;"
+            "  border: 1px solid %3;"
+            "  border-radius: 10px;"
+            "  font-size: 13px;"
+            "  font-weight: 600;"
+            "  padding: 0 14px;"
             "}"
-            "QPushButton:hover { background: rgba(22, 119, 184,0.15); }"
+            "QPushButton:hover { background: %4; border-color: %5; }"
+            "QPushButton:pressed { background: %6; }"
             "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
-                                                 .arg(tabBg, titleFg));
+                                                 .arg(dark ? QStringLiteral("rgba(24,42,67,175)")
+                                                           : QStringLiteral("rgba(255,255,255,155)"),
+                                                      titleFg,
+                                                      dark ? QStringLiteral("rgba(168,211,242,55)")
+                                                           : QStringLiteral("rgba(66,105,148,55)"),
+                                                      dark ? QStringLiteral("rgba(55,90,125,190)")
+                                                           : QStringLiteral("rgba(22,119,184,18)"),
+                                                      dark ? QStringLiteral("rgba(138,223,245,90)")
+                                                           : QStringLiteral("rgba(22,119,184,90)"),
+                                                      dark ? QStringLiteral("rgba(22,119,184,120)")
+                                                           : QStringLiteral("rgba(22,119,184,28)")));
     }
     if (m_batchBar)
         m_batchBar->applyTheme();
@@ -564,15 +604,26 @@ void SearchPage::applyPageStyle()
             "QPushButton {"
             "  background: %1;"
             "  color: %2;"
-            "  border: none;"
-            "  border-radius: 20px;"
-            "  font-size: 14px;"
-            "  font-weight: 500;"
-            "  padding: 0 20px;"
+            "  border: 1px solid %3;"
+            "  border-radius: 10px;"
+            "  font-size: 13px;"
+            "  font-weight: 600;"
+            "  padding: 0 14px;"
             "}"
-            "QPushButton:hover:enabled { background: rgba(22, 119, 184,0.15); }"
+            "QPushButton:hover:enabled { background: %4; border-color: %5; }"
+            "QPushButton:pressed { background: %6; }"
             "QPushButton:disabled { color: rgba(128,128,128,0.8); }")
-                                                   .arg(tabBg, titleFg));
+                                                   .arg(dark ? QStringLiteral("rgba(24,42,67,175)")
+                                                             : QStringLiteral("rgba(255,255,255,155)"),
+                                                        titleFg,
+                                                        dark ? QStringLiteral("rgba(168,211,242,55)")
+                                                             : QStringLiteral("rgba(66,105,148,55)"),
+                                                        dark ? QStringLiteral("rgba(55,90,125,190)")
+                                                             : QStringLiteral("rgba(22,119,184,18)"),
+                                                        dark ? QStringLiteral("rgba(138,223,245,90)")
+                                                             : QStringLiteral("rgba(22,119,184,90)"),
+                                                        dark ? QStringLiteral("rgba(22,119,184,120)")
+                                                             : QStringLiteral("rgba(22,119,184,28)")));
     }
 
     const QColor emptyIcon = dark ? QColor(244, 246, 255, 120) : QColor(33, 37, 41, 100);
