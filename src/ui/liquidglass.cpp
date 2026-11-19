@@ -13,6 +13,7 @@
 #include <QPixmap>
 #include <QRegion>
 #include <QPointer>
+#include <QShowEvent>
 #include <QVariant>
 #include <QWidget>
 
@@ -47,6 +48,29 @@ public:
     }
 
 protected:
+    QSize sizeHint() const override
+    {
+        QSize hint = QListView::sizeHint();
+        int desiredWidth = m_combo ? m_combo->width() : hint.width();
+        if (model()) {
+            for (int row = 0; row < model()->rowCount(); ++row) {
+                const QString text = model()->data(model()->index(row, 0)).toString();
+                desiredWidth = qMax(desiredWidth, fontMetrics().horizontalAdvance(text) + 42);
+            }
+        }
+        hint.setWidth(qMax(desiredWidth, 120));
+        return hint;
+    }
+
+    void showEvent(QShowEvent *event) override
+    {
+        QListView::showEvent(event);
+        const int desiredWidth = sizeHint().width();
+        setMinimumWidth(desiredWidth);
+        if (width() < desiredWidth)
+            resize(desiredWidth, height());
+    }
+
     void paintEvent(QPaintEvent *event) override
     {
         const qreal progress = AppearanceSettings::instance().liquidGlassProgress();

@@ -3,6 +3,8 @@
 #include "ui/toggleswitch.h"
 
 #include <QApplication>
+#include <QComboBox>
+#include <QAbstractItemView>
 #include <QElapsedTimer>
 #include <QPainter>
 #include <QSettings>
@@ -53,6 +55,15 @@ int main(int argc, char **argv)
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, temporary.path());
     Theme::ThemeManager::instance().setMode(Theme::Dark);
+
+    QComboBox quality;
+    quality.setFixedWidth(78);
+    quality.addItems({QStringLiteral("标准"), QStringLiteral("HQ"),
+                      QStringLiteral("SQ"), QStringLiteral("Hi-Res")});
+    LiquidGlass::installComboBox(&quality);
+    if (quality.view()->sizeHint().width()
+        < quality.fontMetrics().horizontalAdvance(QStringLiteral("Hi-Res")) + 42)
+        return 11;
 
     QImage backdrop(160, 90, QImage::Format_RGB32);
     backdrop.fill(QColor("#17233a"));

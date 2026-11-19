@@ -316,7 +316,7 @@ void CoverListCard::paintEvent(QPaintEvent *)
         glassPainted = m_liquidSurface.paint(
             p, QRectF(rect()), LiquidGlass::shellBackdrop(this),
             QRectF(sourceOrigin, size()), 16, Theme::ThemeManager::instance().isDarkMode(),
-            LiquidGlass::Material::Chrome, 1.0 - (m_hovered ? 0.16 : 0.0));
+            LiquidGlass::Material::ListItem, 1.0 - (m_hovered ? 0.16 : 0.0));
         p.restore();
     }
     if (m_hovered) {
