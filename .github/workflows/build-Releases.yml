@@ -215,7 +215,7 @@ jobs:
           foreach ($vsInstall in $vsInstallations) {
             $redistRoot = Join-Path $vsInstall 'VC\Redist\MSVC'
             $runtimeDirs = Get-ChildItem $redistRoot -Directory -ErrorAction SilentlyContinue |
-              Sort-Object { [version]$_.Name } -Descending
+              Sort-Object Name -Descending
             foreach ($runtimeDir in $runtimeDirs) {
               $candidate = Join-Path $runtimeDir.FullName 'x64\Microsoft.VC143.CRT'
               $requiredVcDlls = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')
