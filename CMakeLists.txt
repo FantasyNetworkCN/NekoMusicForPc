@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(NekoMusic
-        VERSION 2026.1115.69
+        VERSION 2026.1119.70
         LANGUAGES CXX
 )
 

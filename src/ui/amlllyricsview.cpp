@@ -940,7 +940,7 @@ QImage AmllLyricsView::sharpLineImage(int index)
     secondary.setAlphaF(qMin<qreal>(secondary.alphaF(), 0.30));
     qreal y = fontPx * kLinePadEm * fx.lineSpacing();
     if (line.main.layout) {
-        painter.setPen(m_impl->activeColor);
+        painter.setPen(m_impl->dimColor);
         line.main.layout->draw(&painter, QPointF(0, y));
         y += qMax<qreal>(fontPx * 1.2, line.main.height);
     }
