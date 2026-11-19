@@ -74,7 +74,6 @@ protected:
     void paintEvent(QPaintEvent *event) override
     {
         const qreal progress = AppearanceSettings::instance().liquidGlassProgress();
-        bool painted = false;
         QWidget *host = m_combo ? m_combo->window() : nullptr;
         if (progress > 0) {
             QPixmap source = host
@@ -95,11 +94,10 @@ protected:
             }
             QPainter painter(viewport());
             painter.setRenderHint(QPainter::Antialiasing);
-            if (progress < 1.0 || source.isNull())
-                painter.fillRect(viewport()->rect(),
-                                 Theme::ThemeManager::instance().isDarkMode()
-                                     ? QColor(25, 36, 55, 244)
-                                     : QColor(250, 252, 255, 246));
+            painter.fillRect(viewport()->rect(),
+                             Theme::ThemeManager::instance().isDarkMode()
+                                 ? QColor(25, 36, 55, 244)
+                                 : QColor(250, 252, 255, 246));
             if (host && !source.isNull()) {
                 Backdrop backdrop;
                 const QPoint origin = host->mapFromGlobal(viewport()->mapToGlobal(QPoint()));
@@ -107,24 +105,13 @@ protected:
                 const bool dark = Theme::ThemeManager::instance().isDarkMode();
                 painter.save();
                 painter.setOpacity(progress);
-                painted = m_surface.paint(painter, viewport()->rect(), backdrop,
-                                          QRectF(origin, viewport()->size()), 14, dark,
-                                          Material::Popup);
+                m_surface.paint(painter, viewport()->rect(), backdrop,
+                                QRectF(origin, viewport()->size()), 14, dark,
+                                Material::Popup);
                 painter.restore();
             }
         }
         QListView::paintEvent(event);
-        if (progress > 0 && painted) {
-            QPainter border(viewport());
-            border.setRenderHint(QPainter::Antialiasing);
-            border.setPen(QPen(Theme::ThemeManager::instance().isDarkMode()
-                                   ? QColor(196, 223, 255, 38)
-                                   : QColor(255, 255, 255, 180),
-                               1));
-            border.setBrush(Qt::NoBrush);
-            border.drawRoundedRect(QRectF(viewport()->rect()).adjusted(.5, .5, -1.5, -1.5),
-                                   14, 14);
-        }
     }
 
 private:

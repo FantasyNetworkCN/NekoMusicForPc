@@ -306,6 +306,8 @@ void CoverListCard::paintEvent(QPaintEvent *)
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, true);
 
+    const bool dark = Theme::ThemeManager::instance().isDarkMode();
+    const QRectF cardBounds = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
     bool glassPainted = false;
     if (m_liquidProgress > 0) {
         const QPoint sourceOrigin = mapTo(window(), QPoint());
@@ -319,9 +321,15 @@ void CoverListCard::paintEvent(QPaintEvent *)
             LiquidGlass::Material::ListItem, 1.0 - (m_hovered ? 0.16 : 0.0));
         p.restore();
     }
+    p.setPen(QPen(QColor(128, 180, 220, m_hovered ? 45 : 14), 1));
+    p.setBrush(glassPainted
+                   ? QColor(255, 255, 255, m_hovered ? 18 : 0)
+                   : (dark ? QColor(170, 215, 250, m_hovered ? 14 : 0)
+                           : QColor(255, 255, 255, m_hovered ? 150 : 0)));
+    p.drawRoundedRect(cardBounds, 16, 16);
     if (m_hovered) {
         QPainterPath hoverPath;
-        hoverPath.addRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 16, 16);
+        hoverPath.addRoundedRect(cardBounds, 16, 16);
         p.fillPath(hoverPath, QColor(22, 119, 184, glassPainted ? 16 : 31));
     }
 
