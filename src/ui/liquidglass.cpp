@@ -1,5 +1,6 @@
 #include "liquidglass.h"
 #include "liquidglassvulkan.h"
+#include "theme/theme.h"
 
 #include <QPainter>
 #include <QOpenGLWidget>
@@ -159,6 +160,82 @@ bool Surface::paint(QPainter &painter, const QRectF &target, const Backdrop &bac
     }
     if (m_image.isNull())
         return false;
+    painter.save();
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    painter.drawImage(target, m_image);
+    painter.restore();
+    return true;
+}
+
+bool ControlSurface::paint(QPainter &painter, const QRectF &target, const Backdrop &backdrop,
+                           const QRectF &sourceArea, const ControlRecipe &recipe)
+{
+    if (backdrop.isEmpty() || target.isEmpty() || sourceArea.isEmpty()
+        || !QRectF(backdrop.m_bounds).intersects(sourceArea))
+        return false;
+
+    const qreal dpr = painter.device()->devicePixelRatioF();
+    const qreal scale = qMin(dpr, qreal(kMaxTextureSide) / qMax(target.width(), target.height()));
+    const QSize pixels(qMax(1, qRound(target.width() * scale)),
+                       qMax(1, qRound(target.height() * scale)));
+    const qint64 key = backdrop.m_image.cacheKey();
+    const bool recipeChanged = m_recipe.track != recipe.track || m_recipe.thumb != recipe.thumb
+        || m_recipe.trackRadius != recipe.trackRadius || m_recipe.thumbRadius != recipe.thumbRadius
+        || m_recipe.pressure != recipe.pressure || m_recipe.dark != recipe.dark;
+    if (m_image.isNull() || m_sourceKey != key || m_backdropBounds != backdrop.m_bounds
+        || m_sourceArea != sourceArea || m_size != target.size() || m_pixelSize != pixels
+        || recipeChanged || m_recipe.checked != recipe.checked) {
+        const qreal sx = pixels.width() / target.width();
+        const qreal sy = pixels.height() / target.height();
+        const auto scaledRect = [sx, sy](const QRectF &rect) {
+            return QRectF(rect.x() * sx, rect.y() * sy, rect.width() * sx, rect.height() * sy);
+        };
+        LiquidGlass::VulkanControlRecipe vulkanRecipe;
+        vulkanRecipe.track = scaledRect(recipe.track);
+        vulkanRecipe.thumb = scaledRect(recipe.thumb);
+        vulkanRecipe.trackRadius = float(recipe.trackRadius * qMin(sx, sy));
+        vulkanRecipe.thumbRadius = float(recipe.thumbRadius * qMin(sx, sy));
+        vulkanRecipe.pressure = float(recipe.pressure);
+        vulkanRecipe.trackMaterial = opticsFor(recipe.trackRadius, recipe.dark,
+                                               Material::SwitchTrack, 1.0);
+        vulkanRecipe.thumbMaterial = opticsFor(recipe.thumbRadius, recipe.dark,
+                                               Material::SwitchThumb, 1.0 - recipe.pressure);
+        const QColor accent(Theme::kLavender);
+        vulkanRecipe.trackMaterial.tint[0] = float(accent.redF());
+        vulkanRecipe.trackMaterial.tint[1] = float(accent.greenF());
+        vulkanRecipe.trackMaterial.tint[2] = float(accent.blueF());
+        vulkanRecipe.trackMaterial.tint[3] = recipe.checked ? 0.24f : 0.09f;
+
+        m_image = renderControlOnVulkan(backdrop.m_image, backdrop.m_bounds,
+                                        sourceArea, pixels, vulkanRecipe);
+        m_sourceKey = key;
+        m_backdropBounds = backdrop.m_bounds;
+        m_sourceArea = sourceArea;
+        m_size = target.size();
+        m_pixelSize = pixels;
+        m_recipe = recipe;
+    }
+    if (m_image.isNull()) {
+        const qreal radius = qMin(recipe.trackRadius, target.height() / 2);
+        m_fallbackTrack.paint(painter, QRectF(target.topLeft() + recipe.track.topLeft(),
+                                               recipe.track.size()),
+                              backdrop, sourceArea.translated(recipe.track.topLeft()),
+                              radius, recipe.dark, Material::SwitchTrack);
+        QColor accent(Theme::kLavender);
+        accent.setAlphaF(recipe.checked ? 0.18 : 0.04);
+        painter.save();
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(accent);
+        painter.drawRoundedRect(QRectF(target.topLeft() + recipe.track.topLeft(),
+                                       recipe.track.size()), radius, radius);
+        painter.restore();
+        m_fallbackThumb.paint(painter, QRectF(target.topLeft() + recipe.thumb.topLeft(),
+                                               recipe.thumb.size()),
+                              backdrop, sourceArea.translated(recipe.thumb.topLeft()),
+                              recipe.thumbRadius, recipe.dark, Material::SwitchThumb,
+                              1.0 - recipe.pressure);
+        return true;
+    }
     painter.save();
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
     painter.drawImage(target, m_image);

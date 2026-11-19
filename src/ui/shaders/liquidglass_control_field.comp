@@ -1,0 +1,60 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(binding = 0, rgba16f) uniform writeonly image2D fieldImage;
+
+layout(push_constant) uniform ControlGeometry {
+    vec4 trackRect;
+    vec4 thumbRect;
+    vec4 radiiAndPixelWidth;
+} geometry;
+
+float roundedRectDistance(vec2 point, vec4 rect, float radius)
+{
+    vec2 halfSize = rect.zw * 0.5;
+    vec2 local = point - rect.xy - halfSize;
+    radius = clamp(radius, 0.0, min(halfSize.x, halfSize.y));
+    vec2 q = abs(local) - halfSize + radius;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+}
+
+vec2 roundedRectGradient(vec2 point, vec4 rect, float radius)
+{
+    vec2 halfSize = rect.zw * 0.5;
+    vec2 local = point - rect.xy - halfSize;
+    radius = clamp(radius, 0.0, min(halfSize.x, halfSize.y));
+    vec2 q = abs(local) - halfSize + radius;
+    vec2 corner = max(q, 0.0);
+    vec2 gradient = dot(corner, corner) > 1e-8
+        ? normalize(corner)
+        : q.x > q.y ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    return gradient * mix(vec2(-1.0), vec2(1.0), greaterThanEqual(local, vec2(0.0)));
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 extent = imageSize(fieldImage);
+    if (any(greaterThanEqual(pixel, extent)))
+        return;
+
+    vec2 point = vec2(pixel) + 0.5;
+    float pixelWidth = max(geometry.radiiAndPixelWidth.z, 0.75);
+    float trackDistance = roundedRectDistance(point, geometry.trackRect,
+                                              geometry.radiiAndPixelWidth.x);
+    float thumbDistance = roundedRectDistance(point, geometry.thumbRect,
+                                              geometry.radiiAndPixelWidth.y);
+
+    bool thumbFront = thumbDistance <= 0.0;
+    float distance = thumbFront ? thumbDistance : trackDistance;
+    vec4 field = vec4(0.0);
+    if (distance <= pixelWidth) {
+        vec2 rect = thumbFront ? geometry.thumbRect.xy : geometry.trackRect.xy;
+        vec2 size = thumbFront ? geometry.thumbRect.zw : geometry.trackRect.zw;
+        float radius = thumbFront ? geometry.radiiAndPixelWidth.y : geometry.radiiAndPixelWidth.x;
+        field = vec4(distance,
+                     roundedRectGradient(point, vec4(rect, size), radius),
+                     thumbFront ? 2.0 : 1.0);
+    }
+    imageStore(fieldImage, pixel, field);
+}

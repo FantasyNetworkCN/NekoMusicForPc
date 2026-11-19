@@ -18,11 +18,22 @@ public:
 
 private:
     friend class Surface;
+    friend class ControlSurface;
     QRect m_bounds;
     QImage m_image;
 };
 
 enum class Material { Chrome, Popup, SwitchTrack, SwitchThumb };
+
+struct ControlRecipe {
+    QRectF track;
+    QRectF thumb;
+    qreal trackRadius = 0;
+    qreal thumbRadius = 0;
+    qreal pressure = 0;
+    bool dark = false;
+    bool checked = false;
+};
 
 /** 每块玻璃各自缓存合成图，控件的文字和图标仍独立绘制。 */
 class Surface
@@ -44,6 +55,26 @@ private:
     qreal m_morph = 1;
     bool m_dark = false;
     Material m_material = Material::Chrome;
+};
+
+/** 单帧绘制的控件玻璃：距离场和材质合成共享同一份几何与背景。 */
+class ControlSurface
+{
+public:
+    bool paint(QPainter &painter, const QRectF &target, const Backdrop &backdrop,
+               const QRectF &sourceArea, const ControlRecipe &recipe);
+    void clear() { m_image = QImage(); }
+
+private:
+    QImage m_image;
+    qint64 m_sourceKey = 0;
+    QRect m_backdropBounds;
+    QRectF m_sourceArea;
+    QSizeF m_size;
+    QSize m_pixelSize;
+    ControlRecipe m_recipe;
+    Surface m_fallbackTrack;
+    Surface m_fallbackThumb;
 };
 
 /** 采集宿主指定区域，stopBefore 非空时只渲染它之下的同级层。 */

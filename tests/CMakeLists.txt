@@ -12,6 +12,28 @@ if(TARGET neko-glass-shaders)
     set_tests_properties(liquidglass-vulkan PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
 endif()
 
+set(control_glass_sources
+    control_glass.cpp
+    "${PROJECT_SOURCE_DIR}/src/ui/toggleswitch.cpp"
+    "${PROJECT_SOURCE_DIR}/src/ui/liquidglass.cpp"
+    "${PROJECT_SOURCE_DIR}/src/ui/liquidglassvulkan.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/appearancesettings.cpp"
+    "${PROJECT_SOURCE_DIR}/src/theme/thememanager.cpp")
+add_executable(NekoMusicControlGlassTest ${control_glass_sources})
+if(TARGET neko-glass-shaders)
+    add_dependencies(NekoMusicControlGlassTest neko-glass-shaders)
+    target_compile_definitions(NekoMusicControlGlassTest PRIVATE NEKO_HAS_VULKAN_GLASS=1)
+endif()
+target_include_directories(NekoMusicControlGlassTest PRIVATE
+    "${PROJECT_SOURCE_DIR}/src" "${NEKO_VULKAN_HEADERS}" "${NEKO_GLASS_GENERATED_DIR}")
+target_link_libraries(NekoMusicControlGlassTest PRIVATE
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGLWidgets Qt6::Test)
+add_test(NAME control-glass COMMAND NekoMusicControlGlassTest)
+set_tests_properties(control-glass PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    SKIP_RETURN_CODE 77
+    TIMEOUT 30)
+
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ui_smoke.cpp")
     return()
 endif()

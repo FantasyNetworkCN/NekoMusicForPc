@@ -22,7 +22,6 @@ public:
 
     qreal knob() const { return m_knob; }
     void setKnob(qreal value);
-    void followLiquidGlassProgress();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -36,9 +35,8 @@ private:
 
     qreal m_knob = 0.0;
     qreal m_pressure = 0.0;
-    bool m_followsLiquidGlass = false;
+    qreal m_liquidProgress = 0;
     QPropertyAnimation *m_anim = nullptr;
     QPropertyAnimation *m_pressAnim = nullptr;
-    LiquidGlass::Surface m_glassTrack;
-    LiquidGlass::Surface m_glassThumb;
+    LiquidGlass::ControlSurface m_controlGlass;
 };

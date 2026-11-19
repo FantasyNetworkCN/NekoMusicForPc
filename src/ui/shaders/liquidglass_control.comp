@@ -1,0 +1,86 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(binding = 0) uniform sampler2D backdrop;
+layout(binding = 1) uniform sampler2D diffusion;
+layout(binding = 2) uniform sampler2D controlField;
+layout(binding = 3, rgba8) uniform writeonly image2D outputImage;
+
+layout(push_constant) uniform ControlMaterial {
+    vec4 rectSource;
+    vec4 sourcePixel;
+    vec4 trackProfile;
+    vec4 trackTint;
+    vec4 trackLight;
+    vec4 thumbProfile;
+    vec4 thumbTint;
+    vec4 thumbLight;
+} material;
+
+vec3 sampleGlass(vec2 uv, float softness)
+{
+    return mix(textureLod(backdrop, uv, 0.0).rgb,
+               textureLod(diffusion, uv, 0.0).rgb, softness);
+}
+
+vec2 refractedOffset(float ior, vec3 surfaceNormal, float height, float thickness)
+{
+    vec3 ray = refract(vec3(0.0, 0.0, -1.0), surfaceNormal, 1.0 / ior);
+    return ray.xy / max(-ray.z, 0.0001) * height * thickness;
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 extent = imageSize(outputImage);
+    if (any(greaterThanEqual(pixel, extent)))
+        return;
+
+    vec4 shape = texelFetch(controlField, pixel, 0);
+    if (shape.a < 0.5) {
+        imageStore(outputImage, pixel, vec4(0.0));
+        return;
+    }
+
+    bool thumb = shape.a > 1.5;
+    vec4 profile = thumb ? material.thumbProfile : material.trackProfile;
+    vec4 tint = thumb ? material.thumbTint : material.trackTint;
+    vec4 light = thumb ? material.thumbLight : material.trackLight;
+    vec2 point = vec2(pixel) + 0.5;
+    float distance = shape.r;
+    vec2 normal = normalize(shape.gb);
+    float pixelWidth = max(material.sourcePixel.z, 0.75);
+    float coverage = clamp(0.5 - distance / pixelWidth, 0.0, 1.0);
+
+    vec2 textureSizePx = vec2(textureSize(backdrop, 0));
+    vec2 uvPerPoint = material.sourcePixel.xy / textureSizePx;
+    vec2 uv = (material.rectSource.zw + point * material.sourcePixel.xy) / textureSizePx;
+    float depth = max(0.0, -distance);
+    float bevel = max(0.5, profile.x * (1.0 - material.sourcePixel.w * (thumb ? 0.12 : 0.0)));
+    float h = clamp(depth / bevel, 0.0, 1.0);
+    float u = 1.0 - h;
+    float profileRoot = sqrt(max(1.0 - u * u * u * u, 0.0001));
+    float slope = h >= 1.0 ? 0.0 : 2.0 * u * u * u / profileRoot;
+    vec3 surfaceNormal = normalize(vec3(normal * min(slope, 11.43), 1.0));
+    float baseIor = thumb ? 1.46 : 1.38;
+    float dispersion = clamp(profile.z * 0.002, 0.0, 0.01);
+    float thickness = profile.y * (0.22 + 0.78 * sqrt(max(1.0 - u * u * u * u, 0.0)));
+    vec2 redOffset = refractedOffset(baseIor + dispersion, surfaceNormal, thickness, 1.0);
+    vec2 greenOffset = refractedOffset(baseIor, surfaceNormal, thickness, 1.0);
+    vec2 blueOffset = refractedOffset(baseIor - dispersion, surfaceNormal, thickness, 1.0);
+    float softness = profile.w * mix(0.04, 1.0, smoothstep(0.06, 0.85, h));
+    vec3 color = vec3(sampleGlass(uv + redOffset * uvPerPoint, softness).r,
+                      sampleGlass(uv + greenOffset * uvPerPoint, softness).g,
+                      sampleGlass(uv + blueOffset * uvPerPoint, softness).b);
+
+    float directional = dot(normal, normalize(light.xy));
+    float key = pow(max(directional, 0.0), 3.0);
+    float fill = pow(max(-directional, 0.0), 3.0);
+    float rim = 1.0 - smoothstep(0.45, 2.3 + pixelWidth, depth);
+    float contact = exp(-pow((depth - (thumb ? 2.6 : 4.0)) / (thumb ? 2.0 : 2.5), 2.0));
+    color *= 1.0 - contact * light.z * (0.33 + 0.67 * fill);
+    color = mix(color, tint.rgb, clamp(tint.a, 0.0, 1.0));
+    color = mix(color, vec3(0.91, 0.97, 1.0),
+                (0.085 + key * 0.72 + fill * 0.28) * rim * light.w);
+    imageStore(outputImage, pixel, vec4(color * coverage, coverage));
+}

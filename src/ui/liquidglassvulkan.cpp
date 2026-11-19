@@ -27,6 +27,12 @@ constexpr uint32_t materialShader[] = {
 constexpr uint32_t fieldShader[] = {
 #include "liquidglass_field_spirv.inc"
 };
+constexpr uint32_t controlFieldShader[] = {
+#include "liquidglass_control_field_spirv.inc"
+};
+constexpr uint32_t controlShader[] = {
+#include "liquidglass_control_spirv.inc"
+};
 
 constexpr VkFormat kFormat = VK_FORMAT_R8G8B8A8_UNORM;
 constexpr VkFormat kFieldFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -42,6 +48,25 @@ struct MaterialPush {
 };
 static_assert(sizeof(MaterialPush) == 80);
 static_assert(offsetof(MaterialPush, tint) == 48);
+
+struct ControlGeometryPush {
+    float track[4];
+    float thumb[4];
+    float radiiAndPixelWidth[4];
+};
+static_assert(sizeof(ControlGeometryPush) == 48);
+
+struct ControlMaterialPush {
+    float rectSource[4];
+    float sourcePixel[4];
+    float trackProfile[4];
+    float trackTint[4];
+    float trackLight[4];
+    float thumbProfile[4];
+    float thumbTint[4];
+    float thumbLight[4];
+};
+static_assert(sizeof(ControlMaterialPush) == 128);
 
 struct Buffer {
     VkBuffer handle = VK_NULL_HANDLE;
@@ -93,6 +118,8 @@ public:
     ~Renderer();
     QImage render(const QImage &image, const QRect &bounds, const QRectF &source,
                   const QSize &pixels, const Optics &optics);
+    QImage renderControl(const QImage &image, const QRect &bounds, const QRectF &source,
+                         const QSize &pixels, const VulkanControlRecipe &recipe);
 
 private:
     bool createInstance();
@@ -133,14 +160,23 @@ private:
     VkCommandBuffer m_command = VK_NULL_HANDLE;
     VkFence m_fence = VK_NULL_HANDLE;
     VkDescriptorPool m_pool = VK_NULL_HANDLE;
-    std::array<VkDescriptorSet, 4> m_sets{};
-    Program m_blur, m_field, m_material;
+    std::array<VkDescriptorSet, 6> m_sets{};
+    Program m_blur, m_field, m_material, m_controlField, m_controlMaterial;
     Buffer m_upload, m_readback;
     Image m_input, m_horizontal, m_diffuse, m_shape, m_output;
+    Image m_controlFieldImage, m_controlOutput;
     qint64 m_inputKey = 0;
     QSize m_boundsSize;
     bool m_failed = false;
+
 };
+
+Renderer *sharedRenderer()
+{
+    static Renderer renderer;
+    static const bool available = renderer.initialize();
+    return available ? &renderer : nullptr;
+}
 
 bool Renderer::createInstance()
 {
@@ -326,7 +362,8 @@ bool Renderer::setupCommands()
         return false;
 
     const VkDescriptorPoolSize sizes[] = {
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5}, {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 4}
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 9},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 6}
     };
     VkDescriptorPoolCreateInfo descriptors{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     descriptors.maxSets = uint32_t(m_sets.size());
@@ -334,8 +371,10 @@ bool Renderer::setupCommands()
     descriptors.pPoolSizes = sizes;
     if (vkCreateDescriptorPool(m_device, &descriptors, nullptr, &m_pool) != VK_SUCCESS)
         return false;
-    const VkDescriptorSetLayout layouts[] = {m_blur.descriptors, m_blur.descriptors,
-                                              m_field.descriptors, m_material.descriptors};
+    const VkDescriptorSetLayout layouts[] = {
+        m_blur.descriptors, m_blur.descriptors, m_field.descriptors, m_material.descriptors,
+        m_controlField.descriptors, m_controlMaterial.descriptors
+    };
     VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     allocate.descriptorPool = m_pool;
     allocate.descriptorSetCount = uint32_t(std::size(layouts));
@@ -349,6 +388,10 @@ bool Renderer::initialize()
         && createProgram(m_blur, blurShader, sizeof(blurShader), 1, sizeof(float) * 2)
         && createProgram(m_field, fieldShader, sizeof(fieldShader), 0, sizeof(float) * 4)
         && createProgram(m_material, materialShader, sizeof(materialShader), 3, sizeof(MaterialPush))
+        && createProgram(m_controlField, controlFieldShader, sizeof(controlFieldShader),
+                         0, sizeof(ControlGeometryPush))
+        && createProgram(m_controlMaterial, controlShader, sizeof(controlShader),
+                         3, sizeof(ControlMaterialPush))
         && setupCommands();
 }
 
@@ -363,9 +406,13 @@ Renderer::~Renderer()
         destroyProgram(m_material);
         destroyProgram(m_field);
         destroyProgram(m_blur);
+        destroyProgram(m_controlMaterial);
+        destroyProgram(m_controlField);
         if (m_sampler) vkDestroySampler(m_device, m_sampler, nullptr);
         destroyImage(m_output);
         destroyImage(m_shape);
+        destroyImage(m_controlOutput);
+        destroyImage(m_controlFieldImage);
         destroyImage(m_diffuse);
         destroyImage(m_horizontal);
         destroyImage(m_input);
@@ -631,15 +678,148 @@ QImage Renderer::render(const QImage &image, const QRect &bounds, const QRectF &
     return result.copy();
 }
 
+QImage Renderer::renderControl(const QImage &image, const QRect &bounds, const QRectF &source,
+                               const QSize &pixels, const VulkanControlRecipe &recipe)
+{
+    if (m_failed || image.isNull() || bounds.isEmpty() || source.isEmpty() || pixels.isEmpty())
+        return {};
+    const auto fail = [&]() -> QImage {
+        m_failed = true;
+        qCWarning(glassLog) << "Liquid Glass control recipe failed";
+        return {};
+    };
+
+    const bool refreshBackdrop = m_inputKey != image.cacheKey() || m_boundsSize != bounds.size();
+    constexpr auto sampled = VK_IMAGE_USAGE_SAMPLED_BIT;
+    constexpr auto storage = VK_IMAGE_USAGE_STORAGE_BIT;
+    if (refreshBackdrop) {
+        if (!ensureImage(m_input, image.size(), sampled | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+            || !ensureImage(m_horizontal, image.size(), sampled | storage)
+            || !ensureImage(m_diffuse, image.size(), sampled | storage)
+            || !ensureBuffer(m_upload, image.sizeInBytes(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT))
+            return fail();
+        std::memcpy(m_upload.mapped, image.constBits(), size_t(image.sizeInBytes()));
+        setDescriptors(m_sets[0], {&m_input}, m_horizontal);
+        setDescriptors(m_sets[1], {&m_horizontal}, m_diffuse);
+    }
+
+    const VkDeviceSize bytes = VkDeviceSize(pixels.width()) * pixels.height() * 4;
+    if (!ensureImage(m_controlFieldImage, pixels, storage | sampled, kFieldFormat)
+        || !ensureImage(m_controlOutput, pixels, storage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
+        || !ensureBuffer(m_readback, bytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT))
+        return fail();
+    setDescriptors(m_sets[4], {}, m_controlFieldImage);
+    setDescriptors(m_sets[5], {&m_input, &m_diffuse, &m_controlFieldImage}, m_controlOutput);
+
+    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    if (vkResetCommandPool(m_device, m_commands, 0) != VK_SUCCESS
+        || vkBeginCommandBuffer(m_command, &begin) != VK_SUCCESS)
+        return fail();
+
+    constexpr auto compute = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    constexpr auto transfer = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    constexpr auto read = VK_ACCESS_SHADER_READ_BIT;
+    constexpr auto write = VK_ACCESS_SHADER_WRITE_BIT;
+    constexpr auto readOnly = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    const float scaleX = float(image.width()) / bounds.width();
+    const float scaleY = float(image.height()) / bounds.height();
+    if (refreshBackdrop) {
+        transition(m_input, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   compute, read, transfer, VK_ACCESS_TRANSFER_WRITE_BIT);
+        VkBufferImageCopy upload{};
+        upload.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        upload.imageExtent = {uint32_t(image.width()), uint32_t(image.height()), 1};
+        vkCmdCopyBufferToImage(m_command, m_upload.handle, m_input.handle,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &upload);
+        transition(m_input, readOnly, transfer, VK_ACCESS_TRANSFER_WRITE_BIT, compute, read);
+
+        const float horizontal[] = {0.95f * scaleX, 0.0f};
+        transition(m_horizontal, VK_IMAGE_LAYOUT_GENERAL, compute, read, compute, write);
+        dispatch(m_blur, m_sets[0], image.size(), horizontal, sizeof(horizontal));
+        transition(m_horizontal, readOnly, compute, write, compute, read);
+        const float vertical[] = {0.0f, 0.95f * scaleY};
+        transition(m_diffuse, VK_IMAGE_LAYOUT_GENERAL, compute, read, compute, write);
+        dispatch(m_blur, m_sets[1], image.size(), vertical, sizeof(vertical));
+        transition(m_diffuse, readOnly, compute, write, compute, read);
+    }
+
+    const float sourcePixelX = float(source.width()) / pixels.width() * scaleX;
+    const float sourcePixelY = float(source.height()) / pixels.height() * scaleY;
+    ControlGeometryPush geometry{
+        {float(recipe.track.x()), float(recipe.track.y()),
+         float(recipe.track.width()), float(recipe.track.height())},
+        {float(recipe.thumb.x()), float(recipe.thumb.y()),
+         float(recipe.thumb.width()), float(recipe.thumb.height())},
+        {recipe.trackRadius, recipe.thumbRadius,
+         std::max(sourcePixelX, sourcePixelY), recipe.pressure}
+    };
+    transition(m_controlFieldImage, VK_IMAGE_LAYOUT_GENERAL,
+               compute, read, compute, write);
+    dispatch(m_controlField, m_sets[4], pixels, &geometry, sizeof(geometry));
+    transition(m_controlFieldImage, readOnly, compute, write, compute, read);
+
+    const auto fillMaterial = [](const Optics &optics, float (&profile)[4],
+                                 float (&tint)[4], float (&light)[4]) {
+        profile[0] = optics.bezel;
+        profile[1] = optics.bend;
+        profile[2] = optics.dispersion;
+        profile[3] = optics.frost;
+        std::copy(std::begin(optics.tint), std::end(optics.tint), std::begin(tint));
+        light[0] = -0.58f;
+        light[1] = -0.81f;
+        light[2] = optics.shadow;
+        light[3] = optics.highlight;
+    };
+    ControlMaterialPush material{};
+    material.rectSource[0] = float(pixels.width());
+    material.rectSource[1] = float(pixels.height());
+    material.rectSource[2] = float(source.x() - bounds.x()) * scaleX;
+    material.rectSource[3] = float(source.y() - bounds.y()) * scaleY;
+    material.sourcePixel[0] = sourcePixelX;
+    material.sourcePixel[1] = sourcePixelY;
+    material.sourcePixel[2] = std::max(sourcePixelX, sourcePixelY);
+    material.sourcePixel[3] = recipe.pressure;
+    fillMaterial(recipe.trackMaterial, material.trackProfile,
+                 material.trackTint, material.trackLight);
+    fillMaterial(recipe.thumbMaterial, material.thumbProfile,
+                 material.thumbTint, material.thumbLight);
+
+    transition(m_controlOutput, VK_IMAGE_LAYOUT_GENERAL,
+               transfer, VK_ACCESS_TRANSFER_READ_BIT, compute, write);
+    dispatch(m_controlMaterial, m_sets[5], pixels, &material, sizeof(material));
+    transition(m_controlOutput, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+               compute, write, transfer, VK_ACCESS_TRANSFER_READ_BIT);
+    VkBufferImageCopy download{};
+    download.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    download.imageExtent = {uint32_t(pixels.width()), uint32_t(pixels.height()), 1};
+    vkCmdCopyImageToBuffer(m_command, m_controlOutput.handle,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_readback.handle, 1, &download);
+    VkBufferMemoryBarrier hostRead{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+    hostRead.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    hostRead.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    hostRead.srcQueueFamilyIndex = hostRead.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    hostRead.buffer = m_readback.handle;
+    hostRead.size = bytes;
+    vkCmdPipelineBarrier(m_command, transfer, VK_PIPELINE_STAGE_HOST_BIT, 0,
+                         0, nullptr, 1, &hostRead, 0, nullptr);
+    if (!submit())
+        return fail();
+    m_inputKey = image.cacheKey();
+    m_boundsSize = bounds.size();
+    const QImage result(static_cast<const uchar *>(m_readback.mapped), pixels.width(), pixels.height(),
+                        pixels.width() * 4, QImage::Format_RGBA8888_Premultiplied);
+    return result.copy();
+}
+
 } // namespace
 
 QImage renderOnVulkan(const QImage &image, const QRect &bounds, const QRectF &source,
                      const QSize &pixels, const Optics &optics)
 {
-    // Surface 只在 QWidget 的 GUI 线程渲染，设备与暂存缓冲由所有玻璃共用。
-    static Renderer renderer;
-    static const bool available = renderer.initialize();
-    if (!available) {
+    // One device and command context are shared by both glass recipes on the GUI thread.
+    auto *renderer = sharedRenderer();
+    if (!renderer) {
         static const auto logged = []() {
             qCInfo(glassLog) << "Vulkan loader or compute device unavailable";
             return true;
@@ -647,7 +827,16 @@ QImage renderOnVulkan(const QImage &image, const QRect &bounds, const QRectF &so
         Q_UNUSED(logged);
         return {};
     }
-    return renderer.render(image, bounds, source, pixels, optics);
+    return renderer->render(image, bounds, source, pixels, optics);
+}
+
+QImage renderControlOnVulkan(const QImage &image, const QRect &bounds, const QRectF &source,
+                            const QSize &pixels, const VulkanControlRecipe &recipe)
+{
+    auto *renderer = sharedRenderer();
+    if (!renderer)
+        return {};
+    return renderer->renderControl(image, bounds, source, pixels, recipe);
 }
 
 } // namespace LiquidGlass
@@ -656,6 +845,12 @@ QImage renderOnVulkan(const QImage &image, const QRect &bounds, const QRectF &so
 
 QImage LiquidGlass::renderOnVulkan(const QImage &, const QRect &, const QRectF &,
                                   const QSize &, const Optics &)
+{
+    return {};
+}
+
+QImage LiquidGlass::renderControlOnVulkan(const QImage &, const QRect &, const QRectF &,
+                                         const QSize &, const VulkanControlRecipe &)
 {
     return {};
 }

@@ -6,7 +6,6 @@
 
 #include <QEasingCurve>
 #include <QPainter>
-#include <QPainterPath>
 #include <QPropertyAnimation>
 
 namespace {
@@ -39,26 +38,17 @@ ToggleSwitch::ToggleSwitch(QWidget *parent)
     connect(this, &QAbstractButton::released, this, [this]() { animatePressure(0); });
     connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
             this, [this](qreal progress) {
-                if (m_followsLiquidGlass)
-                    setKnob(progress);
-                if (progress <= 0) {
-                    m_glassTrack.clear();
-                    m_glassThumb.clear();
-                }
+                m_liquidProgress = progress;
+                if (progress <= 0)
+                    m_controlGlass.clear();
                 update();
             });
+    m_liquidProgress = AppearanceSettings::instance().liquidGlassProgress();
 }
 
 QSize ToggleSwitch::sizeHint() const
 {
     return QSize(44, 24);
-}
-
-void ToggleSwitch::followLiquidGlassProgress()
-{
-    m_followsLiquidGlass = true;
-    m_anim->stop();
-    setKnob(AppearanceSettings::instance().liquidGlassProgress());
 }
 
 void ToggleSwitch::setKnob(qreal value)
@@ -78,8 +68,6 @@ void ToggleSwitch::checkStateSet()
 
 void ToggleSwitch::animateTo(bool checked)
 {
-    if (m_followsLiquidGlass)
-        return;
     const qreal target = checked ? 1.0 : 0.0;
     if (m_anim->state() == QAbstractAnimation::Running && m_anim->endValue().toReal() == target)
         return;
@@ -115,7 +103,7 @@ void ToggleSwitch::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    const qreal progress = AppearanceSettings::instance().liquidGlassProgress();
+    const qreal progress = m_liquidProgress;
     if (progress <= 0) {
         paintStandard(painter, dark);
         return;
@@ -164,16 +152,6 @@ void ToggleSwitch::paintLiquid(QPainter &painter, const LiquidGlass::Backdrop &b
     const QPoint origin = mapTo(window(), QPoint());
     const QRect track = rect();
     const qreal radius = track.height() / 2.0;
-    m_glassTrack.paint(painter, track, backdrop, track.translated(origin), radius,
-                       dark, LiquidGlass::Material::SwitchTrack);
-
-    // 轨道染色保留开关状态，滑块用独立的折射场和接触阴影表现厚度。
-    QColor tint(Theme::kLavender);
-    tint.setAlphaF(m_knob * (isEnabled() ? 0.66 : 0.29));
-    painter.setBrush(tint);
-    painter.setPen(hasFocus() ? QPen(QColor(Theme::kLavenderDk), 1.5) : QPen(Qt::NoPen));
-    painter.drawRoundedRect(QRectF(track).adjusted(0.6, 0.6, -0.6, -0.6), radius, radius);
-
     constexpr qreal inset = 2.5;
     const qreal diameter = track.height() - 2 * inset;
     const qreal travel = track.width() - diameter - 2 * inset;
@@ -184,9 +162,20 @@ void ToggleSwitch::paintLiquid(QPainter &painter, const LiquidGlass::Backdrop &b
                                  track.width() - inset - thumbWidth / 2);
     const QRectF thumb(centerX - thumbWidth / 2, (track.height() - thumbHeight) / 2,
                        thumbWidth, thumbHeight);
-    QPainterPath shadow;
-    shadow.addRoundedRect(thumb.translated(0, 0.8), thumbHeight / 2, thumbHeight / 2);
-    painter.fillPath(shadow, QColor(10, 27, 43, dark ? 112 : 60));
-    m_glassThumb.paint(painter, thumb, backdrop, thumb.translated(origin),
-                       thumbHeight / 2, dark, LiquidGlass::Material::SwitchThumb, 1 - m_pressure);
+    LiquidGlass::ControlRecipe recipe;
+    recipe.track = QRectF(track);
+    recipe.thumb = thumb;
+    recipe.trackRadius = radius;
+    recipe.thumbRadius = thumbHeight / 2;
+    recipe.pressure = m_pressure;
+    recipe.dark = dark;
+    recipe.checked = isChecked();
+    m_controlGlass.paint(painter, track, backdrop, track.translated(origin), recipe);
+
+    if (hasFocus()) {
+        painter.setPen(QPen(QColor(Theme::kLavenderDk), 1.5));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRoundedRect(QRectF(track).adjusted(0.75, 0.75, -0.75, -0.75),
+                                radius, radius);
+    }
 }

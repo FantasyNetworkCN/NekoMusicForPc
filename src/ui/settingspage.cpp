@@ -486,7 +486,6 @@ void SettingsPage::setupUi()
     m_liquidGlassToggle = glassToggle;
     glassToggle->setObjectName(QStringLiteral("liquidGlassToggle"));
     glassToggle->setAccessibleName(glassLabel->text());
-    glassToggle->followLiquidGlassProgress();
     glassToggle->setChecked(appearance.liquidGlassEnabled());
     connect(glassToggle, &QAbstractButton::toggled, &appearance,
             &AppearanceSettings::setLiquidGlassEnabled);
