@@ -276,9 +276,7 @@ protected:
         painter.setOpacity(progress);
         const QPoint origin = mapTo(parentWidget()->parentWidget(), QPoint());
         m_surface.paint(painter, rect(), m_backdrop, QRect(origin, size()),
-                        18.0 + 8.0 * (1.0 - m_glassProgress),
-                        dark, LiquidGlass::Material::Popup,
-                        m_glassProgress);
+                        18.0 + 8.0 * (1.0 - m_glassProgress), dark);
     }
 
 private:

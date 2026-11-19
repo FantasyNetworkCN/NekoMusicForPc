@@ -106,8 +106,7 @@ protected:
                 painter.save();
                 painter.setOpacity(progress);
                 m_surface.paint(painter, viewport()->rect(), backdrop,
-                                QRectF(origin, viewport()->size()), 14, dark,
-                                Material::Popup);
+                                QRectF(origin, viewport()->size()), 14, dark);
                 painter.restore();
             }
         }
@@ -157,34 +156,11 @@ QRectF textureRect(const QRect &source, const QRect &bounds, const QSize &imageS
             source.width() * sx, source.height() * sy};
 }
 
-Optics opticsFor(qreal radius, bool dark, Material material, qreal morph)
+Optics opticsFor(qreal radius, bool dark)
 {
-    if (material == Material::SwitchTrack) {
-        return {float(radius), 6.0f, 3.1f, 0.50f, 0.24f,
-                {dark ? 0.24f : 0.76f, dark ? 0.34f : 0.85f, dark ? 0.46f : 0.94f, 0.40f},
-                0.20f, dark ? 0.78f : 0.86f};
-    }
-    if (material == Material::SwitchThumb) {
-        const float pressure = float(1.0 - morph);
-        return {float(radius), 5.5f, 4.8f + 2.2f * pressure, 0.85f, 0.18f,
-                {0.78f, 0.92f, 1.0f, dark ? 0.58f : 0.65f},
-                0.17f, dark ? 0.92f : 1.0f};
-    }
-
-    if (material == Material::ListItem) {
-        const float energy = float(1.0 + (1.0 - morph) * 0.24);
-        return {float(radius), 5.5f * energy, 2.8f * energy, 0.12f, 0.12f,
-                {dark ? 0.26f : 0.78f, dark ? 0.38f : 0.87f, dark ? 0.54f : 0.96f,
-                 dark ? 0.20f : 0.24f},
-                0.12f, dark ? 0.44f : 0.52f};
-    }
-
-    const bool popup = material == Material::Popup;
-    const float energy = float(1.0 + (1.0 - morph) * 0.42);
-    return {float(radius), (popup ? 26.0f : 22.0f) * energy,
-            (popup ? 26.0f : 19.0f) * energy, 2.15f * energy, popup ? 0.70f : 0.42f,
+    return {float(radius), 22.0f, 19.0f, 2.15f, 0.42f,
             {dark ? 0.05f : 0.96f, dark ? 0.09f : 0.98f, dark ? 0.15f : 1.0f,
-             dark ? (popup ? 0.52f : 0.38f) : (popup ? 0.69f : 0.46f)},
+             dark ? 0.38f : 0.46f},
             0.17f, dark ? 0.62f : 0.82f};
 }
 
@@ -269,7 +245,7 @@ void Backdrop::setImage(const QImage &image, const QRect &bounds)
 }
 
 bool Surface::paint(QPainter &painter, const QRectF &target, const Backdrop &backdrop,
-                    const QRectF &sourceArea, qreal radius, bool dark, Material material, qreal morph)
+                    const QRectF &sourceArea, qreal radius, bool dark)
 {
     if (backdrop.isEmpty() || target.isEmpty() || sourceArea.isEmpty()
         || !QRectF(backdrop.m_bounds).intersects(sourceArea))
@@ -280,10 +256,10 @@ bool Surface::paint(QPainter &painter, const QRectF &target, const Backdrop &bac
     const qint64 key = backdrop.m_image.cacheKey();
     if (m_image.isNull() || m_sourceKey != key || m_backdropBounds != backdrop.m_bounds
         || m_sourceArea != sourceArea || m_size != target.size() || m_radius != radius
-        || m_scale != scale || m_dark != dark || m_material != material || m_morph != morph) {
+        || m_scale != scale || m_dark != dark) {
         const QSize pixels(qMax(1, qRound(target.width() * scale)),
                            qMax(1, qRound(target.height() * scale)));
-        const Optics optics = opticsFor(radius, dark, material, morph);
+        const Optics optics = opticsFor(radius, dark);
         m_image = renderOnVulkan(backdrop.m_image, backdrop.m_bounds, sourceArea, pixels, optics);
         if (m_image.isNull())
             m_image = renderFallback(backdrop.m_image, backdrop.m_bounds, sourceArea, pixels, optics);
@@ -294,8 +270,6 @@ bool Surface::paint(QPainter &painter, const QRectF &target, const Backdrop &bac
         m_radius = radius;
         m_scale = scale;
         m_dark = dark;
-        m_material = material;
-        m_morph = morph;
     }
     if (m_image.isNull())
         return false;
@@ -335,10 +309,8 @@ bool ControlSurface::paint(QPainter &painter, const QRectF &target, const Backdr
         vulkanRecipe.trackRadius = float(recipe.trackRadius * qMin(sx, sy));
         vulkanRecipe.thumbRadius = float(recipe.thumbRadius * qMin(sx, sy));
         vulkanRecipe.pressure = float(recipe.pressure);
-        vulkanRecipe.trackMaterial = opticsFor(recipe.trackRadius, recipe.dark,
-                                               Material::SwitchTrack, 1.0);
-        vulkanRecipe.thumbMaterial = opticsFor(recipe.thumbRadius, recipe.dark,
-                                               Material::SwitchThumb, 1.0 - recipe.pressure);
+        vulkanRecipe.trackMaterial = opticsFor(recipe.trackRadius, recipe.dark);
+        vulkanRecipe.thumbMaterial = opticsFor(recipe.thumbRadius, recipe.dark);
         const QColor accent(Theme::kLavender);
         vulkanRecipe.trackMaterial.tint[0] = float(accent.redF());
         vulkanRecipe.trackMaterial.tint[1] = float(accent.greenF());
@@ -359,7 +331,7 @@ bool ControlSurface::paint(QPainter &painter, const QRectF &target, const Backdr
         m_fallbackTrack.paint(painter, QRectF(target.topLeft() + recipe.track.topLeft(),
                                                recipe.track.size()),
                               backdrop, sourceArea.translated(recipe.track.topLeft()),
-                              radius, recipe.dark, Material::SwitchTrack);
+                              radius, recipe.dark);
         QColor accent(Theme::kLavender);
         accent.setAlphaF(recipe.checked ? 0.18 : 0.04);
         painter.save();
@@ -371,8 +343,7 @@ bool ControlSurface::paint(QPainter &painter, const QRectF &target, const Backdr
         m_fallbackThumb.paint(painter, QRectF(target.topLeft() + recipe.thumb.topLeft(),
                                                recipe.thumb.size()),
                               backdrop, sourceArea.translated(recipe.thumb.topLeft()),
-                              recipe.thumbRadius, recipe.dark, Material::SwitchThumb,
-                              1.0 - recipe.pressure);
+                              recipe.thumbRadius, recipe.dark);
         return true;
     }
     painter.save();

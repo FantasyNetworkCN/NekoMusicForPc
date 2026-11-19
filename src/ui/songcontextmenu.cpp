@@ -82,8 +82,7 @@ protected:
         if (progress <= 0)
             return;
         painter.setOpacity(progress);
-        m_surface.paint(painter, shape, m_backdrop, QRect(m_source.topLeft() + origin, size), radius, dark,
-                        LiquidGlass::Material::Popup, t);
+        m_surface.paint(painter, shape, m_backdrop, QRect(m_source.topLeft() + origin, size), radius, dark);
     }
 
 private:

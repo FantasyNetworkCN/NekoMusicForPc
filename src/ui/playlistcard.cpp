@@ -154,8 +154,7 @@ void PlaylistCard::paintEvent(QPaintEvent *)
         p.setOpacity(m_liquidProgress);
         glassPainted = m_liquidSurface.paint(
             p, rect(), LiquidGlass::shellBackdrop(this),
-            QRectF(mapTo(window(), QPoint()), size()), 18, dark,
-            LiquidGlass::Material::ListItem, 1.0 - m_hoverProgress * 0.18);
+            QRectF(mapTo(window(), QPoint()), size()), 18, dark);
         p.restore();
     }
     p.setPen(QPen(hasFocus() ? QColor(Theme::kLavender)

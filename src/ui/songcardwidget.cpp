@@ -936,8 +936,7 @@ void SongCardWidget::paintEvent(QPaintEvent *)
         p.setOpacity(m_liquidProgress);
         glassPainted = m_liquidSurface.paint(
             p, body, LiquidGlass::shellBackdrop(this),
-            QRectF(sourceOrigin, body.size()), 12, dark, LiquidGlass::Material::ListItem,
-            1.0 - (m_hover ? 0.18 : 0.0));
+            QRectF(sourceOrigin, body.size()), 12, dark);
         p.restore();
     }
 

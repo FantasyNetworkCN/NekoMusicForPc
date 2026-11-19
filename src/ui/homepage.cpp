@@ -75,8 +75,7 @@ protected:
             p.setOpacity(m_liquidProgress);
             glassPainted = m_surface.paint(
                 p, rect(), LiquidGlass::shellBackdrop(this),
-                QRectF(mapTo(window(), QPoint()), size()), 24, dark,
-                LiquidGlass::Material::Chrome, 1.0 - (underMouse() ? 0.16 : 0.0));
+                QRectF(mapTo(window(), QPoint()), size()), 24, dark);
             p.restore();
         }
         if (!glassPainted)
@@ -143,8 +142,7 @@ protected:
             p.setOpacity(m_liquidProgress);
             glassPainted = m_surface.paint(
                 p, rect(), LiquidGlass::shellBackdrop(this),
-                QRectF(mapTo(window(), QPoint()), size()), 16, dark,
-                LiquidGlass::Material::Chrome, underMouse() ? 0.82 : 1.0);
+                QRectF(mapTo(window(), QPoint()), size()), 16, dark);
             p.restore();
         }
         if (!glassPainted)

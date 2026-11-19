@@ -24,8 +24,6 @@ private:
     QImage m_image;
 };
 
-enum class Material { Chrome, Popup, ListItem, SwitchTrack, SwitchThumb };
-
 struct ControlRecipe {
     QRectF track;
     QRectF thumb;
@@ -41,8 +39,7 @@ class Surface
 {
 public:
     bool paint(QPainter &painter, const QRectF &target, const Backdrop &backdrop,
-               const QRectF &sourceArea, qreal radius, bool dark,
-               Material material = Material::Chrome, qreal morph = 1.0);
+               const QRectF &sourceArea, qreal radius, bool dark);
     void clear() { m_image = QImage(); }
 
 private:
@@ -53,9 +50,7 @@ private:
     QSizeF m_size;
     qreal m_radius = 0;
     qreal m_scale = 0;
-    qreal m_morph = 1;
     bool m_dark = false;
-    Material m_material = Material::Chrome;
 };
 
 /** 单帧绘制的控件玻璃：距离场和材质合成共享同一份几何与背景。 */

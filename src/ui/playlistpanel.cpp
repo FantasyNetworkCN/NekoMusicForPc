@@ -1590,8 +1590,7 @@ void PlaylistPanel::paintEvent(QPaintEvent *event)
     const qreal progress = AppearanceSettings::instance().liquidGlassProgress();
     const auto drawGlass = [&]() {
         return m_liquidSurface.paint(p, rect(), m_liquidBackdrop, geometry(),
-                                     18.0 + (1.0 - reveal) * 12.0, dark,
-                                     LiquidGlass::Material::Popup, reveal);
+                                     18.0 + (1.0 - reveal) * 12.0, dark);
     };
     if (progress >= 1 && drawGlass())
         return;

@@ -106,8 +106,7 @@ protected:
             painter.setOpacity(m_liquidProgress);
             glassPainted = m_surface.paint(
                 painter, bounds, LiquidGlass::shellBackdrop(this),
-                QRectF(origin, size()), 12, dark, LiquidGlass::Material::Chrome,
-                1.0 - (m_hovered ? 0.18 : 0.0));
+                QRectF(origin, size()), 12, dark);
             painter.restore();
         }
         if (m_hovered) {
