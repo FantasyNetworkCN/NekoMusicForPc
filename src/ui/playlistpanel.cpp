@@ -914,6 +914,13 @@ void PlaylistPanel::setFullPlayerMode(bool on)
     update();
 }
 
+void PlaylistPanel::setLiquidGlassBackdrop(const QImage &image, const QRect &bounds)
+{
+    m_liquidBackdrop.setImage(image, bounds);
+    m_liquidSurface.clear();
+    update();
+}
+
 void PlaylistPanel::applyPanelChrome()
 {
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
@@ -996,6 +1003,7 @@ void PlaylistPanel::setupUi()
     headerLay->addLayout(titleCol, 1);
 
     m_deviceCombo = new QComboBox(header);
+    m_deviceCombo->setObjectName(QStringLiteral("ppDeviceCombo"));
     m_deviceCombo->setMinimumWidth(130);
     m_deviceCombo->setCursor(Qt::PointingHandCursor);
     connect(m_deviceCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
@@ -1570,12 +1578,19 @@ void PlaylistPanel::togglePanel()
 void PlaylistPanel::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
+    QPainter p(this);
+    const bool dark = Theme::ThemeManager::instance().isDarkMode();
+    const auto *host = parentWidget();
+    const qreal reveal = host ? qBound(0.0, qreal(host->width() - x()) / qMax(1, width()), 1.0) : 1.0;
+    if (m_liquidSurface.paint(p, rect(), m_liquidBackdrop, geometry(),
+                              18.0 + (1.0 - reveal) * 12.0, dark,
+                              LiquidGlass::Material::Popup, reveal)) {
+        return;
+    }
     if (m_fullPlayerMode)
         return;
 
-    QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
-    const bool dark = Theme::ThemeManager::instance().isDarkMode();
 
     QPainterPath clip;
     const QRect r = rect();

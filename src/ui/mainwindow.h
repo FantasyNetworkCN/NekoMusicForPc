@@ -279,6 +279,7 @@ private:
     int m_qualityInfoMusicId = 0;
 
     QWidget *m_shellBackdrop = nullptr;
+    QTimer *m_playlistGlassRefresh = nullptr;
     QTimer *m_shellBackdropRebuildTimer = nullptr;
     QPixmap m_shellBackdropCache;
     QSize m_shellBackdropCacheSize;

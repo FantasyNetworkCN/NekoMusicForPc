@@ -11,6 +11,7 @@
 #include <QWidget>
 #include <QMap>
 #include <QIcon>
+#include "ui/liquidglass.h"
 
 class QPushButton;
 class QVBoxLayout;
@@ -51,6 +52,7 @@ protected:
     void paintEvent(QPaintEvent *) override;
 
 private:
+    LiquidGlass::Surface m_liquidGlass;
     void setupUi();
     QPushButton *createNavItem(const QString &key, const QString &label, const QIcon &icon);
     void refreshPlaylistList();

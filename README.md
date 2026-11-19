@@ -56,7 +56,7 @@ Neko 歌姬计划 PC 客户端基于 Qt 6 与 C++ 构建，面向 Windows、Linu
 **Debian / Ubuntu 示例：**
 
 ```bash
-sudo apt install cmake qt6-base-dev qt6-multimedia-dev qt6-websockets-dev libssl-dev
+sudo apt install cmake qt6-base-dev qt6-multimedia-dev qt6-websockets-dev libssl-dev libvulkan-dev glslc
 ```
 
 ---
@@ -64,6 +64,8 @@ sudo apt install cmake qt6-base-dev qt6-multimedia-dev qt6-websockets-dev libssl
 ## 配置与编译
 
 项目可使用 CMake Presets，也可直接用脚本构建：
+
+液态玻璃的 Vulkan 着色器在构建时由 `glslc` 编译。Windows 原生构建从 `VULKAN_SDK` 读取 SDK，交叉编译可用 `NEKO_VULKAN_HEADERS` 和 `NEKO_GLSLC` 指定头文件目录和宿主编译器。不具备 Vulkan 支持时使用全分辨率的栅格折射。
 
 ```bash
 # Linux（推荐）

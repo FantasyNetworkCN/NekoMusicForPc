@@ -12,6 +12,7 @@
 #include "theme/theme.h"
 #include "theme/thememanager.h"
 #include "ui/glasspaint.h"
+#include "core/appearancesettings.h"
 #include "ui/scrollareafix.h"
 #include "ui/playlistlistitem.h"
 #include "core/covercache.h"
@@ -145,6 +146,8 @@ Sidebar::Sidebar(ApiClient *apiClient, QWidget *parent) : QWidget(parent), m_api
     setFixedWidth(Theme::kSidebarW);
     setAttribute(Qt::WA_StyledBackground, false);
     setAutoFillBackground(false);
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+            this, [this]() { update(); });
     setupUi();
     setActiveNav("home");
     loadPlaylists();
@@ -806,7 +809,21 @@ void Sidebar::retranslate()
 void Sidebar::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
+    const bool dark = Theme::ThemeManager::instance().isDarkMode();
+    const qreal progress = AppearanceSettings::instance().liquidGlassProgress();
+    const auto paintLiquid = [&]() {
+        return m_liquidGlass.paint(p, rect(), LiquidGlass::shellBackdrop(this),
+                                   QRect(mapTo(window(), QPoint()), size()), 20, dark);
+    };
+    if (progress >= 1.0 && paintLiquid())
+        return;
+    if (progress <= 0.0)
+        m_liquidGlass.clear();
     GlassPaint::paintBarGlass(p, rect(), GlassPaint::BarKind::Sidebar,
-                              Theme::ThemeManager::instance().isDarkMode(),
+                              dark,
                               ShellBackdropSettings::instance().usesImageBackdrop());
+    if (progress > 0.0 && progress < 1.0) {
+        p.setOpacity(progress);
+        paintLiquid();
+    }
 }

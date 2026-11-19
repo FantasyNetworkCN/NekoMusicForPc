@@ -8,7 +8,8 @@ arch=('x86_64' 'aarch64')
 url="https://github.com/FantasyNetworkCN/NekoMusicForPc"
 license=('AGPL-3.0-or-later')
 depends=('qt6-base' 'qt6-multimedia' 'qt6-svg' 'qt6-websockets' 'openssl')
-makedepends=('cmake' 'ninja')
+makedepends=('cmake' 'ninja' 'vulkan-headers' 'shaderc')
+optdepends=('vulkan-icd-loader: Vulkan 液态玻璃')
 
 _commit=7072e435a5d6917ead0c27e5098800a871407842
 source=("${pkgname}-${_commit}.tar.gz::${url}/archive/${_commit}.tar.gz")
@@ -30,7 +31,8 @@ pkgver() {
 build() {
   cmake -S "$(_srcdir)" -B "${srcdir}/build" \
     -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_BUILD_TYPE=Release \
+    -DNEKO_REQUIRE_VULKAN_GLASS=ON
   cmake --build "${srcdir}/build"
 }
 

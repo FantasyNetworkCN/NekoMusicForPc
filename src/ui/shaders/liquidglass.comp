@@ -1,0 +1,98 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(binding = 0) uniform sampler2D backdrop;
+layout(binding = 1) uniform sampler2D diffusion;
+layout(binding = 2) uniform sampler2D shapeField;
+layout(binding = 3, rgba8) uniform writeonly image2D outputImage;
+
+layout(push_constant) uniform Material {
+    vec2 rectSize;
+    vec2 sourceOrigin;
+    vec2 sourcePerPoint;
+    float radius;
+    float pixelWidth;
+    float bezel;
+    float bendStrength;
+    float dispersion;
+    float frost;
+    vec4 tint;
+    vec2 keyLight;
+    float shadow;
+    float highlight;
+} glass;
+
+float bevelDisplacement(float height)
+{
+    return 1.0 - sqrt(height * (2.0 - height));
+}
+
+vec3 sampleGlass(vec2 position, float softness)
+{
+    return mix(textureLod(backdrop, position, 0.0).rgb,
+               textureLod(diffusion, position, 0.0).rgb, softness);
+}
+
+vec3 spectralRefraction(vec2 uv, vec2 offset, float softness)
+{
+    // 对可见光谱的七个位置加权，形成连续、窄幅的色散。
+    vec3 color = sampleGlass(uv, softness) * vec3(0.0, 0.56, 0.0);
+    color += sampleGlass(uv + offset * 0.33, softness) * vec3(0.20, 0.22, 0.0);
+    color += sampleGlass(uv + offset * 0.67, softness) * vec3(0.52, 0.0, 0.0);
+    color += sampleGlass(uv + offset, softness) * vec3(0.28, 0.0, 0.0);
+    color += sampleGlass(uv - offset * 0.33, softness) * vec3(0.0, 0.22, 0.20);
+    color += sampleGlass(uv - offset * 0.67, softness) * vec3(0.0, 0.0, 0.52);
+    color += sampleGlass(uv - offset, softness) * vec3(0.0, 0.0, 0.28);
+    return color;
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 extent = imageSize(outputImage);
+    if (any(greaterThanEqual(pixel, extent)))
+        return;
+
+    vec2 position = (vec2(pixel) + 0.5) * glass.rectSize / vec2(extent);
+    vec2 halfSize = glass.rectSize * 0.5;
+    vec4 shape = texelFetch(shapeField, pixel, 0);
+    float distance = shape.r;
+    float coverage = shape.a;
+    if (coverage == 0.0) {
+        imageStore(outputImage, pixel, vec4(0.0));
+        return;
+    }
+
+    float depth = max(0.0, -distance);
+    float bevel = min(glass.bezel, min(halfSize.x, halfSize.y));
+    float h = clamp(depth / max(0.5, bevel), 0.0, 1.0);
+    vec2 normal = shape.gb;
+    vec2 uvPerPoint = glass.sourcePerPoint / vec2(textureSize(backdrop, 0));
+    vec2 undistorted = (glass.sourceOrigin + position * glass.sourcePerPoint)
+                     / vec2(textureSize(backdrop, 0));
+
+    float displacement = glass.bendStrength * bevelDisplacement(h);
+    // 次级折射带由同一个场驱动，峰值落在亮边下方并平滑消失。
+    displacement += glass.bendStrength * 0.14 * sin(h * 3.14159265) * (1.0 - h);
+    vec2 refracted = undistorted - normal * displacement * uvPerPoint;
+    float softness = glass.frost * mix(0.04, 1.0, smoothstep(0.06, 0.85, h));
+    float spread = glass.dispersion * (1.0 - h) * (1.0 - h);
+    vec3 color = spread > 0.12
+        ? spectralRefraction(refracted, normal * spread * uvPerPoint, softness)
+        : sampleGlass(refracted, softness);
+
+    // 有方向的主光与背光随法线分布，材质边沿同时混入邻近背景色。
+    float light = dot(normal, glass.keyLight);
+    float key = pow(max(light, 0.0), 3.0);
+    float fill = pow(max(-light, 0.0), 3.0);
+    float rim = 1.0 - smoothstep(0.45, 2.3 + glass.pixelWidth, depth);
+    float innerShade = exp(-pow((depth - 4.0) / 2.5, 2.0))
+                     * glass.shadow * (0.33 + 0.67 * fill);
+    vec3 reflected = sampleGlass(undistorted + normal * 5.0 * uvPerPoint, 0.30);
+    color = mix(color, reflected, rim * 0.12);
+    color = mix(color, glass.tint.rgb, glass.tint.a);
+    color *= 1.0 - innerShade;
+    color = mix(color, vec3(0.91, 0.97, 1.0),
+                (0.085 + key * 0.72 + fill * 0.28) * rim * glass.highlight);
+    imageStore(outputImage, pixel, vec4(color * coverage, coverage));
+}

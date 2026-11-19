@@ -103,6 +103,7 @@ private:
     QComboBox *m_themeCombo = nullptr;
     QPushButton *m_generalTabBtn = nullptr;
     QPushButton *m_appearanceTabBtn = nullptr;
+    ToggleSwitch *m_liquidGlassToggle = nullptr;
     QPushButton *m_shortcutsTabBtn = nullptr;
     QPushButton *m_aboutTabBtn = nullptr;
     QScrollArea *m_scrollArea = nullptr;
@@ -113,7 +114,6 @@ private:
     QLabel *m_descLabel = nullptr;
     QLabel *m_themeLabel = nullptr;
     QLabel *m_lyricEffectsSectionLabel = nullptr;
-    QLabel *m_lyricEffectsEnabledLabel = nullptr;
     QLabel *m_lyricEffectsHintLabel = nullptr;
     QLabel *m_lyricFontScaleLabel = nullptr;
     QLabel *m_lyricLineSpacingLabel = nullptr;
@@ -142,7 +142,6 @@ private:
     QLabel *m_amllFlowSpeedValue = nullptr;
     QLabel *m_amllBassReactivityValue = nullptr;
     QLabel *m_amllScrimStrengthValue = nullptr;
-    ToggleSwitch *m_lyricEffectsToggle = nullptr;
     ToggleSwitch *m_lyricDistanceBlurToggle = nullptr;
     ToggleSwitch *m_lyricWordSweepToggle = nullptr;
     ToggleSwitch *m_lyricWordFloatToggle = nullptr;

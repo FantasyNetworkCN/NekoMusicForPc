@@ -1,0 +1,8 @@
+file(READ "${INPUT}" bytes HEX)
+string(REGEX MATCHALL "........" words "${bytes}")
+set(text "// Generated from GLSL. Edit the shader source instead.\n")
+foreach(word IN LISTS words)
+    string(REGEX REPLACE "(..)(..)(..)(..)" "0x\\4\\3\\2\\1," literal "${word}")
+    string(APPEND text "${literal}\n")
+endforeach()
+file(WRITE "${OUTPUT}" "${text}")

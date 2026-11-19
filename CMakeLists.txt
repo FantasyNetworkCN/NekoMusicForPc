@@ -42,6 +42,32 @@ message(STATUS "NEKO target: WINDOWS=${NEKO_TARGET_WINDOWS} APPLE=${NEKO_TARGET_
 
 # Qt6
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGLWidgets Multimedia Network WebSockets SvgWidgets Sql Concurrent)
+option(NEKO_REQUIRE_VULKAN_GLASS "Require the Vulkan Liquid Glass build tools" "$ENV{NEKO_REQUIRE_VULKAN_GLASS}")
+find_path(NEKO_VULKAN_HEADERS vulkan/vulkan.h HINTS "$ENV{VULKAN_SDK}/Include")
+find_program(NEKO_GLSLC glslc HINTS "$ENV{VULKAN_SDK}/Bin")
+if(NEKO_VULKAN_HEADERS AND NEKO_GLSLC)
+    set(NEKO_HAS_VULKAN_GLASS ON)
+    set(NEKO_GLASS_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/glass")
+    foreach(shader liquidglass_blur liquidglass_field liquidglass)
+        set(shader_source "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/shaders/${shader}.comp")
+        set(shader_binary "${NEKO_GLASS_GENERATED_DIR}/${shader}.spv")
+        set(shader_header "${NEKO_GLASS_GENERATED_DIR}/${shader}_spirv.inc")
+        add_custom_command(OUTPUT "${shader_header}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${NEKO_GLASS_GENERATED_DIR}"
+            COMMAND "${NEKO_GLSLC}" -O --target-env=vulkan1.0 "${shader_source}" -o "${shader_binary}"
+            COMMAND "${CMAKE_COMMAND}" "-DINPUT=${shader_binary}" "-DOUTPUT=${shader_header}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedSpirv.cmake"
+            DEPENDS "${shader_source}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/EmbedSpirv.cmake"
+            VERBATIM)
+        list(APPEND NEKO_GLASS_SHADERS "${shader_header}")
+    endforeach()
+    add_custom_target(neko-glass-shaders DEPENDS ${NEKO_GLASS_SHADERS})
+    message(STATUS "Liquid Glass Vulkan compute shaders enabled")
+elseif(NEKO_REQUIRE_VULKAN_GLASS)
+    message(FATAL_ERROR "Liquid Glass requires Vulkan headers and the host glslc shader compiler")
+else()
+    message(STATUS "Vulkan headers or glslc unavailable — Liquid Glass uses the raster fallback")
+endif()
 if(NEKO_TARGET_UNIX)
     find_package(Qt6 REQUIRED COMPONENTS DBus)
 endif()
@@ -149,6 +175,8 @@ set(SOURCES
         src/ui/mainwindow.cpp
         src/ui/glasswidget.cpp
         src/ui/glasspaint.cpp
+        src/ui/liquidglass.cpp
+        src/ui/liquidglassvulkan.cpp
         src/ui/titlebar.cpp
         src/ui/sidebar.cpp
         src/ui/carousel.cpp
@@ -203,6 +231,7 @@ set(SOURCES
         src/core/appshortcuts.cpp
         src/core/micsynccontroller.cpp
         src/core/shellbackdropsettings.cpp
+        src/core/appearancesettings.cpp
         src/core/globalshortcutcontroller.cpp
         src/core/listmetaformat.cpp
         src/core/covercache.cpp
@@ -246,6 +275,8 @@ set(HEADERS
         src/ui/mainwindow.h
         src/ui/glasswidget.h
         src/ui/glasspaint.h
+        src/ui/liquidglass.h
+        src/ui/liquidglassvulkan.h
         src/ui/scrollareafix.h
         src/ui/titlebar.h
         src/ui/sidebar.h
@@ -300,6 +331,7 @@ set(HEADERS
         src/core/appshortcuts.h
         src/core/micsynccontroller.h
         src/core/shellbackdropsettings.h
+        src/core/appearancesettings.h
         src/core/globalshortcutcontroller.h
         src/core/covercache.h
         src/core/linuxtmpfscache.h
@@ -409,6 +441,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
         Qt6::Sql
         Qt6::Concurrent
 )
+if(NEKO_HAS_VULKAN_GLASS)
+    add_dependencies(${PROJECT_NAME} neko-glass-shaders)
+    target_include_directories(${PROJECT_NAME} PRIVATE "${NEKO_VULKAN_HEADERS}" "${NEKO_GLASS_GENERATED_DIR}")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE NEKO_HAS_VULKAN_GLASS=1)
+endif()
 if(NEKO_TARGET_UNIX)
     target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::DBus)
     find_package(X11)

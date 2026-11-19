@@ -7,6 +7,8 @@
 #include "theme/theme.h"
 #include "theme/thememanager.h"
 #include "ui/svgicon.h"
+#include "ui/liquidglass.h"
+#include "core/appearancesettings.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -14,6 +16,9 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QGraphicsDropShadowEffect>
+#include <QGraphicsOpacityEffect>
+#include <QVariantAnimation>
+#include <QCloseEvent>
 #include <QMouseEvent>
 #include <QEnterEvent>
 #include <QApplication>
@@ -26,6 +31,54 @@ constexpr int kMenuMaxW = 280;
 constexpr int kRowH = 44;
 constexpr int kPad = 6;
 constexpr int kIconSize = 18;
+constexpr int kMenuMargin = 8;
+
+class SongContextMenuPanel final : public QWidget
+{
+public:
+    explicit SongContextMenuPanel(QWidget *parent) : QWidget(parent) {}
+
+    void setBackdrop(const QImage &image, const QRect &bounds, const QRect &source)
+    {
+        m_backdrop.setImage(image, bounds);
+        m_source = source;
+        m_surface.clear();
+        setAttribute(Qt::WA_StyledBackground, m_backdrop.isEmpty());
+        update();
+    }
+
+    bool hasGlass() const { return !m_backdrop.isEmpty(); }
+
+    void setReveal(qreal progress, bool upwards)
+    {
+        m_reveal = progress;
+        m_upwards = upwards;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        if (!hasGlass())
+            return;
+        QPainter painter(this);
+        const qreal t = qBound(0.0, m_reveal, 1.0);
+        const QSize size(qRound(width() * (0.84 + 0.16 * t)),
+                         qRound(height() * (0.60 + 0.40 * t)));
+        const QPoint origin((width() - size.width()) / 2, m_upwards ? height() - size.height() : 0);
+        m_surface.paint(painter, QRect(origin, size), m_backdrop,
+                        QRect(m_source.topLeft() + origin, size),
+                        12.0 + 7.0 * (1.0 - t), Theme::ThemeManager::instance().isDarkMode(),
+                        LiquidGlass::Material::Popup, t);
+    }
+
+private:
+    LiquidGlass::Surface m_surface;
+    LiquidGlass::Backdrop m_backdrop;
+    QRect m_source;
+    qreal m_reveal = 1.0;
+    bool m_upwards = false;
+};
 
 class SongContextMenuRow final : public QWidget
 {
@@ -138,6 +191,7 @@ SongContextMenuPopup *SongContextMenuPopup::showAt(QWidget *anchor, const QPoint
 
     auto *menu = new SongContextMenuPopup(anchor, entries);
     menu->placeAt(globalPos);
+    menu->animateGlassOpen();
     menu->show();
     menu->raise();
     menu->activateWindow();
@@ -153,10 +207,10 @@ SongContextMenuPopup::SongContextMenuPopup(QWidget *anchor, const QList<Entry> &
     setAttribute(Qt::WA_TranslucentBackground, true);
 
     auto *outer = new QVBoxLayout(this);
-    outer->setContentsMargins(8, 8, 8, 8);
+    outer->setContentsMargins(kMenuMargin, kMenuMargin, kMenuMargin, kMenuMargin);
     outer->setSpacing(0);
 
-    m_panel = new QWidget(this);
+    m_panel = new SongContextMenuPanel(this);
     m_panel->setObjectName(QStringLiteral("songContextMenuPanel"));
     auto *shadow = new QGraphicsDropShadowEffect(m_panel);
     shadow->setBlurRadius(24);
@@ -175,6 +229,8 @@ SongContextMenuPopup::SongContextMenuPopup(QWidget *anchor, const QList<Entry> &
 
     connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged, this,
             [this]() { applyTheme(); });
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassChanged,
+            this, &SongContextMenuPopup::refreshGlassBackdrop);
 }
 
 /** 按 entries 重建行部件并重算固定宽高（构造与 setEntries 共用，保证两处口径一致） */
@@ -216,7 +272,6 @@ void SongContextMenuPopup::setEntries(const QList<Entry> &entries)
     if (entries.isEmpty())
         return;
     applyEntriesToLayout(entries);
-    applyTheme();
     clampToScreen();
     update();
 }
@@ -228,7 +283,13 @@ void SongContextMenuPopup::clampToScreen()
                                                        : QApplication::primaryScreen();
     if (!screen)
         screen = QApplication::primaryScreen();
-    const QRect avail = screen ? screen->availableGeometry() : QRect(0, 0, 1920, 1080);
+    QRect avail = screen ? screen->availableGeometry() : QRect(0, 0, 1920, 1080);
+    if (m_anchor && AppearanceSettings::instance().liquidGlassEnabled()) {
+        QWidget *host = m_anchor->window();
+        const QRect appArea = avail.intersected(QRect(host->mapToGlobal(QPoint()), host->size()));
+        if (appArea.width() >= width() && appArea.height() >= height())
+            avail = appArea;
+    }
 
     int x = geometry().x();
     int y = geometry().y();
@@ -241,6 +302,93 @@ void SongContextMenuPopup::clampToScreen()
     if (y < avail.top())
         y = avail.top();
     move(x, y);
+    refreshGlassBackdrop();
+}
+
+void SongContextMenuPopup::refreshGlassBackdrop()
+{
+    auto *panel = static_cast<SongContextMenuPanel *>(m_panel);
+    if (!panel)
+        return;
+    QWidget *host = m_anchor ? m_anchor->window() : nullptr;
+    if (host && AppearanceSettings::instance().liquidGlassEnabled()) {
+        const QRect source = QRect(host->mapFromGlobal(pos()), size())
+                                 .adjusted(kMenuMargin, kMenuMargin, -kMenuMargin, -kMenuMargin);
+        const int margin = LiquidGlass::kCaptureMargin;
+        const QRect area = source.adjusted(-margin, -margin, margin, margin).intersected(host->rect());
+        // 菜单超出本应用窗口时，使用同主题的实色面板。
+        if (host->rect().contains(source))
+            panel->setBackdrop(LiquidGlass::capture(host, area), area, source);
+        else
+            panel->setBackdrop({}, {}, {});
+    } else {
+        panel->setBackdrop({}, {}, {});
+    }
+    applyTheme();
+}
+
+void SongContextMenuPopup::animateGlassOpen()
+{
+    if (!static_cast<SongContextMenuPanel *>(m_panel)->hasGlass())
+        return;
+    m_glassProgress = 0.0;
+    animateGlass(1.0);
+}
+
+void SongContextMenuPopup::animateGlass(qreal end)
+{
+    if (!m_glassAnimation) {
+        m_glassAnimation = new QVariantAnimation(this);
+        connect(m_glassAnimation, &QVariantAnimation::valueChanged, this, [this](const QVariant &value) {
+            m_glassProgress = value.toReal();
+            static_cast<SongContextMenuPanel *>(m_panel)->setReveal(m_glassProgress, m_openUpwards);
+            if (auto *fade = qobject_cast<QGraphicsOpacityEffect *>(graphicsEffect()))
+                fade->setOpacity(qBound(0.0, m_glassProgress, 1.0));
+            const bool revealRows = m_glassProgress > 0.86 && !m_glassClosing;
+            for (QWidget *row : m_rowWidgets) {
+                if (auto *rowFade = qobject_cast<QGraphicsOpacityEffect *>(row->graphicsEffect()))
+                    rowFade->setOpacity(revealRows ? (m_glassProgress - 0.86) / 0.14 : 0.0);
+            }
+        });
+        connect(m_glassAnimation, &QVariantAnimation::finished, this, [this]() {
+            if (m_glassClosing) {
+                m_closeReady = true;
+                close();
+                return;
+            }
+            setGraphicsEffect(nullptr);
+            for (QWidget *row : m_rowWidgets)
+                row->setGraphicsEffect(nullptr);
+        });
+    }
+    m_glassAnimation->stop();
+    auto *fade = new QGraphicsOpacityEffect(this);
+    fade->setOpacity(m_glassProgress);
+    setGraphicsEffect(fade);
+    for (QWidget *row : m_rowWidgets) {
+        auto *rowFade = new QGraphicsOpacityEffect(row);
+        rowFade->setOpacity(m_glassClosing ? m_glassProgress : 0.0);
+        row->setGraphicsEffect(rowFade);
+    }
+    static_cast<SongContextMenuPanel *>(m_panel)->setReveal(m_glassProgress, m_openUpwards);
+    m_glassAnimation->setDuration(m_glassClosing ? 150 : 270);
+    m_glassAnimation->setStartValue(m_glassProgress);
+    m_glassAnimation->setEndValue(end);
+    m_glassAnimation->setEasingCurve(m_glassClosing ? QEasingCurve::InCubic : QEasingCurve::OutQuint);
+    m_glassAnimation->start();
+}
+
+void SongContextMenuPopup::closeEvent(QCloseEvent *event)
+{
+    if (m_closeReady || !isVisible() || !static_cast<SongContextMenuPanel *>(m_panel)->hasGlass()) {
+        QWidget::closeEvent(event);
+        return;
+    }
+    event->ignore();
+    if (!m_glassClosing) {
+        m_glassClosing = true;
+        animateGlass(0.0);
+    }
 }
 
 void SongContextMenuPopup::applyTheme()
@@ -248,7 +396,9 @@ void SongContextMenuPopup::applyTheme()
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
     if (!m_panel)
         return;
-    if (dark) {
+    if (static_cast<SongContextMenuPanel *>(m_panel)->hasGlass()) {
+        m_panel->setStyleSheet(QString());
+    } else if (dark) {
         m_panel->setStyleSheet(QStringLiteral(
             "QWidget#songContextMenuPanel {"
             "  background: rgb(40, 40, 44);"
@@ -279,7 +429,8 @@ void SongContextMenuPopup::placeAt(const QPoint &globalPos)
     const QRect avail = screen ? screen->availableGeometry() : QRect(0, 0, 1920, 1080);
 
     int y = globalPos.y();
-    if (y + height() > avail.bottom())
+    m_openUpwards = y + height() > avail.bottom();
+    if (m_openUpwards)
         y = globalPos.y() - height();
     move(globalPos.x(), y);
     clampToScreen();

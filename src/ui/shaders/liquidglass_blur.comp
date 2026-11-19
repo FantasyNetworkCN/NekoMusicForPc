@@ -1,0 +1,26 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(binding = 0) uniform sampler2D inputImage;
+layout(binding = 1, rgba8) uniform writeonly image2D outputImage;
+layout(push_constant) uniform Blur {
+    vec2 axis;
+} blur;
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 extent = imageSize(outputImage);
+    if (any(greaterThanEqual(pixel, extent)))
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(extent);
+    vec2 stepUV = blur.axis / vec2(extent);
+    // 全尺寸高斯低通，双线性合并相邻 tap，无需缩小背景。
+    vec4 color = textureLod(inputImage, uv, 0.0) * 0.227027;
+    color += (textureLod(inputImage, uv + stepUV * 1.384615, 0.0)
+            + textureLod(inputImage, uv - stepUV * 1.384615, 0.0)) * 0.316216;
+    color += (textureLod(inputImage, uv + stepUV * 3.230769, 0.0)
+            + textureLod(inputImage, uv - stepUV * 3.230769, 0.0)) * 0.070270;
+    imageStore(outputImage, pixel, color);
+}

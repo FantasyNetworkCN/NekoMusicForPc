@@ -8,7 +8,11 @@
 #include <QWidget>
 #include <QList>
 #include <QPoint>
+#include <QPointer>
 #include <functional>
+
+class QCloseEvent;
+class QVariantAnimation;
 
 class SongContextMenuPopup : public QWidget
 {
@@ -51,17 +55,28 @@ public:
     /** 在当前几何下重新夹进屏幕可用区域（不改锚点，供 setEntries 后调用） */
     void clampToScreen();
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private:
     explicit SongContextMenuPopup(QWidget *anchor, const QList<Entry> &entries);
     ~SongContextMenuPopup() override = default;
 
     void applyTheme();
+    void refreshGlassBackdrop();
+    void animateGlassOpen();
+    void animateGlass(qreal end);
     /** 按给定 entries 重建行部件并重算固定宽高（构造与 setEntries 共用） */
     void applyEntriesToLayout(const QList<Entry> &entries);
 
-    QWidget *m_anchor = nullptr;
+    QPointer<QWidget> m_anchor;
     QWidget *m_panel = nullptr;
     class QVBoxLayout *m_panelLay = nullptr;
+    QVariantAnimation *m_glassAnimation = nullptr;
+    qreal m_glassProgress = 1.0;
+    bool m_glassClosing = false;
+    bool m_closeReady = false;
+    bool m_openUpwards = false;
     QList<Entry> m_entries;
     QList<QWidget *> m_rowWidgets;
 };

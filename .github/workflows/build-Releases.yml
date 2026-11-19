@@ -52,11 +52,14 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             dpkg-dev \
             fakeroot \
-            libssl-dev
+            libssl-dev \
+            libvulkan-dev \
+            glslc
 
       - name: Build and package (.deb)
         env:
           CMAKE_PREFIX_PATH: ${{ env.QT_ROOT_DIR }}
+          NEKO_REQUIRE_VULKAN_GLASS: 'ON'
         run: |
           set -euo pipefail
           echo "Qt: ${QT_ROOT_DIR:-<未设置>}"
@@ -138,11 +141,23 @@ jobs:
             choco install ninja -y --no-progress
           }
 
+          # 从 Vulkan SDK 获取头文件和着色器编译器。
+          if (-not $env:VULKAN_SDK -or -not (Test-Path "$env:VULKAN_SDK\Bin\glslc.exe")) {
+            choco install vulkan-sdk -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Vulkan SDK 安装失败" }
+            $sdk = Get-ChildItem 'C:\VulkanSDK' -Directory |
+                   Where-Object { Test-Path (Join-Path $_.FullName 'Bin\glslc.exe') } |
+                   Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+            if (-not $sdk) { throw "未找到 Vulkan SDK 的 glslc" }
+            $env:VULKAN_SDK = $sdk.FullName
+          }
+
           # ---------------- 构建 ----------------
           cmake -S $root -B $buildDir -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_C_COMPILER=gcc `
             -DCMAKE_CXX_COMPILER=g++ `
+            -DNEKO_REQUIRE_VULKAN_GLASS=ON `
             -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
           if ($LASTEXITCODE -ne 0) { throw "CMake 配置失败" }
 

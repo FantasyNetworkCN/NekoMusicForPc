@@ -14,7 +14,6 @@ class LyricEffectSettings final : public QObject
 public:
     static LyricEffectSettings &instance();
 
-    bool lyricsEnabled() const { return m_lyricsEnabled; }
     qreal fontScale() const { return m_fontScale; }
     qreal lineSpacing() const { return m_lineSpacing; }
     qreal alignPosition() const { return m_alignPosition; }
@@ -32,7 +31,6 @@ public:
     qreal backgroundBassReactivity() const { return m_backgroundBassReactivity; }
     qreal backgroundScrimStrength() const { return m_backgroundScrimStrength; }
 
-    void setLyricsEnabled(bool enabled);
     void setFontScale(qreal scale);
     void setLineSpacing(qreal scale);
     void setAlignPosition(qreal position);
@@ -68,7 +66,6 @@ private:
     void load();
     void save() const;
 
-    bool m_lyricsEnabled = true;
     qreal m_fontScale = 1.0;
     qreal m_lineSpacing = 1.0;
     qreal m_alignPosition = 0.35;

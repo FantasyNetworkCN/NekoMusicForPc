@@ -710,7 +710,7 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
         line.y.setTarget(target, delay);
         const qreal scaleTarget = line.highlighted
             ? 1.0
-            : (m_impl->playing && fx.lyricsEnabled() ? fx.inactiveScale() : 1.0);
+            : (m_impl->playing ? fx.inactiveScale() : 1.0);
         line.scale.setParams(100, 25, 2.0);
         line.scale.setTarget(scaleTarget, delay);
 
@@ -846,8 +846,7 @@ bool AmllLyricsView::updateTimeline(qint64 positionMs, bool seek)
         const auto &fx = LyricEffectSettings::instance();
         for (LineLayout &line : m_impl->lines)
             line.scale.setTarget(
-                line.highlighted ? 1.0
-                                 : (fx.lyricsEnabled() ? fx.inactiveScale() : 1.0));
+                line.highlighted ? 1.0 : fx.inactiveScale());
     }
 
     if (!m_impl->frameTimer->isActive() && isVisible())
@@ -872,9 +871,7 @@ void AmllLyricsView::setPlaying(bool playing)
     const auto &fx = LyricEffectSettings::instance();
     for (LineLayout &line : m_impl->lines)
         line.scale.setTarget(
-            playing && !line.highlighted && fx.lyricsEnabled()
-                ? fx.inactiveScale()
-                : 1.0);
+            playing && !line.highlighted ? fx.inactiveScale() : 1.0);
     if (playing && isVisible())
         m_impl->frameTimer->start();
     update();
@@ -995,7 +992,7 @@ void AmllLyricsView::drawKaraokeLine(QPainter &painter, int index)
             line.translation.layout->draw(&painter, QPointF(0, y));
         }
     };
-    if (!fx.lyricsEnabled() || !fx.wordSweep()) {
+    if (!fx.wordSweep()) {
         painter.setPen(m_impl->activeColor);
         line.main.layout->draw(&painter, QPointF(0, padY));
         drawSubLines();
@@ -1178,7 +1175,7 @@ void AmllLyricsView::paintEvent(QPaintEvent *event)
         const bool hovered = m_impl->pointerInside && m_impl->hoveredIndex == i;
         qreal blur = 0;
         if (!m_impl->pointerInside && !m_impl->autoAlignSuspended && !hovered
-            && fx.lyricsEnabled() && fx.distanceBlur()) {
+            && fx.distanceBlur()) {
             if (line.highlighted) {
                 blur = 0;
             } else {

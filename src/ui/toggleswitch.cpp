@@ -30,6 +30,7 @@ ToggleSwitch::ToggleSwitch(QWidget *parent)
     m_anim = new QPropertyAnimation(this, "knob", this);
     m_anim->setDuration(Theme::kAnimFast);
     m_anim->setEasingCurve(QEasingCurve::InOutCubic);
+    connect(this, &QAbstractButton::toggled, this, &ToggleSwitch::animateTo);
 }
 
 QSize ToggleSwitch::sizeHint() const
@@ -54,14 +55,18 @@ void ToggleSwitch::checkStateSet()
 
 void ToggleSwitch::animateTo(bool checked)
 {
+    const qreal target = checked ? 1.0 : 0.0;
     if (!m_anim) {
-        m_knob = checked ? 1.0 : 0.0;
-        update();
+        setKnob(target);
         return;
     }
+    if (m_anim->state() == QAbstractAnimation::Running && m_anim->endValue().toReal() == target)
+        return;
     m_anim->stop();
+    if (qFuzzyCompare(m_knob, target))
+        return;
     m_anim->setStartValue(m_knob);
-    m_anim->setEndValue(checked ? 1.0 : 0.0);
+    m_anim->setEndValue(target);
     m_anim->start();
 }
 

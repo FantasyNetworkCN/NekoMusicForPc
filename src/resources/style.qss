@@ -722,7 +722,7 @@ QTextEdit:focus {
     max-height: 1px;
 }
 
-#settingsCombo {
+#settingsCombo, #ppDeviceCombo {
     background: rgba(238, 241, 246, 16);
     border: 1px solid rgba(64, 197, 241, 35);
     border-radius: 10px;
@@ -732,14 +732,14 @@ QTextEdit:focus {
     min-width: 140px;
 }
 
-#settingsCombo::drop-down {
+#settingsCombo::drop-down, #ppDeviceCombo::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: center right;
     border: none;
     width: 28px;
 }
 
-#settingsCombo QAbstractItemView {
+#settingsCombo QAbstractItemView, #ppDeviceCombo QAbstractItemView {
     background: #151923;
     color: #EAF0FA;
     selection-background-color: rgba(64, 197, 241, 50);
@@ -750,17 +750,17 @@ QTextEdit:focus {
     padding: 4px;
 }
 
-#settingsCombo QAbstractItemView::item {
+#settingsCombo QAbstractItemView::item, #ppDeviceCombo QAbstractItemView::item {
     min-height: 26px;
     padding: 6px 10px;
     border-radius: 6px;
 }
 
-#settingsCombo QAbstractItemView::item:hover {
+#settingsCombo QAbstractItemView::item:hover, #ppDeviceCombo QAbstractItemView::item:hover {
     background: rgba(64, 197, 241, 22);
 }
 
-#settingsCombo QAbstractItemView::item:selected {
+#settingsCombo QAbstractItemView::item:selected, #ppDeviceCombo QAbstractItemView::item:selected {
     background: rgba(64, 197, 241, 48);
     color: #FFFFFF;
 }

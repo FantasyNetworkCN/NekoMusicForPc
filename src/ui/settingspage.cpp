@@ -10,6 +10,7 @@
 #include "core/appshortcuts.h"
 #include "core/micsynccontroller.h"
 #include "core/shellbackdropsettings.h"
+#include "core/appearancesettings.h"
 #include "core/lyriceffectsettings.h"
 #include "core/usermanager.h"
 #include "ui/logindialog.h"
@@ -478,6 +479,24 @@ void SettingsPage::setupUi()
     themeRow->addWidget(m_themeCombo);
     appearanceLay->addLayout(themeRow);
 
+    auto &appearance = AppearanceSettings::instance();
+    auto *glassRow = new QHBoxLayout();
+    auto *glassLabel = createBoundLabel(QStringLiteral("liquidGlass"), appearanceBody);
+    auto *glassToggle = new ToggleSwitch(appearanceBody);
+    m_liquidGlassToggle = glassToggle;
+    glassToggle->setObjectName(QStringLiteral("liquidGlassToggle"));
+    glassToggle->setAccessibleName(glassLabel->text());
+    glassToggle->setChecked(appearance.liquidGlassEnabled());
+    connect(glassToggle, &QAbstractButton::toggled, &appearance,
+            &AppearanceSettings::setLiquidGlassEnabled);
+    connect(&appearance, &AppearanceSettings::liquidGlassChanged, glassToggle, [glassToggle](bool on) {
+        const QSignalBlocker blocker(glassToggle);
+        glassToggle->setChecked(on);
+    });
+    glassRow->addWidget(glassLabel, 1);
+    glassRow->addWidget(glassToggle, 0, Qt::AlignRight);
+    appearanceLay->addLayout(glassRow);
+
     auto *lineEffects = new QFrame(appearanceBody);
     lineEffects->setFrameShape(QFrame::HLine);
     lineEffects->setObjectName("settingsDivider");
@@ -641,19 +660,6 @@ void SettingsPage::setupLyricEffectSection(QVBoxLayout *cardLay, QWidget *cardBo
     m_lyricEffectsSectionLabel =
         createBoundLabel(QStringLiteral("lyricEffectsSection"), cardBody);
     cardLay->addWidget(m_lyricEffectsSectionLabel);
-
-    auto *enabledRow = new QHBoxLayout();
-    m_lyricEffectsEnabledLabel =
-        createBoundLabel(QStringLiteral("lyricEffectsEnabled"), cardBody);
-    enabledRow->addWidget(m_lyricEffectsEnabledLabel, 1);
-    m_lyricEffectsToggle = new ToggleSwitch(cardBody);
-    m_lyricEffectsToggle->setChecked(fx.lyricsEnabled());
-    connect(m_lyricEffectsToggle, &QAbstractButton::toggled, this, [this](bool on) {
-        LyricEffectSettings::instance().setLyricsEnabled(on);
-        refreshLyricEffectControls();
-    });
-    enabledRow->addWidget(m_lyricEffectsToggle, 0, Qt::AlignRight);
-    cardLay->addLayout(enabledRow);
 
     m_lyricEffectsHintLabel =
         createBoundLabel(QStringLiteral("lyricEffectsHint"), cardBody,
@@ -891,7 +897,7 @@ void SettingsPage::refreshLyricEffectControls()
             slider->blockSignals(true);
     }
     const QList<ToggleSwitch *> toggles = {
-        m_lyricEffectsToggle, m_lyricDistanceBlurToggle,
+        m_lyricDistanceBlurToggle,
         m_lyricWordSweepToggle, m_lyricWordFloatToggle,
         m_lyricEmphasisGlowToggle, m_amllBackgroundToggle,
     };
@@ -900,8 +906,6 @@ void SettingsPage::refreshLyricEffectControls()
             toggle->blockSignals(true);
     }
 
-    if (m_lyricEffectsToggle)
-        m_lyricEffectsToggle->setChecked(fx.lyricsEnabled());
     if (m_lyricFontScaleSlider)
         m_lyricFontScaleSlider->setValue(qRound(fx.fontScale() * 100.0));
     if (m_lyricLineSpacingSlider)
@@ -955,19 +959,8 @@ void SettingsPage::refreshLyricEffectControls()
     setPercent(m_amllBassReactivityValue, m_amllBassReactivitySlider->value());
     setPercent(m_amllScrimStrengthValue, m_amllScrimStrengthSlider->value());
 
-    const bool lyricsOn = fx.lyricsEnabled();
-    const bool blurOn = lyricsOn && fx.distanceBlur();
-    if (m_lyricFontScaleSlider) m_lyricFontScaleSlider->setEnabled(lyricsOn);
-    if (m_lyricLineSpacingSlider) m_lyricLineSpacingSlider->setEnabled(lyricsOn);
-    if (m_lyricAlignSlider) m_lyricAlignSlider->setEnabled(lyricsOn);
-    if (m_lyricInactiveScaleSlider) m_lyricInactiveScaleSlider->setEnabled(lyricsOn);
-    if (m_lyricDistanceBlurToggle) m_lyricDistanceBlurToggle->setEnabled(lyricsOn);
-    if (m_lyricBlurStrengthSlider) m_lyricBlurStrengthSlider->setEnabled(blurOn);
-    if (m_lyricWordSweepToggle) m_lyricWordSweepToggle->setEnabled(lyricsOn);
-    if (m_lyricWordFloatToggle) m_lyricWordFloatToggle->setEnabled(lyricsOn);
-    if (m_lyricEmphasisGlowToggle) m_lyricEmphasisGlowToggle->setEnabled(lyricsOn);
-    if (m_lyricSpringStrengthSlider) m_lyricSpringStrengthSlider->setEnabled(lyricsOn);
-    if (m_lyricSpringDampingSlider) m_lyricSpringDampingSlider->setEnabled(lyricsOn);
+    if (m_lyricBlurStrengthSlider)
+        m_lyricBlurStrengthSlider->setEnabled(fx.distanceBlur());
 
     const bool backgroundOn = fx.backgroundEnabled();
     if (m_amllFlowSpeedSlider)
@@ -1335,6 +1328,8 @@ void SettingsPage::retranslate()
         if (it.key())
             it.key()->setText(I18n::instance().tr(it.value()));
     }
+    if (m_liquidGlassToggle)
+        m_liquidGlassToggle->setAccessibleName(I18n::instance().tr(QStringLiteral("liquidGlass")));
     if (m_lyricEffectsResetBtn) {
         m_lyricEffectsResetBtn->setText(
             I18n::instance().tr(QStringLiteral("effectsResetDefaults")));

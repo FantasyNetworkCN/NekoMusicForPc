@@ -1,5 +1,7 @@
 #include "glasswidget.h"
 #include "glasspaint.h"
+#include "liquidglass.h"
+#include "core/appearancesettings.h"
 #include "theme/thememanager.h"
 
 #include <QPainter>
@@ -22,6 +24,17 @@ protected:
     {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
+        const qreal progress = m_owner->m_backdropCaptureEnabled
+            ? AppearanceSettings::instance().liquidGlassProgress() : 0.0;
+        const auto paintLiquid = [&]() {
+            return m_liquidGlass.paint(p, rect(), LiquidGlass::shellBackdrop(this),
+                                       QRect(mapTo(window(), QPoint()), size()), m_owner->m_radius,
+                                       Theme::ThemeManager::instance().isDarkMode());
+        };
+        if (progress >= 1.0 && paintLiquid())
+            return;
+        if (progress <= 0.0)
+            m_liquidGlass.clear();
         const QRectF bounds = QRectF(rect()).adjusted(.5, .5, -.5, -.5);
         const qreal radius = qMin(qreal(m_owner->m_radius), bounds.height() / 2);
         QPainterPath shape;
@@ -43,9 +56,14 @@ protected:
         p.setPen(QPen(m_owner->m_border, 1));
         p.setBrush(Qt::NoBrush);
         p.drawPath(shape);
+        if (progress > 0.0 && progress < 1.0) {
+            p.setOpacity(progress);
+            paintLiquid();
+        }
     }
 private:
     GlassWidget *m_owner;
+    LiquidGlass::Surface m_liquidGlass;
 };
 
 GlassWidget::GlassWidget(QWidget *parent) : QWidget(parent)
@@ -64,6 +82,8 @@ GlassWidget::GlassWidget(QWidget *parent) : QWidget(parent)
     stack->setCurrentWidget(m_content);
     connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged,
             this, [this](Theme::ThemeMode) { refreshBackdrop(); });
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+            this, &GlassWidget::refreshBackdrop);
 }
 
 GlassWidget::~GlassWidget() = default;

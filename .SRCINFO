@@ -8,11 +8,14 @@ pkgbase = neko-cloud-music
 	license = AGPL-3.0-or-later
 	makedepends = cmake
 	makedepends = ninja
+	makedepends = vulkan-headers
+	makedepends = shaderc
 	depends = qt6-base
 	depends = qt6-multimedia
 	depends = qt6-svg
 	depends = qt6-websockets
 	depends = openssl
+	optdepends = vulkan-icd-loader: Vulkan 液态玻璃
 	source = neko-cloud-music-7072e435a5d6917ead0c27e5098800a871407842.tar.gz::https://github.com/FantasyNetworkCN/NekoMusicForPc/archive/7072e435a5d6917ead0c27e5098800a871407842.tar.gz
 	sha256sums = SKIP
 

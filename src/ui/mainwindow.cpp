@@ -58,6 +58,9 @@
 #include "theme/theme.h"
 #include "theme/thememanager.h"
 #include "ui/glasspaint.h"
+#include "ui/glasswidget.h"
+#include "ui/liquidglass.h"
+#include "core/appearancesettings.h"
 #include "version.h"
 #include "core/systemmediacontroller.h"
 #include "core/localmusicmeta.h"
@@ -108,10 +111,23 @@ public:
         update();
     }
 
-    void refreshBackdrop(QWidget *host, QWidget *drawerPanel)
+    void refreshBackdrop(QWidget *host, PlaylistPanel *drawerPanel)
     {
         if (!host)
             return;
+        m_liquidGlass = AppearanceSettings::instance().liquidGlassEnabled();
+        if (m_liquidGlass && drawerPanel) {
+            const QRect area = host->rect().adjusted(
+                qMax(0, host->width() - drawerPanel->width() - LiquidGlass::kCaptureMargin),
+                0, 0, 0);
+            const QImage frame = LiquidGlass::capture(host, area, this);
+            m_blurPixmap = QPixmap();
+            drawerPanel->setLiquidGlassBackdrop(frame, area);
+            update();
+            return;
+        }
+        if (drawerPanel)
+            drawerPanel->setLiquidGlassBackdrop({}, {});
         QList<QWidget *> exclude;
         exclude.append(this);
         if (drawerPanel)
@@ -162,6 +178,10 @@ protected:
         Q_UNUSED(event);
         QPainter p(this);
         p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        if (m_liquidGlass) {
+            p.fillRect(rect(), QColor(0, 0, 0, m_fullPlayerMode ? 25 : 62));
+            return;
+        }
         if (!m_blurPixmap.isNull())
             p.drawPixmap(rect(), m_blurPixmap);
         else if (!m_fullPlayerMode)
@@ -190,6 +210,7 @@ private:
 
     QPixmap m_blurPixmap;
     bool m_fullPlayerMode = false;
+    bool m_liquidGlass = false;
     QGraphicsOpacityEffect *m_opacityFx = nullptr;
     // QPointer：动画在 DeleteWhenStopped 下由 Qt 自行回收，裸指针会悬垂
     QPointer<QPropertyAnimation> m_fadeAnim;
@@ -491,6 +512,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         scheduleShellBackdropRebuild(0);
         updateChromeForShellBackdrop();
     });
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassChanged,
+            this, [this](bool enabled) {
+                if (enabled) {
+                    m_shellBackdropCacheSize = QSize();
+                    rebuildShellBackdropCache();
+                }
+                if (m_playlistScrim && m_playlistPanel && m_playlistPanel->isDrawerOpen()) {
+                    static_cast<PlaylistDrawerScrim *>(m_playlistScrim)
+                        ->refreshBackdrop(playlistDrawerHost(), m_playlistPanel);
+                    if (enabled && m_playerPageVisible)
+                        m_playlistGlassRefresh->start();
+                    else
+                        m_playlistGlassRefresh->stop();
+                }
+            });
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+            this, [this](qreal progress) {
+                if (progress <= 0 && !AppearanceSettings::instance().liquidGlassEnabled()) {
+                    m_shellBackdropCacheSize = QSize();
+                    rebuildShellBackdropCache();
+                }
+            });
 
     setWindowTitle(QStringLiteral("NekoMusic"));
     resize(1200, 800);
@@ -663,9 +706,21 @@ void MainWindow::setupUi()
     static_cast<PlaylistDrawerScrim *>(m_playlistScrim)->onClicked = [this]() { hidePlaylistDrawer(); };
     connect(m_playlistPanel, &PlaylistPanel::hideRequested, this, &MainWindow::hidePlaylistDrawer);
     connect(m_playlistPanel, &PlaylistPanel::drawerClosed, this, [this]() {
+        m_playlistPanel->setLiquidGlassBackdrop({}, {});
         if (m_playerBar)
             m_playerBar->setFloatingProgressSuppressed(false);
     });
+    auto *liquidGlassRefresh = new QTimer(m_playlistPanel);
+    liquidGlassRefresh->setInterval(80);
+    connect(liquidGlassRefresh, &QTimer::timeout, this, [this]() {
+        if (m_playerPageVisible && m_engine->playbackState() == PlayerEngine::Playing
+            && AppearanceSettings::instance().liquidGlassEnabled()) {
+            static_cast<PlaylistDrawerScrim *>(m_playlistScrim)
+                ->refreshBackdrop(playlistDrawerHost(), m_playlistPanel);
+        }
+    });
+    connect(m_playlistPanel, &PlaylistPanel::drawerClosed, liquidGlassRefresh, &QTimer::stop);
+    m_playlistGlassRefresh = liquidGlassRefresh;
 
     // 一起听会话：实时状态只驱动现有播放栏 / 播放页 / 播放队列抽屉，不新开房间页。
     m_togetherSyncTimer = new QTimer(this);
@@ -1721,7 +1776,12 @@ void MainWindow::rebuildShellBackdropCache()
     if (!m_shellBackdrop)
         return;
 
-    const QSize target = cappedBackdropCacheSize(m_shellBackdrop->size());
+    const auto &appearance = AppearanceSettings::instance();
+    const bool liquidGlass = appearance.liquidGlassEnabled() || appearance.liquidGlassProgress() > 0;
+    QSize target = liquidGlass ? m_shellBackdrop->size() * m_shellBackdrop->devicePixelRatioF()
+                               : cappedBackdropCacheSize(m_shellBackdrop->size());
+    if (liquidGlass && qMax(target.width(), target.height()) > 4096)
+        target.scale(4096, 4096, Qt::KeepAspectRatio);
     if (target.isEmpty())
         return;
     if (m_shellBackdropCacheSize == target && !m_shellBackdropCache.isNull())
@@ -1737,8 +1797,15 @@ void MainWindow::rebuildShellBackdropCache()
             GlassPaint::paintMainWindowSolidBackdrop(painter, cover.rect(), settings.solidColor());
         } else if (settings.kind() == ShellBackdropSettings::Kind::CustomImage) {
             const QPixmap source = settings.cachedSourcePixmap();
-            const QPixmap soft = GlassPaint::blurredPixmap(source, target, 16);
-            GlassPaint::paintMainWindowPagesImageBackdrop(painter, cover.rect(), soft, dark);
+            const QPixmap image = liquidGlass && !source.isNull()
+                ? source.scaled(target, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation)
+                : GlassPaint::blurredPixmap(source, target, 16);
+            GlassPaint::paintMainWindowPagesImageBackdrop(painter, cover.rect(),
+                image.size() != target && !image.isNull()
+                    ? image.copy((image.width() - target.width()) / 2,
+                                 (image.height() - target.height()) / 2,
+                                 target.width(), target.height())
+                    : image, dark);
         } else {
             GlassPaint::paintMainWindowDeepBackdrop(painter, cover.rect(), dark);
         }
@@ -1746,12 +1813,17 @@ void MainWindow::rebuildShellBackdropCache()
 
     m_shellBackdropCache = cover;
     m_shellBackdropCacheSize = target;
+    setProperty("nekoLiquidBackdrop", liquidGlass ? cover : QPixmap());
     setProperty("nekoFrostedBackdrop",
-                settings.kind() == ShellBackdropSettings::Kind::SolidColor
+                liquidGlass || settings.kind() == ShellBackdropSettings::Kind::SolidColor
                     ? cover : GlassPaint::blurredPixmap(cover, target, 32));
     m_shellBackdrop->update();
     updateChromeForShellBackdrop();
     centralWidget()->update();
+    if (m_settingsPage) {
+        for (auto *card : m_settingsPage->findChildren<GlassWidget *>())
+            card->refreshBackdrop();
+    }
 }
 
 QPixmap MainWindow::shellBackdropPixmapForSize(const QSize &size)
@@ -2302,6 +2374,8 @@ void MainWindow::showPlaylistDrawer()
         scrim->fadeIn();
     }
     m_playlistPanel->openDrawer();
+    if (fullPlayer && AppearanceSettings::instance().liquidGlassEnabled())
+        m_playlistGlassRefresh->start();
     raisePlaylistDrawerStack();
 }
 
@@ -2309,6 +2383,7 @@ void MainWindow::hidePlaylistDrawer()
 {
     if (!m_playlistPanel || !m_playlistPanel->isDrawerOpen())
         return;
+    m_playlistGlassRefresh->stop();
     if (m_playlistScrim)
         static_cast<PlaylistDrawerScrim *>(m_playlistScrim)->fadeOut();
     m_playlistPanel->closeDrawer();

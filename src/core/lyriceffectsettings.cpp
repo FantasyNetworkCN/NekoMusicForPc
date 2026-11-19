@@ -6,7 +6,7 @@
 
 namespace {
 
-constexpr auto kLyricsEnabled = "lyricEffects/enabled";
+constexpr auto kLegacyLyricsEnabled = "lyricEffects/enabled";
 constexpr auto kFontScale = "lyricEffects/fontScale";
 constexpr auto kLineSpacing = "lyricEffects/lineSpacing";
 constexpr auto kAlignPosition = "lyricEffects/alignPosition";
@@ -40,7 +40,6 @@ LyricEffectSettings::LyricEffectSettings()
 void LyricEffectSettings::load()
 {
     QSettings settings;
-    m_lyricsEnabled = settings.value(QString::fromLatin1(kLyricsEnabled), true).toBool();
     m_fontScale = std::clamp(
         settings.value(QString::fromLatin1(kFontScale), 1.0).toReal(), 0.6, 2.2);
     m_lineSpacing = std::clamp(
@@ -71,12 +70,24 @@ void LyricEffectSettings::load()
     m_backgroundScrimStrength = std::clamp(
         settings.value(QString::fromLatin1(kBackgroundScrimStrength), 0.68).toReal(),
         0.20, 0.95);
+
+    // 已关闭总开关的旧配置迁移到对应的独立项目。
+    if (settings.contains(QLatin1String(kLegacyLyricsEnabled))) {
+        if (!settings.value(QLatin1String(kLegacyLyricsEnabled)).toBool()) {
+            m_inactiveScale = 1.0;
+            m_distanceBlur = false;
+            m_wordSweep = false;
+            settings.setValue(QLatin1String(kInactiveScale), m_inactiveScale);
+            settings.setValue(QLatin1String(kDistanceBlur), m_distanceBlur);
+            settings.setValue(QLatin1String(kWordSweep), m_wordSweep);
+        }
+        settings.remove(QLatin1String(kLegacyLyricsEnabled));
+    }
 }
 
 void LyricEffectSettings::save() const
 {
     QSettings settings;
-    settings.setValue(QString::fromLatin1(kLyricsEnabled), m_lyricsEnabled);
     settings.setValue(QString::fromLatin1(kFontScale), m_fontScale);
     settings.setValue(QString::fromLatin1(kLineSpacing), m_lineSpacing);
     settings.setValue(QString::fromLatin1(kAlignPosition), m_alignPosition);
@@ -95,15 +106,6 @@ void LyricEffectSettings::save() const
                       m_backgroundBassReactivity);
     settings.setValue(QString::fromLatin1(kBackgroundScrimStrength),
                       m_backgroundScrimStrength);
-}
-
-void LyricEffectSettings::setLyricsEnabled(bool enabled)
-{
-    if (m_lyricsEnabled == enabled)
-        return;
-    m_lyricsEnabled = enabled;
-    save();
-    emit effectsChanged();
 }
 
 void LyricEffectSettings::setFontScale(qreal scale)
@@ -253,7 +255,6 @@ void LyricEffectSettings::setBackgroundScrimStrength(qreal strength)
 
 void LyricEffectSettings::resetToDefaults()
 {
-    m_lyricsEnabled = true;
     m_fontScale = 1.0;
     m_lineSpacing = 1.0;
     m_alignPosition = 0.35;

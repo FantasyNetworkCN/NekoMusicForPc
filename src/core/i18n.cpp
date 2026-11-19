@@ -99,7 +99,7 @@ static QMap<QString, QString> zhCN()
     m["themeDark"] = QStringLiteral("暗色模式");
     m["themeLight"] = QStringLiteral("亮色模式");
     m["lyricEffectsSection"] = QStringLiteral("歌词效果");
-    m["lyricEffectsEnabled"] = QStringLiteral("启用 AMLL 歌词动效");
+    m["liquidGlass"] = QStringLiteral("液态玻璃");
     m["lyricEffectsHint"] = QStringLiteral("以下参数实时应用到沉浸播放页，可随时恢复默认。");
     m["lyricFontScale"] = QStringLiteral("歌词字号");
     m["lyricLineSpacing"] = QStringLiteral("行距与段间距");
@@ -1375,7 +1375,7 @@ static QMap<QString, QString> enUS()
     m["themeDark"] = "Dark Mode";
     m["themeLight"] = "Light Mode";
     m["lyricEffectsSection"] = "Lyric Effects";
-    m["lyricEffectsEnabled"] = "Enable AMLL lyric effects";
+    m["liquidGlass"] = "Liquid Glass";
     m["lyricEffectsHint"] = "Changes apply to the immersive player immediately and can be reset anytime.";
     m["lyricFontScale"] = "Lyric font size";
     m["lyricLineSpacing"] = "Line spacing";

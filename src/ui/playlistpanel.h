@@ -23,6 +23,7 @@
 #include <functional>
 #include "core/musicinfo.h"
 #include "ui/songcontextmenu.h"
+#include "ui/liquidglass.h"
 
 class QScrollArea;
 class QVBoxLayout;
@@ -47,6 +48,7 @@ public:
     void syncToHost();
     /** 全屏播放页内打开：抽屉透明，仅靠背后模糊（对齐 SPlayer .full-player） */
     void setFullPlayerMode(bool on);
+    void setLiquidGlassBackdrop(const QImage &image, const QRect &bounds);
     /** 一起听临时歌单；房间激活时抽屉只展示服务端权威列表。 */
     void setTogetherState(bool active, const QVariantMap &playlist, bool connected);
 
@@ -85,6 +87,8 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private:
+    LiquidGlass::Backdrop m_liquidBackdrop;
+    LiquidGlass::Surface m_liquidSurface;
     void setupUi();
     void applyPanelChrome();
     void syncContainerHeight();

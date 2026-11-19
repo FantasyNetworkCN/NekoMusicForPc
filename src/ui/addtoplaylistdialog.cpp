@@ -16,6 +16,8 @@
 #include "ui/toast.h"
 #include "ui/scrollareafix.h"
 #include "ui/glasspaint.h"
+#include "ui/liquidglass.h"
+#include "core/appearancesettings.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -203,6 +205,7 @@ public:
     }
 
     QPixmap blurPixmap;
+    bool liquidGlass = false;
     qreal scrimOpacity = 0.0;
     std::function<void()> onClicked;
 
@@ -212,6 +215,10 @@ protected:
         QPainter p(this);
         p.setRenderHint(QPainter::SmoothPixmapTransform, true);
         p.setOpacity(scrimOpacity);
+        if (liquidGlass) {
+            p.fillRect(rect(), QColor(0, 0, 0, 72));
+            return;
+        }
         if (!blurPixmap.isNull())
             p.drawPixmap(rect(), blurPixmap);
         else
@@ -225,6 +232,46 @@ protected:
             onClicked();
         event->accept();
     }
+};
+
+class PlaylistAddCardBody final : public QWidget
+{
+public:
+    explicit PlaylistAddCardBody(QWidget *parent) : QWidget(parent) {}
+
+    void setLiquidBackdrop(const QImage &image, const QRect &bounds)
+    {
+        m_backdrop.setImage(image, bounds);
+        m_surface.clear();
+        update();
+    }
+
+    bool hasLiquidBackdrop() const { return !m_backdrop.isEmpty(); }
+
+    void setGlassProgress(qreal progress)
+    {
+        m_glassProgress = progress;
+        if (hasLiquidBackdrop())
+            update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        if (m_backdrop.isEmpty())
+            return;
+        QPainter painter(this);
+        const QPoint origin = mapTo(parentWidget()->parentWidget(), QPoint());
+        m_surface.paint(painter, rect(), m_backdrop, QRect(origin, size()),
+                        18.0 + 8.0 * (1.0 - m_glassProgress),
+                        Theme::ThemeManager::instance().isDarkMode(), LiquidGlass::Material::Popup,
+                        m_glassProgress);
+    }
+
+private:
+    LiquidGlass::Backdrop m_backdrop;
+    LiquidGlass::Surface m_surface;
+    qreal m_glassProgress = 1;
 };
 
 } // namespace
@@ -287,10 +334,8 @@ void AddToPlaylistDialog::openOn(QWidget *host)
 
     if (m_card)
         m_card->setFixedSize(cardWidthForHost(), cardHeightForHost());
-    updateCardHeight();
-    refreshBackdrop();
-
     layoutOverlay();
+    refreshBackdrop();
     if (auto *bd = static_cast<PlaylistAddBackdrop *>(m_backdrop))
         bd->scrimOpacity = 0.0;
 
@@ -327,15 +372,30 @@ void AddToPlaylistDialog::refreshBackdrop()
 {
     if (!m_host || !m_backdrop)
         return;
+    auto *body = static_cast<PlaylistAddCardBody *>(m_cardBody);
+    auto *backdrop = static_cast<PlaylistAddBackdrop *>(m_backdrop);
+    backdrop->liquidGlass = AppearanceSettings::instance().liquidGlassEnabled();
+    if (backdrop->liquidGlass) {
+        const int margin = LiquidGlass::kCaptureMargin;
+        const QRect area = m_card->geometry().adjusted(-margin, -margin, margin, margin)
+                               .intersected(m_host->rect());
+        body->setLiquidBackdrop(LiquidGlass::capture(m_host, area, this), area);
+        backdrop->blurPixmap = QPixmap();
+        backdrop->update();
+        applyTheme();
+        return;
+    }
+    if (body->hasLiquidBackdrop()) {
+        body->setLiquidBackdrop({}, {});
+        applyTheme();
+    }
     QList<QWidget *> exclude;
     exclude.append(this);
     if (m_card)
         exclude.append(m_card);
     const QPixmap blur = GlassPaint::grabBlurredBackdrop(m_host, exclude, kBlurRadius);
-    if (auto *bd = static_cast<PlaylistAddBackdrop *>(m_backdrop)) {
-        bd->blurPixmap = blur;
-        bd->update();
-    }
+    backdrop->blurPixmap = blur;
+    backdrop->update();
 }
 
 void AddToPlaylistDialog::scheduleBackdropRefresh(int delayMs)
@@ -355,11 +415,6 @@ void AddToPlaylistDialog::layoutOverlay()
     if (!m_card)
         return;
 
-    const int targetW = cardWidthForHost();
-    const int targetH = cardHeightForHost();
-    if (!m_dismissing) {
-        m_card->setFixedSize(targetW, targetH);
-    }
     updateCardHeight();
 
     const int x = qMax(0, (width() - m_card->width()) / 2);
@@ -379,6 +434,7 @@ void AddToPlaylistDialog::finishOpenAnimation()
         bd->scrimOpacity = 1.0;
     if (m_card)
         m_card->setFixedSize(cardWidthForHost(), cardHeightForHost());
+    static_cast<PlaylistAddCardBody *>(m_cardBody)->setGlassProgress(1);
     layoutOverlay();
 }
 
@@ -400,7 +456,7 @@ void AddToPlaylistDialog::animateOpen()
     if (m_card) {
         m_card->setFixedSize(startW, cardHeightForHost());
         m_card->show();
-        updateCardHeight();
+        static_cast<PlaylistAddCardBody *>(m_cardBody)->setGlassProgress(0);
         layoutOverlay();
     }
     if (auto *bd = static_cast<PlaylistAddBackdrop *>(m_backdrop)) {
@@ -428,12 +484,13 @@ void AddToPlaylistDialog::animateOpen()
         cardW->setDuration(Theme::kAnimNormal);
         cardW->setStartValue(startW);
         cardW->setEndValue(targetW);
-        cardW->setEasingCurve(QEasingCurve::OutCubic);
-        connect(cardW, &QVariantAnimation::valueChanged, this, [this](const QVariant &v) {
+        cardW->setEasingCurve(QEasingCurve::OutQuint);
+        connect(cardW, &QVariantAnimation::valueChanged, this, [this, startW, targetW](const QVariant &v) {
             if (!m_card)
                 return;
             m_card->setFixedSize(v.toInt(), cardHeightForHost());
-            updateCardHeight();
+            static_cast<PlaylistAddCardBody *>(m_cardBody)->setGlassProgress(
+                qBound(0.0, (v.toReal() - startW) / qMax(1, targetW - startW), 1.0));
             layoutOverlay();
         });
     }
@@ -478,11 +535,12 @@ void AddToPlaylistDialog::animateClose(const std::function<void()> &onFinished)
     cardW->setStartValue(startW);
     cardW->setEndValue(endW);
     cardW->setEasingCurve(QEasingCurve::InCubic);
-    connect(cardW, &QVariantAnimation::valueChanged, this, [this](const QVariant &v) {
+    connect(cardW, &QVariantAnimation::valueChanged, this, [this, startW, endW](const QVariant &v) {
         if (!m_card)
             return;
         m_card->setFixedSize(v.toInt(), cardHeightForHost());
-        updateCardHeight();
+        static_cast<PlaylistAddCardBody *>(m_cardBody)->setGlassProgress(
+            qBound(0.0, (v.toReal() - endW) / qMax(1, startW - endW), 1.0));
         layoutOverlay();
     });
 
@@ -557,8 +615,13 @@ void AddToPlaylistDialog::setupUi()
     m_card->setFixedSize(kCardMinW, kCardMinH);
     m_card->setAttribute(Qt::WA_StyledBackground, false);
 
-    m_cardBody = new QWidget(m_card);
+    m_cardBody = new PlaylistAddCardBody(m_card);
     m_cardBody->setObjectName(QStringLiteral("playlistAddCardBody"));
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassChanged,
+            this, [this]() {
+                if (isVisible())
+                    refreshBackdrop();
+            });
     auto *shadow = new QGraphicsDropShadowEffect(m_cardBody);
     shadow->setBlurRadius(40);
     shadow->setOffset(0, 10);
@@ -629,8 +692,10 @@ void AddToPlaylistDialog::applyTheme()
     const QString emptyFg = metaFg;
 
     if (m_cardBody) {
+        const bool liquid = static_cast<PlaylistAddCardBody *>(m_cardBody)->hasLiquidBackdrop();
+        QString chrome;
         if (dark) {
-            m_cardBody->setStyleSheet(QStringLiteral(
+            chrome = QStringLiteral(
                 "QWidget#playlistAddCardBody {"
                 "  background: rgb(36, 36, 36);"
                 "  border: 1px solid rgba(255, 255, 255, 0.08);"
@@ -640,9 +705,9 @@ void AddToPlaylistDialog::applyTheme()
                 "  color: #c8c8c8; font-size: 22px; border: none; border-radius: 8px;"
                 "  background: transparent;"
                 "}"
-                "QPushButton#playlistAddClose:hover { background: rgba(255,255,255,0.1); }"));
+                "QPushButton#playlistAddClose:hover { background: rgba(255,255,255,0.1); }");
         } else {
-            m_cardBody->setStyleSheet(QStringLiteral(
+            chrome = QStringLiteral(
                 "QWidget#playlistAddCardBody {"
                 "  background: #ffffff;"
                 "  border: 1px solid rgba(0, 0, 0, 0.08);"
@@ -652,8 +717,11 @@ void AddToPlaylistDialog::applyTheme()
                 "  color: #666; font-size: 22px; border: none; border-radius: 8px;"
                 "  background: transparent;"
                 "}"
-                "QPushButton#playlistAddClose:hover { background: rgba(0,0,0,0.06); }"));
+                "QPushButton#playlistAddClose:hover { background: rgba(0,0,0,0.06); }");
         }
+        if (liquid)
+            chrome.remove(0, chrome.indexOf(QLatin1Char('}')) + 1);
+        m_cardBody->setStyleSheet(chrome);
     }
     if (m_titleLbl) {
         m_titleLbl->setStyleSheet(
