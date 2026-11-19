@@ -1,11 +1,18 @@
 #include "liquidglass.h"
 #include "liquidglassvulkan.h"
+#include "core/appearancesettings.h"
 #include "theme/theme.h"
+#include "theme/thememanager.h"
 
 #include <QPainter>
+#include <QApplication>
+#include <QComboBox>
+#include <QFrame>
+#include <QListView>
 #include <QOpenGLWidget>
 #include <QPixmap>
 #include <QRegion>
+#include <QPointer>
 #include <QVariant>
 #include <QWidget>
 
@@ -17,6 +24,119 @@ namespace {
 
 // 背景和输出保持设备像素比例，独立捕获区域不需要整窗重采样。
 constexpr int kMaxTextureSide = 4096;
+
+class GlassComboPopupView final : public QListView
+{
+public:
+    explicit GlassComboPopupView(QComboBox *combo)
+        : QListView(combo), m_combo(combo)
+    {
+        setFrameShape(QFrame::NoFrame);
+        setAutoFillBackground(false);
+        setAttribute(Qt::WA_TranslucentBackground);
+        viewport()->setAttribute(Qt::WA_TranslucentBackground);
+        connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged,
+                this, [this]() { applyTheme(); });
+        connect(&AppearanceSettings::instance(),
+                &AppearanceSettings::liquidGlassProgressChanged, this,
+                [this](qreal) {
+                    applyTheme();
+                    viewport()->update();
+                });
+        applyTheme();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        const qreal progress = AppearanceSettings::instance().liquidGlassProgress();
+        bool painted = false;
+        QWidget *host = m_combo ? m_combo->window() : nullptr;
+        if (progress > 0) {
+            QPixmap source = host
+                ? host->property("nekoLiquidBackdrop").value<QPixmap>() : QPixmap();
+            if (source.isNull())
+                source = host
+                    ? host->property("nekoFrostedBackdrop").value<QPixmap>() : QPixmap();
+            if (source.isNull()) {
+                for (QWidget *candidate : QApplication::topLevelWidgets()) {
+                    source = candidate->property("nekoLiquidBackdrop").value<QPixmap>();
+                    if (source.isNull())
+                        source = candidate->property("nekoFrostedBackdrop").value<QPixmap>();
+                    if (!source.isNull()) {
+                        host = candidate;
+                        break;
+                    }
+                }
+            }
+            QPainter painter(viewport());
+            painter.setRenderHint(QPainter::Antialiasing);
+            if (progress < 1.0 || source.isNull())
+                painter.fillRect(viewport()->rect(),
+                                 Theme::ThemeManager::instance().isDarkMode()
+                                     ? QColor(25, 36, 55, 244)
+                                     : QColor(250, 252, 255, 246));
+            if (host && !source.isNull()) {
+                Backdrop backdrop;
+                const QPoint origin = host->mapFromGlobal(viewport()->mapToGlobal(QPoint()));
+                backdrop.setImage(source.toImage(), host->rect());
+                const bool dark = Theme::ThemeManager::instance().isDarkMode();
+                painter.save();
+                painter.setOpacity(progress);
+                painted = m_surface.paint(painter, viewport()->rect(), backdrop,
+                                          QRectF(origin, viewport()->size()), 14, dark,
+                                          Material::Popup);
+                painter.restore();
+            }
+        }
+        QListView::paintEvent(event);
+        if (progress > 0 && painted) {
+            QPainter border(viewport());
+            border.setRenderHint(QPainter::Antialiasing);
+            border.setPen(QPen(Theme::ThemeManager::instance().isDarkMode()
+                                   ? QColor(196, 223, 255, 38)
+                                   : QColor(255, 255, 255, 180),
+                               1));
+            border.setBrush(Qt::NoBrush);
+            border.drawRoundedRect(QRectF(viewport()->rect()).adjusted(.5, .5, -1.5, -1.5),
+                                   14, 14);
+        }
+    }
+
+private:
+    void applyTheme()
+    {
+        const bool dark = Theme::ThemeManager::instance().isDarkMode();
+        const bool glass = AppearanceSettings::instance().liquidGlassProgress() > 0;
+        if (m_themeReady && m_lastDark == dark && m_lastGlass == glass)
+            return;
+        m_themeReady = true;
+        m_lastDark = dark;
+        m_lastGlass = glass;
+        const QString text = dark ? QStringLiteral("#EAF0FA") : QStringLiteral("#182B45");
+        const QString selection = dark ? QStringLiteral("rgba(90, 186, 225, 100)")
+                                       : QStringLiteral("rgba(22, 119, 184, 55)");
+        const QString background = dark ? QStringLiteral("#19243A")
+                                        : QStringLiteral("#F7FAFF");
+        const QString border = dark ? QStringLiteral("rgba(190, 215, 248, 55)")
+                                    : QStringLiteral("rgba(66, 105, 148, 55)");
+        setStyleSheet(QStringLiteral(
+            "QListView { background: %3; border: 1px solid %4; border-radius: 14px; "
+            "padding: 6px; color: %1; }"
+            "QListView::item { padding: 7px 10px; border-radius: 6px; min-height: 22px; }"
+            "QListView::item:selected { background: %2; color: %1; }"
+            "QListView::item:hover { background: %2; }")
+                .arg(text, selection,
+                     glass ? QStringLiteral("transparent") : background,
+                     glass ? QStringLiteral("transparent") : border));
+    }
+
+    QPointer<QComboBox> m_combo;
+    Surface m_surface;
+    bool m_themeReady = false;
+    bool m_lastDark = false;
+    bool m_lastGlass = false;
+};
 
 QRectF textureRect(const QRect &source, const QRect &bounds, const QSize &imageSize)
 {
@@ -314,6 +434,14 @@ const Backdrop &shellBackdrop(const QWidget *widget)
         backdrop.setImage(source.toImage(), host->rect());
     }
     return backdrop;
+}
+
+void installComboBox(QComboBox *combo)
+{
+    if (!combo || combo->property("nekoLiquidComboInstalled").toBool())
+        return;
+    combo->setProperty("nekoLiquidComboInstalled", true);
+    combo->setView(new GlassComboPopupView(combo));
 }
 
 } // namespace LiquidGlass

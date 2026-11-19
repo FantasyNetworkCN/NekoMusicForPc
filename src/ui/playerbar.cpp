@@ -13,6 +13,7 @@
 #include "theme/thememanager.h"
 #include "ui/glasswidget.h"
 #include "ui/glasspaint.h"
+#include "ui/liquidglass.h"
 #include "core/playerengine.h"
 #include "core/playlistmanager.h"
 #include "ui/svgicon.h"
@@ -1085,6 +1086,7 @@ void PlayerBar::setupUi()
     rl->addWidget(timeBlock, 0, Qt::AlignVCenter);
 
     m_qualitySelector = new QComboBox(right);
+    LiquidGlass::installComboBox(m_qualitySelector);
     m_qualitySelector->setObjectName(QStringLiteral("pbQualitySelector"));
     m_qualitySelector->addItem(I18n::instance().tr(QStringLiteral("standard")), QStringLiteral("standard"));
     m_qualitySelector->addItem(QStringLiteral("HQ"), QStringLiteral("hq"));

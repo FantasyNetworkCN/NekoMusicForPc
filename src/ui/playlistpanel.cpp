@@ -13,6 +13,7 @@
 #include "ui/scrollareafix.h"
 #include "ui/svgicon.h"
 #include "ui/localmusicbadgelabel.h"
+#include "ui/liquidglass.h"
 
 #include <QSizePolicy>
 #include <QScrollArea>
@@ -1006,6 +1007,7 @@ void PlaylistPanel::setupUi()
     headerLay->addLayout(titleCol, 1);
 
     m_deviceCombo = new QComboBox(header);
+    LiquidGlass::installComboBox(m_deviceCombo);
     m_deviceCombo->setObjectName(QStringLiteral("ppDeviceCombo"));
     m_deviceCombo->setMinimumWidth(130);
     m_deviceCombo->setCursor(Qt::PointingHandCursor);

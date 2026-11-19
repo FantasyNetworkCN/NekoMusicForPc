@@ -22,6 +22,7 @@
 #include "theme/thememanager.h"
 #include "ui/glasswidget.h"
 #include "ui/glasspaint.h"
+#include "ui/liquidglass.h"
 #include "ui/scrollareafix.h"
 #include "ui/svgicon.h"
 #include "version.h"
@@ -345,6 +346,7 @@ void SettingsPage::setupUi()
     langRow->addStretch();
 
     m_langCombo = new QComboBox(generalBody);
+    LiquidGlass::installComboBox(m_langCombo);
     m_langCombo->setObjectName("settingsCombo");
     m_langCombo->blockSignals(true);
     m_langCombo->addItem(I18n::instance().languageChinese(), I18n::ZhCN);
@@ -461,6 +463,7 @@ void SettingsPage::setupUi()
     themeRow->addStretch();
 
     m_themeCombo = new QComboBox(appearanceBody);
+    LiquidGlass::installComboBox(m_themeCombo);
     m_themeCombo->setObjectName("settingsCombo");
     m_themeCombo->blockSignals(true);
     m_themeCombo->addItem(I18n::instance().tr("themeSystem"), static_cast<int>(Theme::System));
@@ -984,6 +987,7 @@ void SettingsPage::setupPersonalizationSection(QVBoxLayout *cardLay, QWidget *ca
     kindRow->addStretch();
 
     m_backdropKindCombo = new QComboBox(cardBody);
+    LiquidGlass::installComboBox(m_backdropKindCombo);
     m_backdropKindCombo->setObjectName("settingsCombo");
     m_backdropKindCombo->addItem(I18n::instance().tr("shellBackdropDefaultImage"),
         static_cast<int>(ShellBackdropSettings::Kind::DefaultImage));

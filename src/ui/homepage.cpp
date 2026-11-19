@@ -9,6 +9,7 @@
 
 #include "homepage.h"
 #include "core/apiclient.h"
+#include "core/appearancesettings.h"
 #include "core/i18n.h"
 #include "core/covercache.h"
 #include "core/usermanager.h"
@@ -17,6 +18,7 @@
 #include "ui/playlistcard.h"
 #include "ui/flowlayout.h"
 #include "ui/glasspaint.h"
+#include "ui/liquidglass.h"
 #include "ui/scrollareafix.h"
 #include "ui/svgicon.h"
 
@@ -46,7 +48,18 @@ namespace {
 class DailyMixButton final : public QPushButton
 {
 public:
-    explicit DailyMixButton(QWidget *parent) : QPushButton(parent) {}
+    explicit DailyMixButton(QWidget *parent) : QPushButton(parent)
+    {
+        connect(&AppearanceSettings::instance(),
+                &AppearanceSettings::liquidGlassProgressChanged, this,
+                [this](qreal progress) {
+                    m_liquidProgress = progress;
+                    if (progress <= 0)
+                        m_surface.clear();
+                    update();
+                });
+        m_liquidProgress = AppearanceSettings::instance().liquidGlassProgress();
+    }
 protected:
     void paintEvent(QPaintEvent *) override
     {
@@ -56,10 +69,23 @@ protected:
         QPainterPath shape;
         shape.addRoundedRect(QRectF(rect()).adjusted(.5, .5, -.5, -.5), 24, 24);
         p.setClipPath(shape);
-        GlassPaint::paintCachedBackdrop(p, this, rect());
+        bool glassPainted = false;
+        if (m_liquidProgress > 0) {
+            p.save();
+            p.setOpacity(m_liquidProgress);
+            glassPainted = m_surface.paint(
+                p, rect(), LiquidGlass::shellBackdrop(this),
+                QRectF(mapTo(window(), QPoint()), size()), 24, dark,
+                LiquidGlass::Material::Chrome, 1.0 - (underMouse() ? 0.16 : 0.0));
+            p.restore();
+        }
+        if (!glassPainted)
+            GlassPaint::paintCachedBackdrop(p, this, rect());
         QLinearGradient wash(rect().topLeft(), rect().bottomRight());
-        wash.setColorAt(0, dark ? QColor(33, 76, 99, 220) : QColor(210, 241, 249, 230));
-        wash.setColorAt(1, dark ? QColor(37, 43, 76, 220) : QColor(226, 230, 251, 210));
+        wash.setColorAt(0, dark ? QColor(33, 76, 99, glassPainted ? 116 : 220)
+                                : QColor(210, 241, 249, glassPainted ? 128 : 230));
+        wash.setColorAt(1, dark ? QColor(37, 43, 76, glassPainted ? 112 : 220)
+                                : QColor(226, 230, 251, glassPainted ? 120 : 210));
         p.fillPath(shape, wash);
         if (underMouse() || isDown())
             p.fillPath(shape, QColor(255, 255, 255, isDown() ? 5 : 14));
@@ -80,6 +106,64 @@ protected:
         if (auto *art = findChild<QLabel *>(QStringLiteral("hpDailyCover")))
             art->setVisible(width() >= 650);
     }
+
+private:
+    qreal m_liquidProgress = 0;
+    LiquidGlass::Surface m_surface;
+};
+
+class GlassDiscoveryButton final : public QPushButton
+{
+public:
+    explicit GlassDiscoveryButton(QWidget *parent) : QPushButton(parent)
+    {
+        connect(&AppearanceSettings::instance(),
+                &AppearanceSettings::liquidGlassProgressChanged, this,
+                [this](qreal progress) {
+                    m_liquidProgress = progress;
+                    if (progress <= 0)
+                        m_surface.clear();
+                    update();
+                });
+        m_liquidProgress = AppearanceSettings::instance().liquidGlassProgress();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        const bool dark = Theme::ThemeManager::instance().isDarkMode();
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QRectF bounds = QRectF(rect()).adjusted(.5, .5, -.5, -.5);
+        QPainterPath shape;
+        shape.addRoundedRect(bounds, 16, 16);
+        bool glassPainted = false;
+        if (m_liquidProgress > 0) {
+            p.save();
+            p.setOpacity(m_liquidProgress);
+            glassPainted = m_surface.paint(
+                p, rect(), LiquidGlass::shellBackdrop(this),
+                QRectF(mapTo(window(), QPoint()), size()), 16, dark,
+                LiquidGlass::Material::Chrome, underMouse() ? 0.82 : 1.0);
+            p.restore();
+        }
+        if (!glassPainted)
+            GlassPaint::paintCachedBackdrop(p, this, rect());
+        p.fillPath(shape, dark ? QColor(37, 53, 76, glassPainted ? 70 : 150)
+                               : QColor(255, 255, 255, glassPainted ? 76 : 170));
+        if (underMouse() || isDown())
+            p.fillPath(shape, QColor(255, 255, 255, isDown() ? 8 : 18));
+        p.setPen(QPen(hasFocus() ? QColor(Theme::kLavender)
+                                 : (dark ? QColor(182, 221, 250, 45)
+                                         : QColor(255, 255, 255, 190)),
+                      hasFocus() ? 2 : 1));
+        p.setBrush(Qt::NoBrush);
+        p.drawPath(shape);
+    }
+
+private:
+    qreal m_liquidProgress = 0;
+    LiquidGlass::Surface m_surface;
 };
 
 class DailyArtwork final : public QLabel
@@ -231,7 +315,7 @@ void HomePage::setupUi()
     auto *shortcuts = new QHBoxLayout;
     shortcuts->setSpacing(14);
     auto makeEntry = [this, container](bool hot, QLabel **caption) {
-        auto *button = new QPushButton(container);
+        auto *button = new GlassDiscoveryButton(container);
         button->setObjectName(hot ? "hpHotEntry" : "hpLatestEntry");
         button->setProperty("discoveryTile", true);
         button->setCursor(Qt::PointingHandCursor);

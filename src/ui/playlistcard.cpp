@@ -12,6 +12,7 @@
 #include "ui/svgicon.h"
 #include "core/i18n.h"
 #include "core/covercache.h"
+#include "core/appearancesettings.h"
 
 #include <QVBoxLayout>
 #include <QPainter>
@@ -42,6 +43,14 @@ PlaylistCard::PlaylistCard(const PlaylistInfo &info, QWidget *parent)
     m_hoverAnimation = new QPropertyAnimation(this, "hoverProgress", this);
     m_hoverAnimation->setDuration(160);
     m_hoverAnimation->setEasingCurve(QEasingCurve::OutCubic);
+    m_liquidProgress = AppearanceSettings::instance().liquidGlassProgress();
+    connect(&AppearanceSettings::instance(), &AppearanceSettings::liquidGlassProgressChanged,
+            this, [this](qreal progress) {
+                m_liquidProgress = progress;
+                if (progress <= 0)
+                    m_liquidSurface.clear();
+                update();
+            });
 
     auto *lay = new QVBoxLayout(this);
     lay->setContentsMargins(10, 10, 10, 10);
@@ -138,10 +147,23 @@ void PlaylistCard::paintEvent(QPaintEvent *)
     p.setRenderHint(QPainter::Antialiasing);
     p.setRenderHint(QPainter::SmoothPixmapTransform);
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
-    p.setPen(QPen(hasFocus() ? QColor(Theme::kLavender) : QColor(128, 180, 220, int(45 * m_hoverProgress)), 1));
-    p.setBrush(dark ? QColor(170, 215, 250, int(14 * m_hoverProgress))
-                    : QColor(255, 255, 255, int(150 * m_hoverProgress)));
-    p.drawRoundedRect(QRectF(rect()).adjusted(.5, .5, -.5, -.5), 18, 18);
+    const QRectF cardBounds = QRectF(rect()).adjusted(.5, .5, -.5, -.5);
+    bool glassPainted = false;
+    if (m_liquidProgress > 0) {
+        p.save();
+        p.setOpacity(m_liquidProgress);
+        glassPainted = m_liquidSurface.paint(
+            p, rect(), LiquidGlass::shellBackdrop(this),
+            QRectF(mapTo(window(), QPoint()), size()), 18, dark,
+            LiquidGlass::Material::ListItem, 1.0 - m_hoverProgress * 0.18);
+        p.restore();
+    }
+    p.setPen(QPen(hasFocus() ? QColor(Theme::kLavender)
+                             : QColor(128, 180, 220, int(45 * m_hoverProgress)), 1));
+    p.setBrush(glassPainted ? QColor(255, 255, 255, int(18 * m_hoverProgress))
+                            : (dark ? QColor(170, 215, 250, int(14 * m_hoverProgress))
+                                     : QColor(255, 255, 255, int(150 * m_hoverProgress))));
+    p.drawRoundedRect(cardBounds, 18, 18);
 
     // 圆角裁剪封面
     QRect coverRect(10, 10, Theme::kCoverSmall, Theme::kCoverSmall);

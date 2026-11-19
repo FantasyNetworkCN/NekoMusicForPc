@@ -8,6 +8,7 @@
 #include "core/usermanager.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
+#include "ui/liquidglass.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -156,6 +157,7 @@ void ExternalImportDialog::setupUi()
     targetLayout->addWidget(targetLabel);
 
     m_targetPlaylistCombo = new QComboBox(mainBox);
+    LiquidGlass::installComboBox(m_targetPlaylistCombo);
     m_targetPlaylistCombo->setStyleSheet(QStringLiteral(
         "QComboBox { "
         "  background: %1; "

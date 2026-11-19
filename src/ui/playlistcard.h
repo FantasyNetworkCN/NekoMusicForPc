@@ -13,6 +13,8 @@
 #include <QPixmap>
 #include <QMetaObject>
 
+#include "ui/liquidglass.h"
+
 struct PlaylistInfo {
     int id = -1;
     QString name;
@@ -60,4 +62,6 @@ private:
     qreal m_hoverProgress = 0;
     class QPropertyAnimation *m_hoverAnimation = nullptr;
     QMetaObject::Connection m_coverConn;
+    qreal m_liquidProgress = 0;
+    LiquidGlass::Surface m_liquidSurface;
 };
