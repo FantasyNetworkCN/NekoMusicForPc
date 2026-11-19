@@ -206,6 +206,35 @@ jobs:
             }
           }
 
+          # Qt 的 FFmpeg 插件会加载 dxcompiler.dll；该 DLL 使用 MSVC CRT，
+          # 与上面的 MinGW 运行库是两套独立依赖。
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "未找到 vswhere，无法定位 MSVC 运行库" }
+          $vcRuntime = $null
+          $vsInstallations = & $vswhere -all -products '*' -property installationPath
+          foreach ($vsInstall in $vsInstallations) {
+            $redistRoot = Join-Path $vsInstall 'VC\Redist\MSVC'
+            $runtimeDirs = Get-ChildItem $redistRoot -Directory -ErrorAction SilentlyContinue |
+              Sort-Object { [version]$_.Name } -Descending
+            foreach ($runtimeDir in $runtimeDirs) {
+              $candidate = Join-Path $runtimeDir.FullName 'x64\Microsoft.VC143.CRT'
+              $requiredVcDlls = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')
+              $missingVcDlls = $requiredVcDlls | Where-Object {
+                -not (Test-Path (Join-Path $candidate $_))
+              }
+              if (@($missingVcDlls).Count -eq 0) {
+                $vcRuntime = $candidate
+                break
+              }
+            }
+            if ($vcRuntime) { break }
+          }
+          if (-not $vcRuntime) { throw "未找到完整的 x64 MSVC 运行库（VC143）" }
+          foreach ($dll in @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')) {
+            Copy-Item (Join-Path $vcRuntime $dll) (Join-Path $stage $dll) -Force
+            Write-Host "  补拷 $dll（来自 Visual Studio VC143 CRT）"
+          }
+
           python (Join-Path $root 'tools\check-windows-deploy.py') $stage `
             --objdump (Join-Path $mingw.FullName 'bin\objdump.exe') `
             --qt-bin (Join-Path $env:QT_ROOT_DIR 'bin')
