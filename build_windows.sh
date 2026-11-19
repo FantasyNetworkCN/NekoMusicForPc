@@ -3,7 +3,7 @@
 # Produces: Neko歌姬计划-INSTALLER-win-x64.exe
 #
 # Prerequisites:
-#   sudo apt install g++-mingw-w64-x86-64 nsis
+#   sudo apt install g++-mingw-w64-x86-64 nsis python3
 #   Qt6 for Windows MinGW (see setup instructions below)
 
 set -e
@@ -67,7 +67,7 @@ echo "Using Qt6 host tools:  $QT_HOST_ROOT"
 # Check dependencies
 # ============================================================
 MISSING=""
-for cmd in x86_64-w64-mingw32-g++ x86_64-w64-mingw32-windres makensis cmake; do
+for cmd in x86_64-w64-mingw32-g++ x86_64-w64-mingw32-windres x86_64-w64-mingw32-objdump makensis cmake python3; do
     if ! command -v "$cmd" &>/dev/null; then
         MISSING="$MISSING $cmd"
     fi
@@ -77,7 +77,7 @@ if [ -n "$MISSING" ]; then
     echo "ERROR: Missing tools:$MISSING"
     echo ""
     echo "Install with:"
-    echo "  sudo apt install g++-mingw-w64-x86-64 mingw-w64-x86-64-dev nsis cmake"
+    echo "  sudo apt install g++-mingw-w64-x86-64 mingw-w64-x86-64-dev nsis cmake python3"
     exit 1
 fi
 
@@ -153,52 +153,18 @@ mkdir -p "$DEPLOY_DIR"
 # Copy main executable
 cp "$EXE_PATH" "$DEPLOY_DIR/"
 
-# Copy Qt DLLs from Windows Qt installation
+# Qt DLLs 和 FFmpeg DLLs 由下方的 PE 依赖检查器从同一 Qt 套件递归补齐。
 QT_BIN="$QT_WIN_ROOT/bin"
 if [ ! -d "$QT_BIN" ]; then
     echo "ERROR: Qt bin directory not found: $QT_BIN"
     exit 1
 fi
 
-# Required Qt DLLs（与 CMake target_link_libraries 一致；缺任一则安装后无法启动）
-QT_DLLS=(
-    Qt6Core
-    Qt6Gui
-    Qt6Widgets
-    Qt6Multimedia
-    Qt6Network
-    Qt6WebSockets
-    Qt6Sql
-    Qt6Svg
-    Qt6SvgWidgets
-    Qt6Concurrent
-)
-
-for dll in "${QT_DLLS[@]}"; do
-    if [ -f "$QT_BIN/${dll}.dll" ]; then
-        cp "$QT_BIN/${dll}.dll" "$DEPLOY_DIR/"
-        echo "  Copied ${dll}.dll"
-    else
-        echo "  ERROR: ${dll}.dll not found under $QT_BIN"
-        exit 1
-    fi
-done
-
-# Qt Multimedia（MinGW 套件）在运行时会加载 FFmpeg，需与 exe 同目录
-for pattern in 'avcodec-*.dll' 'avformat-*.dll' 'avutil-*.dll' 'swresample-*.dll' 'swscale-*.dll'; do
-    shopt -s nullglob
-    for f in "$QT_BIN"/$pattern; do
-        cp "$f" "$DEPLOY_DIR/"
-        echo "  Copied $(basename "$f")"
-    done
-    shopt -u nullglob
-done
-
-# 图形栈常用同目录依赖（Qt 安装包 bin 内自带；不打包 OpenGL 软渲染）
-for extra in d3dcompiler_47.dll; do
-    if [ -f "$QT_BIN/$extra" ]; then
-        cp "$QT_BIN/$extra" "$DEPLOY_DIR/"
-        echo "  Copied $extra"
+# Qt 会按需加载 D3D 编译器和 OpenGL 软件渲染库，PE 导入表里没有它们。
+for extra in "$QT_BIN"/{D3Dcompiler_47,d3dcompiler_47,opengl32sw}.dll; do
+    if [ -f "$extra" ]; then
+        cp "$extra" "$DEPLOY_DIR/"
+        echo "  Copied $(basename "$extra")"
     fi
 done
 
@@ -218,30 +184,17 @@ for dll in "${MINGW_COPY[@]}"; do
     fi
 done
 
-# 若仍漏掉 Qt6*.dll，按 PE 导入表从 Qt bin 补拷（例如将来新增模块）
-if command -v x86_64-w64-mingw32-objdump &>/dev/null; then
-    while IFS= read -r imp; do
-        case "${imp,,}" in
-            qt6opengl*.dll|opengl32*.dll)
-                echo "  Skip $imp (no OpenGL)"
-                ;;
-            qt6*.dll)
-                if [ -f "$QT_BIN/$imp" ] && [ ! -f "$DEPLOY_DIR/$imp" ]; then
-                    cp "$QT_BIN/$imp" "$DEPLOY_DIR/"
-                    echo "  Copied $imp (from PE imports)"
-                fi
-                ;;
-        esac
-    done < <(x86_64-w64-mingw32-objdump -p "$DEPLOY_DIR/NekoMusic.exe" 2>/dev/null | sed -n 's/.*DLL Name: //p' | sort -u)
-fi
-
 # Copy Qt plugins（tls：HTTPS 必需，含 qschannelbackend / qopensslbackend 等）
-for plugin in platforms multimedia iconengines imageformats styles translations sqldrivers tls networkinformation generic; do
+for plugin in platforms multimedia iconengines imageformats styles translations tls networkinformation generic; do
     if [ -d "$QT_BIN/../plugins/${plugin}" ]; then
         cp -r "$QT_BIN/../plugins/${plugin}" "$DEPLOY_DIR/"
         echo "  Copied plugins/${plugin}"
     fi
 done
+
+# 本项目仅使用 Qt SQLite 插件。
+mkdir -p "$DEPLOY_DIR/sqldrivers"
+cp "$QT_WIN_ROOT/plugins/sqldrivers/qsqlite.dll" "$DEPLOY_DIR/sqldrivers/"
 
 # OpenSSL DLL（若运行库选用 qopensslbackend；Schannel 后端见 plugins/tls）
 find "$QT_WIN_ROOT" -maxdepth 4 \( -name 'libssl-*.dll' -o -name 'libcrypto-*.dll' \) 2>/dev/null | while read -r f; do
@@ -249,6 +202,9 @@ find "$QT_WIN_ROOT" -maxdepth 4 \( -name 'libssl-*.dll' -o -name 'libcrypto-*.dl
     cp "$f" "$DEPLOY_DIR/"
     echo "  Copied $(basename "$f") (OpenSSL)"
 done
+
+python3 "$SCRIPT_DIR/tools/check-windows-deploy.py" "$DEPLOY_DIR" \
+    --objdump x86_64-w64-mingw32-objdump --qt-bin "$QT_BIN"
 
 # ============================================================
 # Build NSIS installer
@@ -263,13 +219,9 @@ VERSION=$(grep -A1 "project(NekoMusic" "$SCRIPT_DIR/CMakeLists.txt" | grep -oP '
 SUFFIX=""
 FULL_VERSION="${VERSION}${SUFFIX}"
 
-# Temporarily copy deploy files to expected location
-DEPLOY_TEMP="$SCRIPT_DIR/build"
-rm -rf "$DEPLOY_TEMP"
-cp -r "$SCRIPT_DIR/$BUILD_DIR/$DEPLOY_DIR" "$DEPLOY_TEMP"
-
 echo "Running makensis..."
-makensis -V2 "-DBUILD_DIR=$SCRIPT_DIR/build" -DVERSION="$FULL_VERSION" "$SCRIPT_DIR/packaging/nekomusic_installer.nsi"
+makensis -V2 -INPUTCHARSET UTF8 "-DBUILD_DIR=$SCRIPT_DIR/$BUILD_DIR/$DEPLOY_DIR" \
+    "-DVERSION=$FULL_VERSION" "$SCRIPT_DIR/packaging/nekomusic_installer.nsi"
 NSIS_EXIT=$?
 echo "makensis exit code: $NSIS_EXIT"
 

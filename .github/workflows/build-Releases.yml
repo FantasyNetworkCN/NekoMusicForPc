@@ -120,7 +120,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $root     = $PWD.Path
           $buildDir = Join-Path $root 'build-windows'
-          $stage    = Join-Path $root 'build'          # NSIS 脚本约定的待打包目录
+          $stage    = Join-Path $buildDir 'deploy'
 
           # Qt 自带的 MinGW 工具链（g++ / gcc），确保优先于其它编译器
           $mingw = Get-ChildItem $env:IQTA_TOOLS -Directory |
@@ -171,25 +171,14 @@ jobs:
             Remove-Item $pluginsSub -Recurse -Force
           }
 
-          # windeployqt 只跟随 exe 的导入表；链接了但未被引用的模块（如 SvgWidgets/Concurrent）
-          # 它不会拷，但 NSIS 里是必选文件，这里从 Qt 的 bin 兜底补齐
-          $qtDlls = @(
-            'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Widgets.dll', 'Qt6Multimedia.dll',
-            'Qt6Network.dll', 'Qt6WebSockets.dll', 'Qt6Sql.dll', 'Qt6Svg.dll', 'Qt6SvgWidgets.dll',
-            'Qt6Concurrent.dll'
-          )
-          foreach ($dll in $qtDlls) {
-            $dst = Join-Path $stage $dll
-            if (-not (Test-Path $dst)) {
-              $srcDll = Join-Path $env:QT_ROOT_DIR "bin\$dll"
-              if (Test-Path $srcDll) {
-                Copy-Item $srcDll $dst
-                Write-Host "  补拷 $dll（windeployqt 未部署）"
-              }
-            }
+          # 播放列表只用 SQLite。其他驱动可能依赖未随 Qt 分发的数据库客户端。
+          $sqlDrivers = Join-Path $stage 'sqldrivers'
+          if (Test-Path $sqlDrivers) {
+            Get-ChildItem -LiteralPath $sqlDrivers -Filter '*.dll' -File |
+              Where-Object { $_.Name -ne 'qsqlite.dll' } | Remove-Item
           }
 
-          # MinGW 运行库兜底（同上）
+          # MinGW 运行库兜底。
           $mingwDlls = @('libstdc++-6.dll', 'libgcc_s_seh-1.dll', 'libwinpthread-1.dll')
           foreach ($dll in $mingwDlls) {
             $dst = Join-Path $stage $dll
@@ -202,14 +191,10 @@ jobs:
             }
           }
 
-          # NSIS 脚本里这些是必选文件，缺失时在这里就报清楚，别等 makensis 中止
-          $required = @('NekoMusic.exe', 'platforms\qwindows.dll') + $qtDlls + $mingwDlls
-          $missing = @($required | Where-Object { -not (Test-Path (Join-Path $stage $_)) })
-          if ($missing.Count -gt 0) {
-            Write-Host "---- $stage 内容 ----"
-            Get-ChildItem $stage -Recurse -Depth 1 | Select-Object -First 60 FullName
-            throw "部署目录缺少必需文件: $($missing -join ', ')"
-          }
+          python (Join-Path $root 'tools\check-windows-deploy.py') $stage `
+            --objdump (Join-Path $mingw.FullName 'bin\objdump.exe') `
+            --qt-bin (Join-Path $env:QT_ROOT_DIR 'bin')
+          if ($LASTEXITCODE -ne 0) { throw "Windows 部署依赖检查失败" }
 
           # ---------------- NSIS 打包 ----------------
           $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"

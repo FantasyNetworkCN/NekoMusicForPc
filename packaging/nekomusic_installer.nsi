@@ -14,10 +14,10 @@
 !define APP_PROGID "NekoMusic.AudioFile"
 !define APP_CAPABILITIES "Software\NekoMusic\Capabilities"
 
-; 待打包的部署目录。默认相对本脚本所在目录（packaging\..\build）；
+; 待打包的部署目录。默认相对本脚本所在目录；
 ; 相对路径在不同环境下的解析基准不一致，CI 会用 -DBUILD_DIR=<绝对路径> 覆盖。
 !ifndef BUILD_DIR
-  !define BUILD_DIR "${__FILEDIR__}\..\build"
+  !define BUILD_DIR "${__FILEDIR__}\..\build-windows\deploy"
 !endif
 
 ; Repository-root third-party payload. Override with -DVB_CABLE_SETUP=<path>
@@ -73,47 +73,8 @@ Section "Neko歌姬计划" SecMain
     ; Install main executable
     File "${BUILD_DIR}\${APP_EXE}"
 
-    ; Install Qt dependencies
-    File /nonfatal /r "${BUILD_DIR}\platforms"
-    File /nonfatal /r "${BUILD_DIR}\multimedia"
-    File /nonfatal /r "${BUILD_DIR}\iconengines"
-    File /nonfatal /r "${BUILD_DIR}\imageformats"
-    File /nonfatal /r "${BUILD_DIR}\styles"
-    File /nonfatal /r "${BUILD_DIR}\translations"
-    File /nonfatal /r "${BUILD_DIR}\sqldrivers"
-    File /nonfatal /r "${BUILD_DIR}\tls"
-    File /nonfatal /r "${BUILD_DIR}\networkinformation"
-    File /nonfatal /r "${BUILD_DIR}\generic"
-
-    ; Qt DLLs
-    File "${BUILD_DIR}\Qt6Core.dll"
-    File "${BUILD_DIR}\Qt6Gui.dll"
-    File "${BUILD_DIR}\Qt6Widgets.dll"
-    File "${BUILD_DIR}\Qt6Multimedia.dll"
-    File "${BUILD_DIR}\Qt6Network.dll"
-    File "${BUILD_DIR}\Qt6WebSockets.dll"
-    File "${BUILD_DIR}\Qt6Sql.dll"
-    File "${BUILD_DIR}\Qt6Svg.dll"
-    File "${BUILD_DIR}\Qt6SvgWidgets.dll"
-    File "${BUILD_DIR}\Qt6Concurrent.dll"
-
-    ; Qt Multimedia -> FFmpeg（版本号随 Qt 变化，用通配）
-    File /nonfatal "${BUILD_DIR}\avcodec-*.dll"
-    File /nonfatal "${BUILD_DIR}\avformat-*.dll"
-    File /nonfatal "${BUILD_DIR}\avutil-*.dll"
-    File /nonfatal "${BUILD_DIR}\swresample-*.dll"
-    File /nonfatal "${BUILD_DIR}\swscale-*.dll"
-
-    ; MinGW / 图形依赖（与 build_windows.sh 部署目录一致）
-    File "${BUILD_DIR}\libstdc++-6.dll"
-    File "${BUILD_DIR}\libgcc_s_seh-1.dll"
-    File "${BUILD_DIR}\libwinpthread-1.dll"
-    File /nonfatal "${BUILD_DIR}\d3dcompiler_47.dll"
-    File /nonfatal "${BUILD_DIR}\opengl32sw.dll"
-
-    ; Optional: OpenSSL DLLs
-    File /nonfatal "${BUILD_DIR}\libssl*.dll"
-    File /nonfatal "${BUILD_DIR}\libcrypto*.dll"
+    ; 保留已校验的部署目录结构，避免在安装脚本里另维护一份 DLL 清单。
+    File /r /x "${APP_EXE}" "${BUILD_DIR}\*"
 
     ; Bundled VB-CABLE installer (redistribution authorized by the copyright
     ; holder). Installed separately and launched on first microphone-sync use.
