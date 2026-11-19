@@ -314,6 +314,7 @@ void Sidebar::setupUi()
             importMenu->addAction(button->text(), button, &QPushButton::click);
     });
     importButton->setMenu(importMenu);
+    LiquidGlass::installMenu(importMenu);
     lay->addWidget(importButton);
 
     // 收藏歌单分隔线

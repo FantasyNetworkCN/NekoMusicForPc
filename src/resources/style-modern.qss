@@ -149,9 +149,9 @@ QPushButton[discoveryTile="true"]:focus { border-color: @ACCENT@; }
 #pbQualitySelector:focus { border-color: @ACCENT@; }
 #pbQualitySelector::drop-down { border: none; width: 18px; }
 #pbQualitySelector QAbstractItemView {
-    background: @POPUP@;
+    background: transparent;
     color: @INK@;
-    border: 1px solid @LINE@;
+    border: none;
     selection-background-color: @SELECTED@;
     selection-color: @INK@;
     padding: 4px;

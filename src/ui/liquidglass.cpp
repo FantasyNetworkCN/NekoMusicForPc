@@ -5,15 +5,18 @@
 #include "theme/thememanager.h"
 
 #include <QPainter>
+#include <QPainterPath>
 #include <QApplication>
 #include <QComboBox>
 #include <QFrame>
 #include <QListView>
+#include <QMenu>
 #include <QOpenGLWidget>
 #include <QPixmap>
 #include <QRegion>
 #include <QPointer>
 #include <QShowEvent>
+#include <QEvent>
 #include <QVariant>
 #include <QWidget>
 
@@ -65,6 +68,14 @@ protected:
     void showEvent(QShowEvent *event) override
     {
         QListView::showEvent(event);
+        if (auto *container = qobject_cast<QFrame *>(parentWidget())) {
+            container->setFrameShape(QFrame::NoFrame);
+            container->setLineWidth(0);
+            container->setMidLineWidth(0);
+            container->setAttribute(Qt::WA_TranslucentBackground);
+            container->setStyleSheet(QStringLiteral(
+                "QFrame { background: transparent; border: none; }"));
+        }
         const int desiredWidth = sizeHint().width();
         setMinimumWidth(desiredWidth);
         if (width() < desiredWidth)
@@ -146,6 +157,71 @@ private:
     bool m_themeReady = false;
     bool m_lastDark = false;
     bool m_lastGlass = false;
+};
+
+class GlassMenuFilter final : public QObject
+{
+public:
+    explicit GlassMenuFilter(QMenu *menu) : QObject(menu), m_menu(menu)
+    {
+        connect(&AppearanceSettings::instance(),
+                &AppearanceSettings::liquidGlassProgressChanged,
+                menu, [menu](qreal) { menu->update(); });
+        connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged,
+                menu, [menu]() { menu->update(); });
+    }
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (watched != m_menu || event->type() != QEvent::Paint)
+            return QObject::eventFilter(watched, event);
+
+        const qreal progress = AppearanceSettings::instance().liquidGlassProgress();
+        const bool dark = Theme::ThemeManager::instance().isDarkMode();
+        QWidget *host = m_menu->parentWidget() ? m_menu->parentWidget()->window() : nullptr;
+        QPixmap source = host ? host->property("nekoLiquidBackdrop").value<QPixmap>() : QPixmap();
+        if (source.isNull() && host)
+            source = host->property("nekoFrostedBackdrop").value<QPixmap>();
+        if (source.isNull()) {
+            for (QWidget *candidate : QApplication::topLevelWidgets()) {
+                source = candidate->property("nekoLiquidBackdrop").value<QPixmap>();
+                if (source.isNull())
+                    source = candidate->property("nekoFrostedBackdrop").value<QPixmap>();
+                if (!source.isNull()) {
+                    host = candidate;
+                    break;
+                }
+            }
+        }
+
+        QPainter painter(m_menu);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const QRectF bounds = QRectF(m_menu->rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+        QPainterPath shape;
+        shape.addRoundedRect(bounds, 14, 14);
+        painter.fillPath(shape, dark ? QColor(25, 36, 55, 244)
+                                     : QColor(250, 252, 255, 246));
+        if (host && !source.isNull()) {
+            Backdrop backdrop;
+            backdrop.setImage(source.toImage(), host->rect());
+            const QPoint origin = host->mapFromGlobal(m_menu->mapToGlobal(QPoint()));
+            painter.save();
+            painter.setOpacity(progress);
+            m_surface.paint(painter, m_menu->rect(), backdrop,
+                            QRectF(origin, m_menu->size()), 14, dark);
+            painter.restore();
+        }
+        painter.setPen(QPen(dark ? QColor(190, 215, 248, 42)
+                                 : QColor(66, 105, 148, 42), 1));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawPath(shape);
+        return false;
+    }
+
+private:
+    QPointer<QMenu> m_menu;
+    Surface m_surface;
 };
 
 QRectF textureRect(const QRect &source, const QRect &bounds, const QSize &imageSize)
@@ -424,6 +500,19 @@ void installComboBox(QComboBox *combo)
         return;
     combo->setProperty("nekoLiquidComboInstalled", true);
     combo->setView(new GlassComboPopupView(combo));
+}
+
+void installMenu(QMenu *menu)
+{
+    if (!menu || menu->property("nekoLiquidMenuInstalled").toBool())
+        return;
+    menu->setProperty("nekoLiquidMenuInstalled", true);
+    menu->setAttribute(Qt::WA_TranslucentBackground);
+    menu->setStyleSheet(QStringLiteral(
+        "QMenu { background: transparent; border: none; padding: 7px; }"
+        "QMenu::item { padding: 8px 26px 8px 12px; border-radius: 6px; }"
+        "QMenu::item:selected { background: rgba(90, 186, 225, 70); }"));
+    menu->installEventFilter(new GlassMenuFilter(menu));
 }
 
 } // namespace LiquidGlass

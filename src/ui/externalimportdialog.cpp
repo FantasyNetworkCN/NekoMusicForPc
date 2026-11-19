@@ -4,6 +4,7 @@
  */
 
 #include "externalimportdialog.h"
+#include "core/appearancesettings.h"
 #include "core/i18n.h"
 #include "core/usermanager.h"
 #include "theme/theme.h"
@@ -11,17 +12,81 @@
 #include "ui/liquidglass.h"
 
 #include <QVBoxLayout>
+#include <QApplication>
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QLabel>
 #include <QPushButton>
 #include <QComboBox>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
 #include <QProgressBar>
 #include <QGraphicsDropShadowEffect>
 #include <QNetworkReply>
 #include <QPointer>
 
 namespace {
+
+class ImportGlassPanel final : public QWidget
+{
+public:
+    explicit ImportGlassPanel(QWidget *parent) : QWidget(parent)
+    {
+        setAttribute(Qt::WA_TranslucentBackground);
+        setAutoFillBackground(false);
+        connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged,
+                this, [this](Theme::ThemeMode) { update(); });
+        connect(&AppearanceSettings::instance(),
+                &AppearanceSettings::liquidGlassProgressChanged,
+                this, [this](qreal) { update(); });
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        const bool dark = Theme::ThemeManager::instance().isDarkMode();
+        const qreal progress = AppearanceSettings::instance().liquidGlassProgress();
+        QPixmap source;
+        QWidget *host = nullptr;
+        for (QWidget *candidate : QApplication::topLevelWidgets()) {
+            source = candidate->property("nekoLiquidBackdrop").value<QPixmap>();
+            if (source.isNull())
+                source = candidate->property("nekoFrostedBackdrop").value<QPixmap>();
+            if (!source.isNull()) {
+                host = candidate;
+                break;
+            }
+        }
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+        const QRectF bounds = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+        QPainterPath shape;
+        shape.addRoundedRect(bounds, Theme::kRMd, Theme::kRMd);
+        painter.fillPath(shape, dark ? QColor(25, 36, 55, 244)
+                                     : QColor(250, 252, 255, 246));
+
+        if (host && !source.isNull() && progress > 0) {
+            LiquidGlass::Backdrop backdrop;
+            backdrop.setImage(source.toImage(), host->rect());
+            const QPoint origin = host->mapFromGlobal(mapToGlobal(QPoint()));
+            painter.save();
+            painter.setOpacity(progress);
+            m_surface.paint(painter, rect(), backdrop,
+                            QRectF(origin, size()), Theme::kRMd, dark);
+            painter.restore();
+        }
+
+        painter.setPen(QPen(dark ? QColor(190, 215, 248, 42)
+                                 : QColor(66, 105, 148, 42), 1));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawPath(shape);
+    }
+
+private:
+    LiquidGlass::Surface m_surface;
+};
 
 void polishFramelessDialog(QDialog *dlg)
 {
@@ -61,7 +126,6 @@ void ExternalImportDialog::setupUi()
     const bool dark = Theme::ThemeManager::instance().isDarkMode();
 
     // 颜色定义
-    const QString bgColor = dark ? QStringLiteral("rgba(36, 36, 36, 245)") : QStringLiteral("rgba(255, 255, 255, 248)");
     const QString borderColor = dark ? QString::fromUtf8(Theme::kBorderGlass) : QStringLiteral("rgba(64, 197, 241, 0.22)");
     const QString textMainColor = dark ? QString::fromUtf8(Theme::kTextMain) : QStringLiteral("#182B45");
     const QString textSubColor = dark ? QString::fromUtf8(Theme::kTextSub) : QStringLiteral("rgba(33, 37, 41, 0.65)");
@@ -74,17 +138,8 @@ void ExternalImportDialog::setupUi()
     outerLayout->setSpacing(0);
 
     // 主容器（玻璃效果）
-    auto *mainBox = new QWidget(this);
+    auto *mainBox = new ImportGlassPanel(this);
     mainBox->setObjectName(QStringLiteral("externalImportBox"));
-    mainBox->setStyleSheet(
-        QStringLiteral(
-            "QWidget#externalImportBox {"
-            "  background: %1;"
-            "  border: 1px solid %2;"
-            "  border-radius: %3px;"
-            "}")
-            .arg(bgColor, borderColor)
-            .arg(Theme::kRMd));
 
     auto *mainLayout = new QVBoxLayout(mainBox);
     mainLayout->setContentsMargins(24, 24, 24, 24);
@@ -160,7 +215,7 @@ void ExternalImportDialog::setupUi()
     LiquidGlass::installComboBox(m_targetPlaylistCombo);
     m_targetPlaylistCombo->setStyleSheet(QStringLiteral(
         "QComboBox { "
-        "  background: %1; "
+        "  background: transparent; "
         "  border: 1px solid %2; "
         "  border-radius: 8px; "
         "  padding: 8px 12px; "
@@ -170,8 +225,8 @@ void ExternalImportDialog::setupUi()
         "}"
         "QComboBox::drop-down { border: none; width: 24px; }"
         "QComboBox QAbstractItemView { "
-        "  background: %4; "
-        "  border: 1px solid %2; "
+        "  background: transparent; "
+        "  border: none; "
         "  border-radius: 8px; "
         "  color: %3; "
         "  selection-background-color: %5; "

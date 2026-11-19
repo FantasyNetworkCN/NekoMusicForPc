@@ -5,6 +5,7 @@
 
 class QColor;
 class QComboBox;
+class QMenu;
 class QPainter;
 class QWidget;
 
@@ -79,6 +80,7 @@ QImage capture(QWidget *host, const QRect &region, const QWidget *stopBefore = n
 /** 外壳玻璃共享背景图与 Vulkan 中生成的漫射纹理。 */
 const Backdrop &shellBackdrop(const QWidget *widget);
 void installComboBox(QComboBox *combo);
+void installMenu(QMenu *menu);
 
 constexpr int kCaptureMargin = 40;
 
