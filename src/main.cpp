@@ -13,6 +13,7 @@
 #include <QLocalServer>
 #include <QTimer>
 #include <QFileInfo>
+#include <QFileOpenEvent>
 #include <QDir>
 #include <QFile>
 #include <QSaveFile>
@@ -39,6 +40,46 @@
 
 // 单实例服务器名称
 static const QString kServerName = QStringLiteral("NekoMusicSingleInstance");
+
+/** 应用级文件打开事件拦截器，用于处理 macOS 等平台投递到 QApplication 的 URL 深链。 */
+class DeepLinkApplicationEventFilter final : public QObject
+{
+public:
+    explicit DeepLinkApplicationEventFilter(MainWindow *window)
+        : QObject(window), m_window(window) {}
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        Q_UNUSED(watched);
+        if (event->type() != QEvent::FileOpen || !m_window)
+            return false;
+
+        const QUrl url = static_cast<QFileOpenEvent *>(event)->url();
+        if (!url.isValid()
+            || url.scheme().compare(QStringLiteral("nekomusic"), Qt::CaseInsensitive) != 0) {
+            return false;
+        }
+
+        if (url.host().compare(QStringLiteral("sso"), Qt::CaseInsensitive) == 0
+            && url.path() == QStringLiteral("/complete")) {
+            QTimer::singleShot(0, m_window, [window = m_window, url]() {
+                window->handleSsoCallback(url);
+            });
+            return true;
+        }
+        if (url.host().compare(QStringLiteral("together"), Qt::CaseInsensitive) == 0) {
+            QTimer::singleShot(0, m_window, [window = m_window, url]() {
+                window->handleTogetherLink(url);
+            });
+            return true;
+        }
+        return false;
+    }
+
+private:
+    MainWindow *m_window;
+};
 
 #ifdef Q_OS_LINUX
 static QString desktopExecutable(const QString &path)
@@ -351,6 +392,8 @@ int main(int argc, char *argv[])
     QApplication::setQuitOnLastWindowClosed(false);
 
     MainWindow *window = new MainWindow;
+    auto *deepLinkEventFilter = new DeepLinkApplicationEventFilter(window);
+    app.installEventFilter(deepLinkEventFilter);
     bootLog("MainWindow 构造");
 
     // 创建单实例服务器
