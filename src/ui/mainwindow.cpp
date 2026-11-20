@@ -3251,6 +3251,19 @@ bool MainWindow::event(QEvent *event)
 {
     if (event->type() == QEvent::FileOpen) {
         auto *e = static_cast<QFileOpenEvent *>(event);
+        const QUrl url = e->url();
+        if (url.isValid()
+            && url.scheme().compare(QStringLiteral("nekomusic"), Qt::CaseInsensitive) == 0) {
+            if (url.host().compare(QStringLiteral("sso"), Qt::CaseInsensitive) == 0
+                && url.path() == QStringLiteral("/complete")) {
+                QTimer::singleShot(0, this, [this, url]() { handleSsoCallback(url); });
+                return true;
+            }
+            if (url.host().compare(QStringLiteral("together"), Qt::CaseInsensitive) == 0) {
+                QTimer::singleShot(0, this, [this, url]() { handleTogetherLink(url); });
+                return true;
+            }
+        }
         const QString p = e->file();
         if (!p.isEmpty()) {
             QTimer::singleShot(0, this, [this, p]() { openAudioFileFromPath(p); });
