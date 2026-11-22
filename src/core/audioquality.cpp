@@ -138,6 +138,10 @@ ProbeResult probeSuffixFallback(const QString &suffix)
         r.tier = Tier::MQ;
     else if (s == QLatin1String("wma"))
         r.tier = Tier::MQ;
+    else if (s == QLatin1String("ac3") || s == QLatin1String("eac3") || s == QLatin1String("ec3")
+             || s == QLatin1String("thd") || s == QLatin1String("truehd")
+             || s == QLatin1String("mlp"))
+        r.tier = Tier::Dolby;
     else
         r.tier = Tier::HQ;
     return r;
@@ -201,6 +205,8 @@ QColor tierColor(Tier tier, bool dark)
         return dark ? QColor(0xe8, 0xb0, 0x4a) : QColor(0xd9, 0x9a, 0x2b);
     case Tier::HiRes:
         return dark ? QColor(0xff, 0x6f, 0x93) : QColor(0xe0, 0x56, 0x7a);
+    case Tier::Dolby:
+        return dark ? QColor(0x6f, 0x9b, 0xff) : QColor(0x2f, 0x6f, 0xed);
     case Tier::Unknown:
     default:
         return {};
@@ -218,6 +224,9 @@ Tier tierFromApiQuality(const QString &apiQuality)
         return Tier::SQ;
     if (value == QLatin1String("hires") || value == QLatin1String("hi-res"))
         return Tier::HiRes;
+    if (value == QLatin1String("dolby") || value == QLatin1String("dolby atmos")
+        || value == QLatin1String("atmos") || value == QStringLiteral("杜比"))
+        return Tier::Dolby;
     return Tier::Unknown;
 }
 
@@ -275,6 +284,9 @@ ProbeResult probeHttpHint(const QString &contentType, qint64 contentLengthBytes,
         out.tier = Tier::HQ;
     else if (ct.contains(QLatin1String("aac")) || ct.contains(QLatin1String("mp4")))
         out.tier = Tier::MQ;
+    else if (ct.contains(QLatin1String("eac3")) || ct.contains(QLatin1String("ac3"))
+             || ct.contains(QLatin1String("truehd")) || ct.contains(QLatin1String("mlp")))
+        out.tier = Tier::Dolby;
     return ensureVisibleTier(out);
 }
 
@@ -283,6 +295,8 @@ QString tierIconName(Tier tier)
     switch (tier) {
     case Tier::HiRes:
         return QStringLiteral("HiRes");
+    case Tier::Dolby:
+        return QStringLiteral("Dolby");
     case Tier::SQ:
         return QStringLiteral("SQ");
     case Tier::HQ:
@@ -335,6 +349,8 @@ QString tierShortName(Tier tier)
         return QStringLiteral("无损");
     case Tier::HiRes:
         return QStringLiteral("Hi-Res");
+    case Tier::Dolby:
+        return QStringLiteral("杜比");
     default:
         return {};
     }

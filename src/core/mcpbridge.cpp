@@ -368,7 +368,8 @@ QJsonArray McpBridge::listTools() const
         QJsonObject{{QStringLiteral("quality"),
                      enumProp(QStringLiteral("音质档位"),
                               {QStringLiteral("standard"), QStringLiteral("hq"),
-                               QStringLiteral("sq"), QStringLiteral("hires")})}},
+                               QStringLiteral("sq"), QStringLiteral("hires"),
+                               QStringLiteral("dolby")})}},
         QJsonArray{QStringLiteral("quality")});
     add(QStringLiteral("get_desktop_lyrics"), QStringLiteral("获取桌面歌词开关状态。"));
     add(QStringLiteral("set_desktop_lyrics"), QStringLiteral("打开/关闭桌面歌词。"),
@@ -1671,14 +1672,16 @@ void McpBridge::initHandlers()
              QJsonObject{{QStringLiteral("quality"), quality},
                          {QStringLiteral("available"),
                           QJsonArray{QStringLiteral("standard"), QStringLiteral("hq"),
-                                     QStringLiteral("sq"), QStringLiteral("hires")}}});
+                                     QStringLiteral("sq"), QStringLiteral("hires"),
+                                     QStringLiteral("dolby")}}});
     });
     m_handlers.insert(QStringLiteral("set_audio_quality"), [this](const QJsonObject &arguments, Done done) {
         static const QStringList allowed{QStringLiteral("standard"), QStringLiteral("hq"),
-                                         QStringLiteral("sq"), QStringLiteral("hires")};
+                                         QStringLiteral("sq"), QStringLiteral("hires"),
+                                         QStringLiteral("dolby")};
         const QString quality = arguments.value(QStringLiteral("quality")).toString().trimmed().toLower();
         if (!allowed.contains(quality)) {
-            done(false, QStringLiteral("quality 仅支持 standard / hq / sq / hires"), QJsonObject());
+            done(false, QStringLiteral("quality 仅支持 standard / hq / sq / hires / dolby"), QJsonObject());
             return;
         }
         if (!m_setAudioQuality) {

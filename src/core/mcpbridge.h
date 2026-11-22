@@ -40,7 +40,7 @@ public:
     void setFavoritesRefreshCallback(std::function<void()> cb) { m_refreshFavorites = std::move(cb); }
     /** 切换主窗口页面（home/favorites/recent/downloads/hot/latest/daily/settings）。 */
     void setOpenPageCallback(std::function<void(const QString &)> cb) { m_openPage = std::move(cb); }
-    /** 当前音质偏好（standard/hq/sq/hires）。 */
+    /** 当前音质偏好（standard/hq/sq/hires/dolby）。 */
     void setAudioQualityQueryCallback(std::function<QString()> cb) { m_audioQuality = std::move(cb); }
     /** 以程序方式切换音质；返回是否接受该档位。 */
     void setAudioQualityCallback(std::function<bool(const QString &)> cb) { m_setAudioQuality = std::move(cb); }

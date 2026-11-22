@@ -20,7 +20,7 @@ struct MusicInfo {
     qint64 uploadedAtMs = 0;
     /** 搜索 API：该曲是否有有效歌词（仅 query 搜索会设置） */
     bool lrc = false;
-    /** 搜索 API：该曲支持的最高音质（standard/hq/sq/hires），未探测过为空 */
+    /** 搜索 API：该曲支持的最高音质（standard/hq/sq/hires/dolby），未探测过为空 */
     QString maxQuality;
 
     bool isLocalFile() const { return !localPath.isEmpty(); }

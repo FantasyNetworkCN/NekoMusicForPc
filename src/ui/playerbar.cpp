@@ -1092,6 +1092,7 @@ void PlayerBar::setupUi()
     m_qualitySelector->addItem(QStringLiteral("HQ"), QStringLiteral("hq"));
     m_qualitySelector->addItem(QStringLiteral("SQ"), QStringLiteral("sq"));
     m_qualitySelector->addItem(QStringLiteral("Hi-Res"), QStringLiteral("hires"));
+    m_qualitySelector->addItem(QStringLiteral("Dolby"), QStringLiteral("dolby"));
     m_qualitySelector->setMinimumWidth(78);
     m_qualitySelector->setFixedHeight(30);
     m_qualitySelector->setToolTip(QStringLiteral("选择播放音质"));
@@ -1658,6 +1659,7 @@ void PlayerBar::setMaxQuality(const QString &quality, bool authoritative)
     if (normalized == QStringLiteral("standard")) maxRank = 0;
     else if (normalized == QStringLiteral("sq")) maxRank = 2;
     else if (normalized == QStringLiteral("hires")) maxRank = 3;
+    else if (normalized == QStringLiteral("dolby")) maxRank = 4;
 
     auto *model = qobject_cast<QStandardItemModel *>(m_qualitySelector->model());
     if (model) {
