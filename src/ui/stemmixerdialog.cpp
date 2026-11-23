@@ -4,6 +4,7 @@
 #include "core/i18n.h"
 #include "core/nekonetworkaccessmanager.h"
 #include "core/playerengine.h"
+#include "core/stemaudiomixer.h"
 #include "core/usermanager.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
@@ -27,7 +28,6 @@
 #include <QSettings>
 #include <QSlider>
 #include <QStandardPaths>
-#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -37,9 +37,6 @@ namespace {
 
 constexpr int kSliderMax = 100;
 constexpr int kDefaultGain = 80;
-constexpr int kSyncIntervalMs = 500;
-constexpr qint64 kSyncDriftMs = 120;
-constexpr int kStemSwitchTimeoutMs = 20000;
 constexpr qint64 kCacheTtlMs = 180LL * 24 * 60 * 60 * 1000;
 
 QString percentText(int value)
@@ -67,13 +64,6 @@ QString absoluteMediaUrl(QString value)
     }
     const QString base = QString::fromUtf8(Theme::kApiBase);
     return base + (value.startsWith('/') ? value : QStringLiteral("/") + value);
-}
-
-qint64 secondsTextToMs(const QVariant &value)
-{
-    bool ok = false;
-    const double seconds = value.toDouble(&ok);
-    return ok ? qMax<qint64>(0, qRound64(seconds * 1000.0)) : 0;
 }
 
 QString chunkPathsKey(int index)
@@ -112,7 +102,7 @@ StemMixerDialog::StemMixerDialog(ApiClient *apiClient, PlayerEngine *engine,
     }
 
     updateStemControls();
-    if (m_fullReady || !m_readyChunks.isEmpty())
+    if (!m_readyChunks.isEmpty())
         setStatus(I18n::instance().tr(QStringLiteral("stemCacheRestored")));
     else
         setStatus(I18n::instance().tr(QStringLiteral("stemEnableHint")));
@@ -123,6 +113,8 @@ StemMixerDialog::~StemMixerDialog()
     m_stemActive = false;
     stopStemStream();
     stopPlayback();
+    if (m_audioMixer)
+        m_audioMixer->clearChunks();
     if (m_engine)
         m_engine->setVolume(m_masterSlider ? m_masterSlider->value() / qreal(kSliderMax)
                                            : 1.0f);
@@ -196,7 +188,7 @@ void StemMixerDialog::setupUi()
     connect(m_masterSlider, &QSlider::valueChanged, this, [this](int value) {
         m_masterValue->setText(percentText(value));
         persistGains();
-        if (m_stemActive && m_stemSwitched)
+        if (m_stemActive && !m_mixerOutputFailed)
             applyStemVolumes();
         else if (m_engine)
             m_engine->setVolume(value / qreal(kSliderMax));
@@ -284,42 +276,10 @@ void StemMixerDialog::setupUi()
         m_accompanimentSlider->setValue(kSliderMax);
     });
 
-    m_syncTimer = new QTimer(this);
-    m_syncTimer->setInterval(kSyncIntervalMs);
-    connect(m_syncTimer, &QTimer::timeout, this, &StemMixerDialog::syncPositions);
-
-    m_switchTimeout = new QTimer(this);
-    m_switchTimeout->setSingleShot(true);
-    m_switchTimeout->setInterval(kStemSwitchTimeoutMs);
-    connect(m_switchTimeout, &QTimer::timeout, this, [this]() {
-        if (!m_switchPending)
-            return;
-        const int failedChunk = m_loadingChunkIndex;
-        const StemSource failedSource = m_loadingSource;
-        if (failedSource == StemSource::Chunk && failedChunk >= 0)
-            m_failedChunks.insert(failedChunk);
-        else if (failedSource == StemSource::Full)
-            m_fullFailed = true;
-        stopStemPlayback(true);
-        setStatus(I18n::instance().tr(QStringLiteral("stemPlaybackFallback")));
-    });
-
     if (m_engine) {
-        connect(m_engine, &PlayerEngine::stateChanged, this, [this]() {
-            if (!m_stemActive)
-                return;
-            syncTransport();
-            syncPositions();
-        });
-        connect(m_engine, &PlayerEngine::positionChanged, this, [this]() {
-            if (m_stemActive && !m_switchPending)
-                syncPositions();
-        });
         connect(m_engine, &PlayerEngine::playbackFinished, this, [this]() {
-            if (m_stemActive) {
-                stopStemPlayback(false);
+            if (m_stemActive)
                 setStatus(I18n::instance().tr(QStringLiteral("stemTrackFinished")));
-            }
         });
         connect(m_engine, &PlayerEngine::musicStarted, this,
                 [this](const MusicInfo &info) {
@@ -329,44 +289,56 @@ void StemMixerDialog::setupUi()
     }
 }
 
-void StemMixerDialog::ensurePlayers()
+void StemMixerDialog::ensureMixer()
 {
-    if (m_vocalsEngine && m_accompanimentEngine)
+    if (m_audioMixer)
         return;
 
-    m_vocalsEngine = new PlayerEngine(this);
-    m_accompanimentEngine = new PlayerEngine(this);
+    m_audioMixer = new StemAudioMixer(this);
     if (m_engine) {
-        m_vocalsEngine->setOutputDevice(m_engine->outputDevice());
-        m_accompanimentEngine->setOutputDevice(m_engine->outputDevice());
+        m_audioMixer->setOutputDevice(m_engine->outputDevice());
+        connect(m_engine, &PlayerEngine::decodedAudioBuffer, m_audioMixer,
+                [this](const QAudioBuffer &buffer) {
+                    m_audioMixer->processOriginalBuffer(
+                        buffer, m_engine ? m_engine->position() : -1);
+                });
     }
-
-    auto onDuration = [this](bool vocals, qint64 duration) {
-        if (!m_switchPending || duration <= 0)
+    connect(m_audioMixer, &StemAudioMixer::playbackActive, this, [this](int index) {
+        if (!m_stemActive)
             return;
-        if (vocals)
-            m_vocalsLoaded = true;
-        else
-            m_accompanimentLoaded = true;
-        if (m_vocalsLoaded && m_accompanimentLoaded)
-            finishStemSwitch();
-    };
-    connect(m_vocalsEngine, &PlayerEngine::durationChanged, this,
-            [onDuration](qint64 duration) { onDuration(true, duration); });
-    connect(m_accompanimentEngine, &PlayerEngine::durationChanged, this,
-            [onDuration](qint64 duration) { onDuration(false, duration); });
-    connect(m_vocalsEngine, &PlayerEngine::mediaError, this,
-            [this](const QString &message) { handlePlaybackFailure(message); });
-    connect(m_accompanimentEngine, &PlayerEngine::mediaError, this,
-            [this](const QString &message) { handlePlaybackFailure(message); });
-    connect(m_vocalsEngine, &PlayerEngine::playbackFinished, this, [this]() {
-        if (m_stemActive && m_source == StemSource::Chunk)
-            syncPositions();
+        setStatus(I18n::instance().tr(QStringLiteral("stemChunkActive"))
+                      .arg(index + 1)
+                      .arg(qMax(m_totalChunks, m_readyChunks.size())));
     });
-    connect(m_accompanimentEngine, &PlayerEngine::playbackFinished, this, [this]() {
-        if (m_stemActive && m_source == StemSource::Chunk)
-            syncPositions();
+    connect(m_audioMixer, &StemAudioMixer::chunkDecoding, this, [this](int index) {
+        if (!m_stemActive)
+            return;
+        setStatus(I18n::instance().tr(QStringLiteral("stemChunkLoading"))
+                      .arg(index + 1)
+                      .arg(qMax(m_totalChunks, m_readyChunks.size())));
     });
+    connect(m_audioMixer, &StemAudioMixer::playbackFallback, this, [this]() {
+        if (m_stemActive && !m_mixerOutputFailed)
+            setStatus(I18n::instance().tr(QStringLiteral("stemWaitingChunk")));
+    });
+    connect(m_audioMixer, &StemAudioMixer::outputUnavailable, this,
+            &StemMixerDialog::onMixerOutputUnavailable);
+    connect(m_audioMixer, &StemAudioMixer::chunkDecodeFailed, this,
+            &StemMixerDialog::onMixerChunkFailure);
+    for (auto it = m_readyChunks.cbegin(); it != m_readyChunks.cend(); ++it)
+        registerReadyChunk(it.key(), it.value());
+}
+
+void StemMixerDialog::registerReadyChunk(int index, const QVariantMap &chunk)
+{
+    if (m_audioMixer) {
+        m_audioMixer->addChunk(
+            index,
+            chunk.value(QStringLiteral("startSec")).toDouble(),
+            chunk.value(QStringLiteral("endSec")).toDouble(),
+            chunkVocalsPath(index),
+            chunkAccompanimentPath(index));
+    }
 }
 
 void StemMixerDialog::loadCachedStems()
@@ -374,11 +346,6 @@ void StemMixerDialog::loadCachedStems()
     const QDir dir(musicCacheDir());
     if (!dir.exists())
         return;
-
-    if (cachedFileReady(fullVocalsPath()) && cachedFileReady(fullAccompanimentPath())) {
-        m_fullReady = true;
-        m_fullFailed = false;
-    }
 
     const QStringList manifests =
         dir.entryList({QStringLiteral("chunk-*.json")}, QDir::Files, QDir::Name);
@@ -410,8 +377,7 @@ void StemMixerDialog::loadCachedStems()
 
 void StemMixerDialog::startStemStream()
 {
-    if (!m_stemActive || !m_apiClient || m_streamReply || m_streamDone || m_fullReady
-        || m_fullDownloading) {
+    if (!m_stemActive || !m_apiClient || m_streamReply || m_streamDone) {
         return;
     }
     setStatus(I18n::instance().tr(QStringLiteral("stemPreparing")));
@@ -469,6 +435,34 @@ void StemMixerDialog::onStemStreamError(int statusCode, const QString &message)
                         .arg(detail));
 }
 
+void StemMixerDialog::onMixerOutputUnavailable(const QString &message)
+{
+    if (!m_stemActive)
+        return;
+    m_mixerOutputFailed = true;
+    if (m_audioMixer)
+        m_audioMixer->setEnabled(false);
+    if (m_engine && m_masterSlider)
+        m_engine->setVolume(m_masterSlider->value() / qreal(kSliderMax));
+    const QString detail = message.trimmed();
+    setStatus(detail.isEmpty()
+                  ? I18n::instance().tr(QStringLiteral("stemPlaybackFallback"))
+                  : I18n::instance().tr(QStringLiteral("stemPlaybackFallbackDetail"))
+                        .arg(detail));
+}
+
+void StemMixerDialog::onMixerChunkFailure(int index, const QString &message)
+{
+    Q_UNUSED(index)
+    if (!m_stemActive)
+        return;
+    const QString detail = message.trimmed();
+    setStatus(detail.isEmpty()
+                  ? I18n::instance().tr(QStringLiteral("stemPlaybackFallback"))
+                  : I18n::instance().tr(QStringLiteral("stemPlaybackFallbackDetail"))
+                        .arg(detail));
+}
+
 void StemMixerDialog::onStemStreamEvent(const QString &event, const QVariantMap &data)
 {
     if (!m_stemActive)
@@ -478,7 +472,7 @@ void StemMixerDialog::onStemStreamEvent(const QString &event, const QVariantMap 
         const QString jobId = data.value(QStringLiteral("jobId")).toString();
         if (!jobId.isEmpty())
             m_jobId = jobId;
-        if (m_readyChunks.isEmpty() && !m_fullReady) {
+        if (m_readyChunks.isEmpty()) {
             const int queuePosition = qMax(0, data.value(QStringLiteral("queuePosition")).toInt());
             setStatus(I18n::instance().tr(QStringLiteral("stemQueued")).arg(queuePosition));
         }
@@ -489,7 +483,7 @@ void StemMixerDialog::onStemStreamEvent(const QString &event, const QVariantMap 
         m_totalChunks = qMax(m_totalChunks,
                              data.value(QStringLiteral("totalChunks")).toInt());
         updateProgress();
-        if (!m_fullReady && m_readyChunks.isEmpty()) {
+        if (m_readyChunks.isEmpty()) {
             setStatus(m_totalChunks > 0
                           ? I18n::instance().tr(QStringLiteral("stemProcessing")).arg(m_totalChunks)
                           : I18n::instance().tr(QStringLiteral("stemPreparing")));
@@ -509,10 +503,7 @@ void StemMixerDialog::onStemStreamEvent(const QString &event, const QVariantMap 
         if (m_seenChunkEvents.contains(key))
             return;
         m_seenChunkEvents.insert(key);
-        if (m_readyChunks.contains(index) || cachedFileReady(chunkVocalsPath(index))) {
-            // 缓存和 SSE 重放都可能先于本次连接到达；统一走 cacheChunk 校验。
-        }
-        if (!m_stemSwitched && !m_switchPending && !m_fullReady) {
+        if (m_stemActive && !m_mixerOutputFailed) {
             setStatus(I18n::instance().tr(QStringLiteral("stemChunkDownloading"))
                           .arg(index + 1)
                           .arg(qMax(m_totalChunks, index + 1)));
@@ -523,7 +514,12 @@ void StemMixerDialog::onStemStreamEvent(const QString &event, const QVariantMap 
 
     if (event == QLatin1String("done")) {
         m_streamDone = true;
-        cacheFullTracks(data);
+        updateProgress();
+        if (m_stemActive && !m_mixerOutputFailed) {
+            setStatus(m_readyChunks.size() >= m_totalChunks
+                          ? I18n::instance().tr(QStringLiteral("stemReady"))
+                          : I18n::instance().tr(QStringLiteral("stemPlaybackFallback")));
+        }
         return;
     }
 
@@ -550,10 +546,8 @@ void StemMixerDialog::cacheChunk(int index, const QVariantMap &data)
         chunk.insert(QStringLiteral("cached"), true);
         m_readyChunks.insert(index, chunk);
         saveChunkManifest(index, chunk);
-        m_failedChunks.remove(index);
+        registerReadyChunk(index, chunk);
         updateProgress();
-        if (m_stemActive)
-            syncPositions();
         return;
     }
 
@@ -569,8 +563,7 @@ void StemMixerDialog::cacheChunk(int index, const QVariantMap &data)
         [this, index, data](bool ok, const QString &message) {
             m_chunkDownloads.remove(index);
             if (!ok) {
-                m_failedChunks.insert(index);
-                if (m_stemActive && !m_stemSwitched) {
+                if (m_stemActive) {
                     const QString detail = message.trimmed();
                     setStatus(detail.isEmpty()
                                   ? I18n::instance().tr(QStringLiteral("stemPlaybackFallback"))
@@ -584,58 +577,9 @@ void StemMixerDialog::cacheChunk(int index, const QVariantMap &data)
             chunk.insert(QStringLiteral("index"), index);
             chunk.insert(QStringLiteral("cached"), true);
             m_readyChunks.insert(index, chunk);
-            m_failedChunks.remove(index);
             saveChunkManifest(index, chunk);
+            registerReadyChunk(index, chunk);
             updateProgress();
-            if (m_stemActive)
-                syncPositions();
-        });
-}
-
-void StemMixerDialog::cacheFullTracks(const QVariantMap &data)
-{
-    if (m_fullReady || m_fullDownloading)
-        return;
-
-    const QString vocalsUrl = data.value(QStringLiteral("vocalsUrl")).toString();
-    const QString accompanimentUrl =
-        data.value(QStringLiteral("accompanimentUrl")).toString();
-    if (cachedFileReady(fullVocalsPath()) && cachedFileReady(fullAccompanimentPath())) {
-        m_fullReady = true;
-        m_fullFailed = false;
-        updateProgress();
-        if (m_stemActive)
-            syncPositions();
-        return;
-    }
-    if (vocalsUrl.isEmpty() || accompanimentUrl.isEmpty())
-        return;
-
-    m_fullDownloading = true;
-    if (m_stemActive && !m_stemSwitched) {
-        setStatus(I18n::instance().tr(QStringLiteral("stemFullDownloading")));
-    }
-    downloadPair(
-        vocalsUrl, accompanimentUrl, fullVocalsPath(), fullAccompanimentPath(),
-        [this](bool ok, const QString &message) {
-            m_fullDownloading = false;
-            if (!ok) {
-                m_fullFailed = true;
-                if (m_stemActive && !m_stemSwitched) {
-                    const QString detail = message.trimmed();
-                    setStatus(detail.isEmpty()
-                                  ? I18n::instance().tr(QStringLiteral("stemPlaybackFallback"))
-                                  : I18n::instance()
-                                        .tr(QStringLiteral("stemPlaybackFallbackDetail"))
-                                        .arg(detail));
-                }
-                return;
-            }
-            m_fullReady = true;
-            m_fullFailed = false;
-            updateProgress();
-            if (m_stemActive)
-                syncPositions();
         });
 }
 
@@ -665,13 +609,9 @@ void StemMixerDialog::updateProgress()
         return;
     m_progressBar->setVisible(m_stemActive);
     const int total = qMax(m_totalChunks, m_readyChunks.size());
-    if (m_fullReady) {
-        const int maximum = qMax(1, total);
-        m_progressBar->setRange(0, maximum);
-        m_progressBar->setValue(maximum);
-    } else if (total > 0) {
+    if (total > 0) {
         m_progressBar->setRange(0, total);
-        m_progressBar->setValue(m_readyChunks.size());
+        m_progressBar->setValue(qMin(total, int(m_readyChunks.size())));
     } else {
         m_progressBar->setRange(0, 0);
     }
@@ -679,11 +619,9 @@ void StemMixerDialog::updateProgress()
 
 void StemMixerDialog::updateStemControls()
 {
-    const bool canEdit = m_stemActive && (m_stemSwitched || m_switchPending
-                                          || m_fullReady || !m_readyChunks.isEmpty());
-    m_vocalsSlider->setEnabled(canEdit);
-    m_accompanimentSlider->setEnabled(canEdit);
-    m_resetMixButton->setEnabled(canEdit);
+    m_vocalsSlider->setEnabled(m_stemActive);
+    m_accompanimentSlider->setEnabled(m_stemActive);
+    m_resetMixButton->setEnabled(m_stemActive);
     m_stemToggle->setEnabled(UserManager::instance().isLoggedIn()
                              && UserManager::instance().isVip());
 }
@@ -706,27 +644,15 @@ void StemMixerDialog::setStatus(const QString &text)
 void StemMixerDialog::setStemActive(bool active)
 {
     if (active == m_stemActive) {
-        if (active)
-            syncPositions();
         return;
     }
 
     if (!active) {
         m_stemActive = false;
-        m_stemSwitched = false;
-        m_switchPending = false;
-        m_source = StemSource::None;
-        m_loadingSource = StemSource::None;
-        m_activeChunkIndex = -1;
-        m_loadingChunkIndex = -1;
-        m_vocalsLoaded = false;
-        m_accompanimentLoaded = false;
-        if (m_syncTimer)
-            m_syncTimer->stop();
-        if (m_switchTimeout)
-            m_switchTimeout->stop();
+        m_mixerOutputFailed = false;
         stopStemStream();
-        stopPlayback();
+        if (m_audioMixer)
+            m_audioMixer->setEnabled(false);
         if (m_engine)
             m_engine->setVolume(m_masterSlider->value() / qreal(kSliderMax));
         updateStemControls();
@@ -745,292 +671,37 @@ void StemMixerDialog::setStemActive(bool active)
     }
 
     m_stemActive = true;
-    m_stemSwitched = false;
-    m_switchPending = false;
-    m_source = StemSource::None;
-    m_loadingSource = StemSource::None;
-    m_activeChunkIndex = -1;
-    m_loadingChunkIndex = -1;
-    m_failedChunks.clear();
+    m_mixerOutputFailed = false;
     m_seenChunkEvents.clear();
-    m_fullFailed = false;
-    ensurePlayers();
+    ensureMixer();
+    if (m_audioMixer && m_engine)
+        m_audioMixer->setOutputDevice(m_engine->outputDevice());
+    applyStemVolumes();
+    if (m_audioMixer)
+        m_audioMixer->setEnabled(true);
+    if (m_engine)
+        m_engine->setVolume(0.0f);
     updateStemControls();
     updateProgress();
-    m_syncTimer->start();
     const bool allChunksReady = m_totalChunks > 0
             && m_readyChunks.size() >= m_totalChunks;
-    if (!m_fullReady && !m_fullDownloading && !allChunksReady) {
+    if (!allChunksReady) {
         m_streamDone = false;
         startStemStream();
     }
-    syncPositions();
-    if (!m_stemSwitched && !m_switchPending) {
-        setStatus(m_fullReady || !m_readyChunks.isEmpty()
-                      ? I18n::instance().tr(QStringLiteral("stemCacheRestored"))
-                      : I18n::instance().tr(QStringLiteral("stemPreparing")));
-    }
-}
-
-void StemMixerDialog::startChunkPlayback(int index, const QVariantMap &chunk)
-{
-    if (!m_stemActive || m_switchPending || !m_engine || m_failedChunks.contains(index))
-        return;
-    if (!cachedFileReady(chunkVocalsPath(index))
-        || !cachedFileReady(chunkAccompanimentPath(index))) {
-        return;
-    }
-
-    const qint64 position = m_engine->position();
-    const qint64 startMs = secondsTextToMs(chunk.value(QStringLiteral("startSec")));
-    const qint64 endMs = secondsTextToMs(chunk.value(QStringLiteral("endSec")));
-    if (position < startMs || position >= endMs)
-        return;
-
-    if (m_stemSwitched || m_source != StemSource::None)
-        stopStemPlayback(true);
-    if (!m_stemActive)
-        return;
-
-    ensurePlayers();
-    m_loadingSource = StemSource::Chunk;
-    m_loadingChunkIndex = index;
-    m_switchPending = true;
-    m_vocalsLoaded = false;
-    m_accompanimentLoaded = false;
-    if (m_engine) {
-        m_vocalsEngine->setOutputDevice(m_engine->outputDevice());
-        m_accompanimentEngine->setOutputDevice(m_engine->outputDevice());
-    }
-    m_vocalsEngine->setVolume(0.0f);
-    m_accompanimentEngine->setVolume(0.0f);
-    const qint64 offset = qMax<qint64>(0, position - startMs);
-    m_vocalsEngine->playResuming(QUrl::fromLocalFile(chunkVocalsPath(index)), offset);
-    m_accompanimentEngine->playResuming(
-        QUrl::fromLocalFile(chunkAccompanimentPath(index)), offset);
-    syncTransport();
-    m_switchTimeout->start();
-    setStatus(I18n::instance().tr(QStringLiteral("stemChunkLoading"))
-                  .arg(index + 1)
-                  .arg(qMax(m_totalChunks, qMax(index + 1, m_readyChunks.size()))));
-}
-
-void StemMixerDialog::startFullPlayback(qint64 positionMs)
-{
-    if (!m_stemActive || m_switchPending || !m_engine || !m_fullReady || m_fullFailed)
-        return;
-    if (!cachedFileReady(fullVocalsPath()) || !cachedFileReady(fullAccompanimentPath()))
-        return;
-    if (m_source == StemSource::Full && m_stemSwitched)
-        return;
-
-    if (m_stemSwitched || m_source != StemSource::None)
-        stopStemPlayback(true);
-    if (!m_stemActive)
-        return;
-
-    ensurePlayers();
-    m_loadingSource = StemSource::Full;
-    m_loadingChunkIndex = -1;
-    m_switchPending = true;
-    m_vocalsLoaded = false;
-    m_accompanimentLoaded = false;
-    if (m_engine) {
-        m_vocalsEngine->setOutputDevice(m_engine->outputDevice());
-        m_accompanimentEngine->setOutputDevice(m_engine->outputDevice());
-    }
-    m_vocalsEngine->setVolume(0.0f);
-    m_accompanimentEngine->setVolume(0.0f);
-    m_vocalsEngine->playResuming(QUrl::fromLocalFile(fullVocalsPath()),
-                                 qMax<qint64>(0, positionMs));
-    m_accompanimentEngine->playResuming(QUrl::fromLocalFile(fullAccompanimentPath()),
-                                        qMax<qint64>(0, positionMs));
-    syncTransport();
-    m_switchTimeout->start();
-    setStatus(I18n::instance().tr(QStringLiteral("stemLoadingAudio")));
-}
-
-void StemMixerDialog::stopStemPlayback(bool restoreMain)
-{
-    if (m_switchTimeout)
-        m_switchTimeout->stop();
-    m_switchPending = false;
-    m_stemSwitched = false;
-    m_source = StemSource::None;
-    m_loadingSource = StemSource::None;
-    m_activeChunkIndex = -1;
-    m_loadingChunkIndex = -1;
-    m_vocalsLoaded = false;
-    m_accompanimentLoaded = false;
-    if (m_vocalsEngine)
-        m_vocalsEngine->stop();
-    if (m_accompanimentEngine)
-        m_accompanimentEngine->stop();
-    if (restoreMain && m_engine && m_masterSlider)
-        m_engine->setVolume(m_masterSlider->value() / qreal(kSliderMax));
-}
-
-void StemMixerDialog::handlePlaybackFailure(const QString &message)
-{
-    if (!m_stemActive)
-        return;
-    const int failedChunk = m_loadingChunkIndex >= 0 ? m_loadingChunkIndex
-                                                     : m_activeChunkIndex;
-    if (m_loadingSource == StemSource::Chunk && failedChunk >= 0)
-        m_failedChunks.insert(failedChunk);
-    else if (m_loadingSource == StemSource::Full || m_source == StemSource::Full)
-        m_fullFailed = true;
-
-    stopStemPlayback(true);
-    const QString detail = message.trimmed();
-    setStatus(detail.isEmpty()
-                  ? I18n::instance().tr(QStringLiteral("stemPlaybackFallback"))
-                  : I18n::instance().tr(QStringLiteral("stemPlaybackFallbackDetail")).arg(detail));
-    if (m_stemActive && !m_switchPending)
-        syncPositions();
-}
-
-void StemMixerDialog::chooseSourceForPosition(qint64 positionMs)
-{
-    if (!m_stemActive || m_stemSwitched || m_switchPending)
-        return;
-    if (m_fullReady && !m_fullFailed) {
-        startFullPlayback(positionMs);
-        return;
-    }
-
-    QVariantMap chunk;
-    const int index = chunkIndexAt(positionMs, &chunk);
-    if (index >= 0 && !m_failedChunks.contains(index))
-        startChunkPlayback(index, chunk);
-}
-
-void StemMixerDialog::finishStemSwitch()
-{
-    if (!m_stemActive || !m_switchPending || !m_vocalsLoaded || !m_accompanimentLoaded)
-        return;
-    m_switchTimeout->stop();
-    m_switchPending = false;
-    m_stemSwitched = true;
-    m_source = m_loadingSource;
-    m_activeChunkIndex = m_source == StemSource::Chunk ? m_loadingChunkIndex : -1;
-    if (m_engine)
-        m_engine->setVolume(0.0f);
-    applyStemVolumes();
-    syncTransport();
-    updateStemControls();
-    if (m_source == StemSource::Chunk) {
-        setStatus(I18n::instance().tr(QStringLiteral("stemChunkActive"))
-                      .arg(m_activeChunkIndex + 1)
-                      .arg(qMax(m_totalChunks, m_readyChunks.size())));
-    } else {
-        setStatus(I18n::instance().tr(QStringLiteral("stemActive")));
-    }
+    setStatus(!m_readyChunks.isEmpty()
+                  ? I18n::instance().tr(QStringLiteral("stemCacheRestored"))
+                  : I18n::instance().tr(QStringLiteral("stemPreparing")));
 }
 
 void StemMixerDialog::applyStemVolumes()
 {
-    if (!m_stemActive || !m_stemSwitched || !m_vocalsEngine
-        || !m_accompanimentEngine) {
+    if (!m_stemActive || !m_audioMixer || m_mixerOutputFailed)
         return;
-    }
     const qreal master = m_masterSlider->value() / qreal(kSliderMax);
-    m_vocalsEngine->setVolume(master * m_vocalsSlider->value() / qreal(kSliderMax));
-    m_accompanimentEngine->setVolume(
-        master * m_accompanimentSlider->value() / qreal(kSliderMax));
-}
-
-void StemMixerDialog::syncTransport()
-{
-    if (!m_stemActive || !m_engine || !m_vocalsEngine || !m_accompanimentEngine)
-        return;
-    switch (m_engine->playbackState()) {
-    case PlayerEngine::Playing:
-        if (m_stemSwitched) {
-            m_vocalsEngine->play();
-            m_accompanimentEngine->play();
-        }
-        break;
-    case PlayerEngine::Paused:
-        m_vocalsEngine->pause();
-        m_accompanimentEngine->pause();
-        break;
-    case PlayerEngine::Stopped:
-        m_vocalsEngine->stop();
-        m_accompanimentEngine->stop();
-        break;
-    }
-}
-
-void StemMixerDialog::syncPositions()
-{
-    if (!m_stemActive || !m_engine || !m_vocalsEngine || !m_accompanimentEngine
-        || m_switchPending) {
-        return;
-    }
-    const qint64 clock = qMax<qint64>(0, m_engine->position());
-
-    if (m_stemSwitched) {
-        if (!currentSourceMatchesPosition(clock)) {
-            stopStemPlayback(true);
-        } else {
-            const QVariantMap chunk = m_source == StemSource::Chunk
-                    ? m_readyChunks.value(m_activeChunkIndex)
-                    : QVariantMap();
-            const qint64 offset = m_source == StemSource::Chunk
-                    ? chunkOffsetMs(chunk, clock)
-                    : clock;
-            if (m_engine->playbackState() == PlayerEngine::Playing) {
-                if (qAbs(m_vocalsEngine->position() - offset) > kSyncDriftMs)
-                    m_vocalsEngine->setPosition(offset);
-                if (qAbs(m_accompanimentEngine->position() - offset) > kSyncDriftMs)
-                    m_accompanimentEngine->setPosition(offset);
-            } else {
-                m_vocalsEngine->setPosition(offset);
-                m_accompanimentEngine->setPosition(offset);
-            }
-            syncTransport();
-            return;
-        }
-    }
-
-    chooseSourceForPosition(clock);
-}
-
-int StemMixerDialog::chunkIndexAt(qint64 positionMs, QVariantMap *chunk) const
-{
-    for (auto it = m_readyChunks.cbegin(); it != m_readyChunks.cend(); ++it) {
-        const qint64 startMs = secondsTextToMs(it.value().value(QStringLiteral("startSec")));
-        const qint64 endMs = secondsTextToMs(it.value().value(QStringLiteral("endSec")));
-        if (endMs <= startMs)
-            continue;
-        if (positionMs >= startMs && positionMs < endMs) {
-            if (chunk)
-                *chunk = it.value();
-            return it.key();
-        }
-    }
-    return -1;
-}
-
-qint64 StemMixerDialog::chunkOffsetMs(const QVariantMap &chunk, qint64 positionMs) const
-{
-    return qMax<qint64>(0, positionMs - secondsTextToMs(chunk.value(QStringLiteral("startSec"))));
-}
-
-bool StemMixerDialog::currentSourceMatchesPosition(qint64 positionMs) const
-{
-    if (m_source == StemSource::Full)
-        return m_fullReady && cachedFileReady(fullVocalsPath())
-                && cachedFileReady(fullAccompanimentPath());
-    if (m_source != StemSource::Chunk || m_activeChunkIndex < 0)
-        return false;
-    const QVariantMap chunk = m_readyChunks.value(m_activeChunkIndex);
-    if (chunk.isEmpty())
-        return false;
-    const qint64 startMs = secondsTextToMs(chunk.value(QStringLiteral("startSec")));
-    const qint64 endMs = secondsTextToMs(chunk.value(QStringLiteral("endSec")));
-    return positionMs >= startMs && positionMs < endMs;
+    m_audioMixer->setGains(master,
+                           m_vocalsSlider->value() / qreal(kSliderMax),
+                           m_accompanimentSlider->value() / qreal(kSliderMax));
 }
 
 QString StemMixerDialog::musicCacheDir() const
@@ -1055,16 +726,6 @@ QString StemMixerDialog::chunkManifestPath(int index) const
 {
     return musicCacheDir()
             + QStringLiteral("/chunk-%1.json").arg(index, 3, 10, QChar('0'));
-}
-
-QString StemMixerDialog::fullVocalsPath() const
-{
-    return musicCacheDir() + QStringLiteral("/full-vocals.mp3");
-}
-
-QString StemMixerDialog::fullAccompanimentPath() const
-{
-    return musicCacheDir() + QStringLiteral("/full-accompaniment.mp3");
 }
 
 void StemMixerDialog::downloadFile(const QString &url, const QString &destination,
@@ -1152,12 +813,6 @@ void StemMixerDialog::downloadPair(const QString &vocalsUrl,
 
 void StemMixerDialog::stopPlayback()
 {
-    if (m_syncTimer)
-        m_syncTimer->stop();
-    if (m_switchTimeout)
-        m_switchTimeout->stop();
-    if (m_vocalsEngine)
-        m_vocalsEngine->stop();
-    if (m_accompanimentEngine)
-        m_accompanimentEngine->stop();
+    if (m_audioMixer)
+        m_audioMixer->setEnabled(false);
 }

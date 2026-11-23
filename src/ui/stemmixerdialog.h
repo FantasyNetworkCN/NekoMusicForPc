@@ -10,6 +10,7 @@
 
 class ApiClient;
 class PlayerEngine;
+class StemAudioMixer;
 class NekoNetworkAccessManager;
 class QNetworkReply;
 class QLabel;
@@ -17,14 +18,13 @@ class QCheckBox;
 class QPushButton;
 class QProgressBar;
 class QSlider;
-class QTimer;
 
 /**
- * 人声 / 伴奏分离播放器。
+ * 人声 / 伴奏分离控制器与音量面板。
  *
- * 原曲始终承担播放时钟。服务端通过 SSE 返回分片后，PC 立即下载并缓存，
- * 双轨就绪时静音原曲；遇到缺片、seek 或网络失败则继续播放原曲，不能阻塞
- * 主播放器，也不能因为普通网络错误自动关闭开关。
+ * 原曲继续由 PlayerEngine 解码并推进唯一播放时钟。启用后主音频输出静音，
+ * StemAudioMixer 在同一条 PCM 流里混入当前人声/伴奏分片；缺片时原样输出
+ * 原曲。不会创建额外播放器，也不会因分片切换重启媒体源。
  */
 class StemMixerDialog final : public QDialog
 {
@@ -34,47 +34,30 @@ public:
     ~StemMixerDialog() override;
 
 private:
-    enum class StemSource {
-        None,
-        Chunk,
-        Full
-    };
-
     void setupUi();
-    void ensurePlayers();
+    void ensureMixer();
+    void registerReadyChunk(int index, const QVariantMap &chunk);
     void loadCachedStems();
     void startStemStream();
     void stopStemStream();
     void onStemStreamEvent(const QString &event, const QVariantMap &data);
     void onStemStreamError(int statusCode, const QString &message);
+    void onMixerOutputUnavailable(const QString &message);
+    void onMixerChunkFailure(int index, const QString &message);
     void cacheChunk(int index, const QVariantMap &data);
-    void cacheFullTracks(const QVariantMap &data);
-    void startChunkPlayback(int index, const QVariantMap &chunk);
-    void startFullPlayback(qint64 positionMs);
-    void stopStemPlayback(bool restoreMain = true);
-    void chooseSourceForPosition(qint64 positionMs);
-    void handlePlaybackFailure(const QString &message);
     void saveChunkManifest(int index, const QVariantMap &chunk) const;
     void updateProgress();
     void updateStemControls();
     void persistGains() const;
     void setStatus(const QString &text);
     void setStemActive(bool active);
-    void finishStemSwitch();
     void applyStemVolumes();
-    void syncTransport();
-    void syncPositions();
     void stopPlayback();
 
     QString musicCacheDir() const;
     QString chunkVocalsPath(int index) const;
     QString chunkAccompanimentPath(int index) const;
     QString chunkManifestPath(int index) const;
-    QString fullVocalsPath() const;
-    QString fullAccompanimentPath() const;
-    int chunkIndexAt(qint64 positionMs, QVariantMap *chunk = nullptr) const;
-    qint64 chunkOffsetMs(const QVariantMap &chunk, qint64 positionMs) const;
-    bool currentSourceMatchesPosition(qint64 positionMs) const;
 
     using DownloadFileCb = std::function<void(bool ok, const QString &message)>;
     using DownloadPairCb = std::function<void(bool ok, const QString &message)>;
@@ -101,29 +84,15 @@ private:
     QPushButton *m_resetMixButton = nullptr;
     QPushButton *m_closeButton = nullptr;
 
-    PlayerEngine *m_vocalsEngine = nullptr;
-    PlayerEngine *m_accompanimentEngine = nullptr;
+    StemAudioMixer *m_audioMixer = nullptr;
     NekoNetworkAccessManager *m_cacheNam = nullptr;
     QNetworkReply *m_streamReply = nullptr;
     QString m_jobId;
     QMap<int, QVariantMap> m_readyChunks;
     QSet<int> m_chunkDownloads;
-    QSet<int> m_failedChunks;
     QSet<QString> m_seenChunkEvents;
     int m_totalChunks = 0;
-    int m_activeChunkIndex = -1;
-    int m_loadingChunkIndex = -1;
-    StemSource m_source = StemSource::None;
-    StemSource m_loadingSource = StemSource::None;
-    bool m_fullReady = false;
-    bool m_fullDownloading = false;
-    bool m_fullFailed = false;
     bool m_streamDone = false;
     bool m_stemActive = false;
-    bool m_stemSwitched = false;
-    bool m_switchPending = false;
-    bool m_vocalsLoaded = false;
-    bool m_accompanimentLoaded = false;
-    QTimer *m_syncTimer = nullptr;
-    QTimer *m_switchTimeout = nullptr;
+    bool m_mixerOutputFailed = false;
 };

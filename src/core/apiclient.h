@@ -46,11 +46,7 @@ public:
     using MusicInfoCb = std::function<void(bool, const QVariantMap&)>;
     void fetchMusicInfo(int musicId, MusicInfoCb cb);
 
-    // 获取服务端人声/伴奏分离媒体地址
-    using StemFilesCb = std::function<void(bool ok, const QString &message,
-                                           const QString &vocalsUrl,
-                                           const QString &accompanimentUrl)>;
-    void fetchStemFiles(int musicId, StemFilesCb cb);
+    // 服务端人声/伴奏分离 SSE
     using StemStreamEventCb = std::function<void(const QString &event, const QVariantMap &data)>;
     QNetworkReply *streamStemSeparation(int musicId, StemStreamEventCb onEvent,
                                        std::function<void(int statusCode,

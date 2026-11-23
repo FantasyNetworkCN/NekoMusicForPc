@@ -466,8 +466,8 @@ static QMap<QString, QString> zhCN()
     m["stemChunkDownloading"] = QStringLiteral("正在缓存第 %1/%2 段分离音轨，原曲继续播放…");
     m["stemChunkLoading"] = QStringLiteral("正在接入第 %1/%2 段分离音轨…");
     m["stemChunkActive"] = QStringLiteral("人声分离已生效（第 %1/%2 段）。");
+    m["stemWaitingChunk"] = QStringLiteral("当前分片尚未就绪，原曲继续播放…");
     m["stemCacheRestored"] = QStringLiteral("已恢复本地分离缓存，切到对应播放位置时自动接入。");
-    m["stemFullDownloading"] = QStringLiteral("分片已可用，正在后台缓存完整双轨供下次快速使用…");
     m["stemServiceUnavailable"] = QStringLiteral("分离服务暂时不可用，原曲继续播放；关闭后重新开启可重试。");
     m["stemServiceUnavailableDetail"] = QStringLiteral("分离服务暂时不可用：%1。原曲继续播放，关闭后重新开启可重试。");
     m["stemPlaybackFallback"] = QStringLiteral("分离音轨暂不可用，已自动回退原曲播放。");
@@ -1784,8 +1784,8 @@ static QMap<QString, QString> enUS()
     m["stemChunkDownloading"] = "Caching separated chunk %1/%2; original playback continues…";
     m["stemChunkLoading"] = "Connecting separated chunk %1/%2…";
     m["stemChunkActive"] = "Stem separation is active (chunk %1/%2).";
+    m["stemWaitingChunk"] = "The current separated chunk is not ready yet; original playback continues…";
     m["stemCacheRestored"] = "Local stem cache restored; matching playback positions connect automatically.";
-    m["stemFullDownloading"] = "Chunks are ready; caching the complete stems in the background for faster reuse…";
     m["stemServiceUnavailable"] = "Stem service is temporarily unavailable. Original playback continues; turn it off and on to retry.";
     m["stemServiceUnavailableDetail"] = "Stem service is temporarily unavailable: %1. Original playback continues; turn it off and on to retry.";
     m["stemPlaybackFallback"] = "Separated audio is temporarily unavailable; original playback resumed automatically.";

@@ -219,6 +219,7 @@ set(SOURCES
         src/ui/artistdetailpage.cpp
         src/ui/roundcoverlabel.cpp
         src/core/playerengine.cpp
+        src/core/stemaudiomixer.cpp
         src/core/mcpserver.cpp
         src/core/mcpbridge.cpp
         src/core/applog.cpp
@@ -319,6 +320,7 @@ set(HEADERS
         src/ui/coverlistcard.h
         src/ui/roundcoverlabel.h
         src/core/playerengine.h
+        src/core/stemaudiomixer.h
         src/core/mcpserver.h
         src/core/mcpbridge.h
         src/core/applog.h

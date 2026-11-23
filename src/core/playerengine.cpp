@@ -647,6 +647,8 @@ void PlayerEngine::connectPlayerSignals(QMediaPlayer *player)
 
 void PlayerEngine::analyzeAudioBuffer(const QAudioBuffer &buffer)
 {
+    if (buffer.isValid())
+        emit decodedAudioBuffer(buffer);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     if (!buffer.isValid())
         return;

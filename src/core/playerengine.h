@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QMediaPlayer>
 #include <QAudioOutput>
+#include <QAudioBuffer>
 #include <QAudioDevice>
 #include <QUrl>
 
@@ -10,7 +11,6 @@
 
 class QTimer;
 class HttpMediaDevice;
-class QAudioBuffer;
 class QAudioBufferOutput;
 
 class PlayerEngine : public QObject
@@ -73,6 +73,8 @@ signals:
     void playbackFinished();
     /** 播放器元数据就绪时发出（含可用码率） */
     void audioMetaReady();
+    /** 已解码、正在送入主音频输出的 PCM；分离混音直接复用这一路数据。 */
+    void decodedAudioBuffer(const QAudioBuffer &buffer);
     /** 解码音频的低频能量（0..1），用于 AMLL 流动背景随鼓点起伏。 */
     void lowFrequencyLevelChanged(qreal level);
 

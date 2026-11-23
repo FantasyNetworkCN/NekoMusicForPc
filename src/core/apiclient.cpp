@@ -438,47 +438,6 @@ void ApiClient::fetchMusicInfo(int musicId, MusicInfoCb cb) {
     });
 }
 
-void ApiClient::fetchStemFiles(int musicId, StemFilesCb cb) {
-    if (musicId <= 0) {
-        if (cb) cb(false, I18n::instance().tr(QStringLiteral("stemFailed")), {}, {});
-        return;
-    }
-    QUrl url(QString::fromUtf8("%1/api/music/file/%2").arg(Theme::kApiBase).arg(musicId));
-    QUrlQuery query(url);
-    query.addQueryItem(QStringLiteral("separate"), QStringLiteral("1"));
-    url.setQuery(query);
-    auto *reply = m_nam.get(QNetworkRequest(url));
-    connect(reply, &QNetworkReply::finished, this, [reply, cb]() {
-        reply->deleteLater();
-        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const QByteArray raw = reply->readAll();
-        if (reply->error() != QNetworkReply::NoError || status != 200) {
-            QString message;
-            const QJsonObject root = QJsonDocument::fromJson(raw).object();
-            message = root.value(QStringLiteral("message")).toString();
-            if (message.isEmpty())
-                message = reply->errorString();
-            if (cb) cb(false, message, {}, {});
-            return;
-        }
-        const QStringList lines = QString::fromUtf8(raw).split('\n', Qt::SkipEmptyParts);
-        if (lines.size() < 2) {
-            if (cb) cb(false, I18n::instance().tr(QStringLiteral("stemFailed")), {}, {});
-            return;
-        }
-        auto absoluteUrl = [](QString value) {
-            value = value.trimmed();
-            if (value.startsWith(QStringLiteral("http://"))
-                || value.startsWith(QStringLiteral("https://"))) {
-                return value;
-            }
-            return QString::fromUtf8(Theme::kApiBase)
-                    + (value.startsWith('/') ? value : QStringLiteral("/") + value);
-        };
-        if (cb) cb(true, {}, absoluteUrl(lines.at(0)), absoluteUrl(lines.at(1)));
-    });
-}
-
 QNetworkReply *ApiClient::streamStemSeparation(
     int musicId, StemStreamEventCb onEvent,
     std::function<void(int statusCode, const QString &message)> onError)
