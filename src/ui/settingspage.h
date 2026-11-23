@@ -22,6 +22,7 @@ class QResizeEvent;
 class QScrollArea;
 class QSlider;
 class QStackedWidget;
+class QTimer;
 class QVBoxLayout;
 class QWidget;
 class ApiClient;
@@ -82,10 +83,12 @@ private:
     void updateBackdropOptionRows();
     void refreshBackdropPathLabel();
     void refreshBackdropColorSwatch();
-    void verifyMusicSource();
-    void applyMusicSource(const QString &baseUrl);
+    void verifyMusicSource(bool complianceCheck = false);
+    void verifyMusicSourceGithub(const QString &baseUrl, const QString &sourceUrl);
+    void applyMusicSource(const QString &baseUrl, bool notify = true);
     void setMusicSourceBusy(bool busy);
     void failMusicSourceVerification();
+    void scheduleMusicSourceComplianceCheck(bool checkSoon = false);
 
     QLabel *m_mcpTitleLabel = nullptr;
     QLabel *m_mcpEnableLabel = nullptr;
@@ -204,7 +207,9 @@ private:
     QPushButton *m_musicSourceResetBtn = nullptr;
     QNetworkReply *m_musicSourceManifestReply = nullptr;
     QNetworkReply *m_musicSourceRepositoryReply = nullptr;
+    QTimer *m_musicSourceComplianceTimer = nullptr;
     bool m_musicSourceVerificationBusy = false;
+    bool m_musicSourceComplianceCheck = false;
     QLabel *m_micSyncSectionLabel = nullptr;
     QLabel *m_micSyncEnableLabel = nullptr;
     ToggleSwitch *m_micSyncToggle = nullptr;

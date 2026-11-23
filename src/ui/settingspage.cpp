@@ -125,19 +125,43 @@ QString normalizeMusicSourceBase(const QString &raw)
     return result;
 }
 
-QString normalizeMusicSourceUrl(const QString &raw)
+bool isValidGithubSegment(const QString &value)
+{
+    if (value.isEmpty())
+        return false;
+    for (const QChar ch : value) {
+        if (!ch.isLetterOrNumber() && ch != QLatin1Char('-') && ch != QLatin1Char('_')
+            && ch != QLatin1Char('.')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+QString normalizeGithubRepositoryUrl(const QString &raw)
 {
     const QUrl url(raw.trimmed(), QUrl::StrictMode);
-    if (!url.isValid() || url.host().isEmpty() || !url.userInfo().isEmpty()
-        || url.hasQuery() || url.hasFragment()) {
+    if (!url.isValid() || url.host().compare(QStringLiteral("github.com"), Qt::CaseInsensitive) != 0
+        || !url.userInfo().isEmpty() || url.hasQuery() || url.hasFragment()
+        || url.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) != 0) {
         return {};
     }
-    const QString scheme = url.scheme().toLower();
-    if (scheme != QStringLiteral("https")
-        && !(scheme == QStringLiteral("http") && isLoopbackHost(url.host()))) {
+    QString path = url.path();
+    while (path.startsWith(QLatin1Char('/')))
+        path.remove(0, 1);
+    while (path.endsWith(QLatin1Char('/')))
+        path.chop(1);
+    const QStringList segments = path.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    if (segments.size() != 2 || !isValidGithubSegment(segments[0])
+        || !isValidGithubSegment(segments[1])) {
         return {};
     }
-    return url.toString(QUrl::FullyEncoded);
+    QString repository = segments[1];
+    if (repository.endsWith(QStringLiteral(".git")))
+        repository.chop(4);
+    if (repository.isEmpty())
+        return {};
+    return QStringLiteral("https://github.com/%1/%2").arg(segments[0], repository);
 }
 
 bool readMusicSourceManifest(const QByteArray &body, QString *sourceUrl)
@@ -156,12 +180,21 @@ bool readMusicSourceManifest(const QByteArray &body, QString *sourceUrl)
         || data.value(QStringLiteral("apiProtocol")).toInt() != 1) {
         return false;
     }
-    const QString normalized = normalizeMusicSourceUrl(
+    const QString normalized = normalizeGithubRepositoryUrl(
         data.value(QStringLiteral("sourceUrl")).toString());
     if (normalized.isEmpty())
         return false;
     *sourceUrl = normalized;
     return true;
+}
+
+bool isAgplGithubLicense(const QJsonObject &repository)
+{
+    const QString spdx = repository.value(QStringLiteral("license")).toObject()
+                             .value(QStringLiteral("spdx_id")).toString();
+    return spdx == QStringLiteral("AGPL-3.0")
+        || spdx == QStringLiteral("AGPL-3.0-only")
+        || spdx == QStringLiteral("AGPL-3.0-or-later");
 }
 
 } // namespace
@@ -173,6 +206,7 @@ SettingsPage::SettingsPage(ApiClient *apiClient, QWidget *parent)
     setAutoFillBackground(false);
     m_nam = new NekoNetworkAccessManager(this);
     setupUi();
+    scheduleMusicSourceComplianceCheck(true);
     connect(&Theme::ThemeManager::instance(), &Theme::ThemeManager::themeChanged, this,
             [this](Theme::ThemeMode mode) {
                 Q_UNUSED(mode);
@@ -478,7 +512,7 @@ void SettingsPage::setupUi()
     m_musicSourceVerifyBtn->setObjectName(QStringLiteral("settingsPrimaryBtn"));
     m_musicSourceVerifyBtn->setCursor(Qt::PointingHandCursor);
     connect(m_musicSourceVerifyBtn, &QPushButton::clicked, this,
-            &SettingsPage::verifyMusicSource);
+            [this]() { verifyMusicSource(false); });
     musicSourceRow->addWidget(m_musicSourceVerifyBtn);
 
     m_musicSourceResetBtn = new QPushButton(
@@ -1740,20 +1774,33 @@ void SettingsPage::setMusicSourceBusy(bool busy)
 
 void SettingsPage::failMusicSourceVerification()
 {
+    const bool complianceCheck = m_musicSourceComplianceCheck;
+    m_musicSourceComplianceCheck = false;
     setMusicSourceBusy(false);
+    if (complianceCheck) {
+        const QString failedBase = Theme::apiBase();
+        if (failedBase != QString::fromLatin1(Theme::kDefaultApiBase))
+            applyMusicSource(QString::fromLatin1(Theme::kDefaultApiBase), false);
+        Toast::show(window(), I18n::instance().tr(QStringLiteral("musicSourceComplianceFailed")),
+                    Toast::Error, 6000);
+        return;
+    }
     if (m_musicSourceStatusLabel) {
         m_musicSourceStatusLabel->setText(
             I18n::instance().tr(QStringLiteral("musicSourceFailed")));
     }
 }
 
-void SettingsPage::verifyMusicSource()
+void SettingsPage::verifyMusicSource(bool complianceCheck)
 {
     if (m_musicSourceVerificationBusy || !m_musicSourceEdit)
         return;
 
-    const QString baseUrl = normalizeMusicSourceBase(m_musicSourceEdit->text());
+    m_musicSourceComplianceCheck = complianceCheck;
+    const QString baseUrl = normalizeMusicSourceBase(
+        complianceCheck ? Theme::apiBase() : m_musicSourceEdit->text());
     if (baseUrl.isEmpty()) {
+        m_musicSourceComplianceCheck = false;
         if (m_musicSourceStatusLabel) {
             m_musicSourceStatusLabel->setText(
                 I18n::instance().tr(QStringLiteral("musicSourceInvalid")));
@@ -1797,31 +1844,68 @@ void SettingsPage::verifyMusicSource()
             return;
         }
 
-        QNetworkRequest sourceRequest{QUrl(sourceUrl)};
-        sourceRequest.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                                   QNetworkRequest::NoLessSafeRedirectPolicy);
-        auto *sourceReply = m_nam->head(sourceRequest);
-        m_musicSourceRepositoryReply = sourceReply;
-        QTimer::singleShot(10000, sourceReply, &QNetworkReply::abort);
-        connect(sourceReply, &QNetworkReply::finished, this, [this, sourceReply, baseUrl]() {
-            if (m_musicSourceRepositoryReply == sourceReply)
-                m_musicSourceRepositoryReply = nullptr;
-            sourceReply->deleteLater();
-            if (!m_musicSourceVerificationBusy)
-                return;
-            const int sourceStatus =
-                sourceReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            if (sourceReply->error() != QNetworkReply::NoError
-                || sourceStatus < 200 || sourceStatus >= 400) {
-                failMusicSourceVerification();
-                return;
-            }
-            applyMusicSource(baseUrl);
-        });
+        verifyMusicSourceGithub(baseUrl, sourceUrl);
     });
 }
 
-void SettingsPage::applyMusicSource(const QString &baseUrl)
+void SettingsPage::verifyMusicSourceGithub(const QString &baseUrl, const QString &sourceUrl)
+{
+    const QUrl repoUrl(sourceUrl);
+    QString path = repoUrl.path();
+    while (path.startsWith(QLatin1Char('/')))
+        path.remove(0, 1);
+    while (path.endsWith(QLatin1Char('/')))
+        path.chop(1);
+    const QStringList segments = path.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    if (segments.size() != 2) {
+        failMusicSourceVerification();
+        return;
+    }
+
+    QNetworkRequest sourceRequest(
+        QUrl(QStringLiteral("https://api.github.com/repos/%1/%2").arg(segments[0], segments[1])));
+    sourceRequest.setRawHeader("Accept", "application/vnd.github+json");
+    sourceRequest.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
+    sourceRequest.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                               QNetworkRequest::NoLessSafeRedirectPolicy);
+    auto *sourceReply = m_nam->get(sourceRequest);
+    m_musicSourceRepositoryReply = sourceReply;
+    QTimer::singleShot(10000, sourceReply, &QNetworkReply::abort);
+    connect(sourceReply, &QNetworkReply::finished, this, [this, sourceReply, baseUrl, segments]() {
+        if (m_musicSourceRepositoryReply == sourceReply)
+            m_musicSourceRepositoryReply = nullptr;
+        sourceReply->deleteLater();
+        if (!m_musicSourceVerificationBusy)
+            return;
+        const int sourceStatus =
+            sourceReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (sourceReply->error() != QNetworkReply::NoError
+            || sourceStatus < 200 || sourceStatus >= 400) {
+            failMusicSourceVerification();
+            return;
+        }
+        QJsonParseError parseError{};
+        const QJsonDocument document = QJsonDocument::fromJson(sourceReply->readAll(), &parseError);
+        const QJsonObject repository = document.object();
+        if (parseError.error != QJsonParseError::NoError || !document.isObject()
+            || repository.value(QStringLiteral("private")).toBool()
+            || repository.value(QStringLiteral("disabled")).toBool()
+            || !isAgplGithubLicense(repository)) {
+            failMusicSourceVerification();
+            return;
+        }
+        const QString htmlUrl = repository.value(QStringLiteral("html_url")).toString();
+        const QString requestedUrl = QStringLiteral("https://github.com/%1/%2")
+                                         .arg(segments[0], segments[1]);
+        if (htmlUrl.compare(requestedUrl, Qt::CaseInsensitive) != 0) {
+            failMusicSourceVerification();
+            return;
+        }
+        applyMusicSource(baseUrl, !m_musicSourceComplianceCheck);
+    });
+}
+
+void SettingsPage::applyMusicSource(const QString &baseUrl, bool notify)
 {
     const QString normalized = normalizeMusicSourceBase(baseUrl);
     if (normalized.isEmpty()) {
@@ -1829,6 +1913,8 @@ void SettingsPage::applyMusicSource(const QString &baseUrl)
         return;
     }
 
+    const bool complianceCheck = m_musicSourceComplianceCheck;
+    m_musicSourceComplianceCheck = false;
     const QString official = QString::fromLatin1(Theme::kDefaultApiBase);
     const QString previous = Theme::apiBase();
     QSettings settings;
@@ -1842,17 +1928,49 @@ void SettingsPage::applyMusicSource(const QString &baseUrl)
     if (previous != normalized)
         UserManager::instance().logout();
 
-    if (m_musicSourceEdit)
+    if (m_musicSourceEdit && (!complianceCheck || !m_musicSourceEdit->hasFocus()))
         m_musicSourceEdit->setText(normalized);
     setMusicSourceBusy(false);
     if (m_musicSourceStatusLabel) {
         m_musicSourceStatusLabel->setText(
             normalized == official
                 ? I18n::instance().tr(QStringLiteral("musicSourceDefault"))
-                : I18n::instance().tr(QStringLiteral("musicSourceCurrent")).arg(normalized));
+                : I18n::instance().tr(QString::fromLatin1(
+                      complianceCheck ? "musicSourceCompliancePassed" : "musicSourceCurrent"))
+                      .arg(normalized));
     }
-    Toast::show(window(), I18n::instance().tr(QStringLiteral("musicSourceSwitched")),
-                Toast::Info, 3500);
+    scheduleMusicSourceComplianceCheck();
+    if (notify) {
+        Toast::show(window(), I18n::instance().tr(QStringLiteral("musicSourceSwitched")),
+                    Toast::Info, 3500);
+    }
+}
+
+void SettingsPage::scheduleMusicSourceComplianceCheck(bool checkSoon)
+{
+    if (!m_musicSourceComplianceTimer) {
+        m_musicSourceComplianceTimer = new QTimer(this);
+        m_musicSourceComplianceTimer->setInterval(6 * 60 * 60 * 1000);
+        connect(m_musicSourceComplianceTimer, &QTimer::timeout, this, [this]() {
+            if (!m_musicSourceVerificationBusy
+                && Theme::apiBase() != QString::fromLatin1(Theme::kDefaultApiBase)) {
+                verifyMusicSource(true);
+            }
+        });
+    }
+    if (Theme::apiBase() == QString::fromLatin1(Theme::kDefaultApiBase)) {
+        m_musicSourceComplianceTimer->stop();
+        return;
+    }
+    m_musicSourceComplianceTimer->start();
+    if (checkSoon) {
+        QTimer::singleShot(30000, this, [this]() {
+            if (!m_musicSourceVerificationBusy
+                && Theme::apiBase() != QString::fromLatin1(Theme::kDefaultApiBase)) {
+                verifyMusicSource(true);
+            }
+        });
+    }
 }
 
 // ──────────────────────────── MCP（Model Context Protocol） ────────────────────────────
