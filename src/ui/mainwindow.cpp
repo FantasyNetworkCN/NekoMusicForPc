@@ -401,6 +401,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_downloader = &MusicDownloader::instance();
     m_together = &TogetherRoomClient::instance();
     setupUi();
+    m_playabilityTimer = new QTimer(this);
+    m_playabilityTimer->setInterval(10000);
+    connect(m_playabilityTimer, &QTimer::timeout,
+            this, &MainWindow::checkCurrentTrackPlayability);
+    m_playabilityTimer->start();
     ctorLog("setupUi");
     setupMcpServer();
     ctorLog("setupMcpServer");
@@ -1056,6 +1061,7 @@ void MainWindow::setupUi()
 
     // 记录最近播放，并刷新列表页正在播放高亮
     connect(m_engine, &PlayerEngine::musicStarted, this, [this](const MusicInfo &music) {
+        QTimer::singleShot(0, this, &MainWindow::checkCurrentTrackPlayability);
         refreshMusicStats(music.id);
         PlaylistDatabase::instance().recordRecentPlay(music);
         if (m_favoritesPage)
@@ -1449,12 +1455,21 @@ void MainWindow::setupUi()
             const quint64 switchSeq = m_enginePlaySeq;
             // 音质接口返回 JSON：先解析成固定媒体地址再切换（失败时回退原地址）
             MusicUrlResolver::instance().resolve(url, this,
-                [this, info, switchSeq, url](bool ok, const QUrl &resolved) {
+                [this, info, switchSeq](bool ok, const QUrl &resolved,
+                                        int status, const QString &message) {
                     if (switchSeq != m_enginePlaySeq)
                         return;
-                    const QUrl effectiveUrl = ok ? resolved : url;
-                    m_engine->switchSourceWithoutRestart(effectiveUrl);
-                    startBackgroundCacheDownload(info.id, switchSeq, effectiveUrl);
+                    if (!ok) {
+                        m_playerBar->setLoading(false);
+                        Toast::show(this,
+                                    status == 403
+                                        ? I18n::instance().tr(QStringLiteral("musicNotPlayable"))
+                                        : message,
+                                    Toast::Info);
+                        return;
+                    }
+                    m_engine->switchSourceWithoutRestart(resolved);
+                    startBackgroundCacheDownload(info.id, switchSeq, resolved);
                 });
         }
         m_playerBar->setLoading(false);
@@ -2672,10 +2687,29 @@ void MainWindow::startRemotePlaybackWithBackgroundCache(int musicId, quint64 pla
     // 音质接口现在返回 200 + JSON：先解析成固定媒体地址，再交给播放器 / 下载器
     if (MusicUrlResolver::isMusicFileApiUrl(remoteUrl)) {
         MusicUrlResolver::instance().resolve(remoteUrl, this,
-            [this, musicId, playSeq, pauseWhenReady, resumeMs, remoteUrl](bool ok, const QUrl &resolved) {
+            [this, musicId, playSeq, pauseWhenReady, resumeMs]
+            (bool ok, const QUrl &resolved, int status, const QString &message) {
                 if (playSeq != m_enginePlaySeq)
                     return;
-                startResolvedRemotePlayback(musicId, playSeq, ok ? resolved : remoteUrl,
+                if (!ok) {
+                    m_playerBar->setLoading(false);
+                    m_streamRetryActive = false;
+                    if (status == 403) {
+                        MusicInfo current = m_engine->currentMusic();
+                        if (current.id == musicId) {
+                            current.playable = false;
+                            m_engine->setCurrentMusic(current);
+                            PlaylistManager::instance().setPlayable(musicId, false);
+                        }
+                        Toast::show(this,
+                                    I18n::instance().tr(QStringLiteral("musicNotPlayable")),
+                                    Toast::Info);
+                    } else if (!message.isEmpty()) {
+                        Toast::show(this, message, Toast::Info);
+                    }
+                    return;
+                }
+                startResolvedRemotePlayback(musicId, playSeq, resolved,
                                             pauseWhenReady, resumeMs);
             });
         return;
@@ -2795,6 +2829,50 @@ void MainWindow::refreshMusicStats(int musicId)
             if (m_playerPage)
                 m_playerPage->setCommentCount(data.value(QStringLiteral("totalComments")).toInt());
         });
+}
+
+void MainWindow::checkCurrentTrackPlayability()
+{
+    if (!m_engine || !m_apiClient || m_playabilityCheckInFlight)
+        return;
+    const MusicInfo current = m_engine->currentMusic();
+    if (current.id <= 0 || current.isLocalFile() || !current.playable)
+        return;
+
+    m_playabilityCheckInFlight = true;
+    const int musicId = current.id;
+    m_apiClient->fetchMusicInfo(musicId, [this, musicId](bool ok, const QVariantMap &data) {
+        m_playabilityCheckInFlight = false;
+        if (!ok || !m_engine || m_engine->currentMusic().id != musicId)
+            return;
+        if (data.contains(QStringLiteral("playable"))
+            && !data.value(QStringLiteral("playable")).toBool()) {
+            handleCurrentTrackUnplayable(musicId);
+        }
+    });
+}
+
+void MainWindow::handleCurrentTrackUnplayable(int musicId)
+{
+    if (!m_engine || musicId <= 0 || m_engine->currentMusic().id != musicId)
+        return;
+    MusicInfo current = m_engine->currentMusic();
+    if (!current.playable)
+        return;
+
+    current.playable = false;
+    m_engine->setCurrentMusic(current);
+    PlaylistManager::instance().setPlayable(musicId, false);
+    MusicDownloader::purgeCachedAudio(musicId);
+
+    m_isDownloading = false;
+    disconnectDownloader();
+    m_downloader->cancel();
+    m_streamRetryActive = false;
+    m_engine->stop();
+    m_playerBar->setLoading(false);
+    refreshSystemMediaIntegration();
+    Toast::show(this, I18n::instance().tr(QStringLiteral("musicNotPlayable")), Toast::Info);
 }
 
 void MainWindow::refreshFavoriteCount(int musicId)
@@ -4010,6 +4088,11 @@ void MainWindow::togglePlaybackForSystemUi()
         m_together->togglePlayPause();
         return;
     }
+    const MusicInfo current = m_engine->currentMusic();
+    if (current.id > 0 && !current.isLocalFile() && !current.playable) {
+        Toast::show(this, I18n::instance().tr(QStringLiteral("musicNotPlayable")), Toast::Info);
+        return;
+    }
     QElapsedTimer timer;
     timer.start();
     const bool pausing = m_engine->isActuallyPlaying() && !m_engine->isFadingOut();
@@ -4081,6 +4164,11 @@ void MainWindow::resumePlaybackForSystemUi()
         return;
     if (m_together && m_together->isActive()) {
         m_together->resume();
+        return;
+    }
+    const MusicInfo current = m_engine->currentMusic();
+    if (current.id > 0 && !current.isLocalFile() && !current.playable) {
+        Toast::show(this, I18n::instance().tr(QStringLiteral("musicNotPlayable")), Toast::Info);
         return;
     }
     if (!m_engine->isActuallyPlaying())

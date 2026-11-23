@@ -13,6 +13,8 @@ public:
 
     /** 与按 musicId 下载时的落盘路径一致（无扩展名，由 FFmpeg 嗅探格式）。 */
     static QString cachedAudioFilePath(int musicId, const QString &quality = QStringLiteral("hq"));
+    /** 清理某首在线曲目的临时音频缓存，不触碰用户保存的下载文件。 */
+    static void purgeCachedAudio(int musicId);
 
     /** 删除 nekomusic-cache 下旧版 URL-MD5 文件名缓存（仅识别 32 位小写十六进制基名）。 */
     static void purgeLegacyMd5CacheFiles();

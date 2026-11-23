@@ -199,6 +199,9 @@ private:
     void refreshPlayerMaxQuality(int musicId);
     /** 拉取并刷新当前曲目的收藏数 / 评论数角标 */
     void refreshMusicStats(int musicId);
+    /** 当前在线曲目的播放权限复核；禁播后停止播放但保留队列数据。 */
+    void checkCurrentTrackPlayability();
+    void handleCurrentTrackUnplayable(int musicId);
     /** 仅刷新收藏数（收藏状态变更后调用） */
     void refreshFavoriteCount(int musicId);
     void startBackgroundCacheDownload(int musicId, quint64 playSeq, const QUrl &url);
@@ -270,6 +273,8 @@ private:
     QMetaObject::Connection m_streamErrorConn;
     AddToPlaylistDialog *m_addToPlaylistOverlay = nullptr;
     QTimer *m_streamAttemptTimer = nullptr;
+    QTimer *m_playabilityTimer = nullptr;
+    bool m_playabilityCheckInFlight = false;
     bool m_streamRetryActive = false;
     QUrl m_streamRemoteUrl;
     bool m_streamPauseWhenReady = false;

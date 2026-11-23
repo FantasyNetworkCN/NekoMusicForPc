@@ -177,6 +177,21 @@ void PlaylistManager::clearPlaylist() {
     emit playlistChanged();
 }
 
+void PlaylistManager::setPlayable(int musicId, bool playable)
+{
+    if (musicId <= 0)
+        return;
+    bool changed = false;
+    for (MusicInfo &music : m_playlist) {
+        if (music.id == musicId && music.playable != playable) {
+            music.playable = playable;
+            changed = true;
+        }
+    }
+    if (changed)
+        emit playlistChanged();
+}
+
 void PlaylistManager::setPlayMode(const QString& mode) {
     m_playMode = mode;
     PlaylistDatabase::instance().setQueuePlayMode(mode);

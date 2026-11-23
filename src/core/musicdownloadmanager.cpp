@@ -361,10 +361,17 @@ void MusicDownloadManager::startNetworkDownload(const MusicInfo &music)
     if (MusicUrlResolver::isMusicFileApiUrl(apiUrl)) {
         // 音质接口现在返回 200 + JSON，必须先解析成固定媒体地址
         MusicUrlResolver::instance().resolve(apiUrl, this,
-            [this, music, apiUrl](bool ok, const QUrl &resolved) {
+            [this, music](bool ok, const QUrl &resolved,
+                          int, const QString &message) {
                 if (m_current.id != music.id)
                     return; // 期间已被取消 / 切换
-                startNetworkDownloadResolved(music, ok ? resolved : apiUrl);
+                if (!ok) {
+                    finishCurrent(false, message.isEmpty()
+                                             ? QStringLiteral("播放地址解析失败")
+                                             : message);
+                    return;
+                }
+                startNetworkDownloadResolved(music, resolved);
             });
         return;
     }

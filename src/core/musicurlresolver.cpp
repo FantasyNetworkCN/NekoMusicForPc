@@ -52,14 +52,14 @@ bool MusicUrlResolver::isMusicFileApiUrl(const QUrl &url)
 void MusicUrlResolver::resolve(const QUrl &apiUrl, QObject *context, Callback cb)
 {
     if (!isMusicFileApiUrl(apiUrl)) {
-        cb(true, apiUrl);
+        cb(true, apiUrl, 0, {});
         return;
     }
 
     const QString key = apiUrl.toString();
     const auto cached = m_cache.constFind(key);
     if (cached != m_cache.constEnd() && cached->expiresAt > QDateTime::currentMSecsSinceEpoch()) {
-        cb(true, cached->url);
+        cb(true, cached->url, 200, {});
         return;
     }
 
@@ -75,24 +75,29 @@ void MusicUrlResolver::resolve(const QUrl &apiUrl, QObject *context, Callback cb
         reply->deleteLater();
 
         const QByteArray body = reply->readAll();
-        if (reply->error() != QNetworkReply::NoError) {
+        const int status =
+            reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QJsonObject root = QJsonDocument::fromJson(body).object();
+        const QString message = root.value(QStringLiteral("message")).toString();
+        if (reply->error() != QNetworkReply::NoError || status >= 400) {
             qWarning() << "[music-url] 解析音质地址失败:" << apiUrl.toString()
-                       << reply->errorString();
-            cb(false, apiUrl);
+                       << status << reply->errorString();
+            cb(false, apiUrl, status,
+               message.isEmpty() ? reply->errorString() : message);
             return;
         }
 
-        const QJsonObject root = QJsonDocument::fromJson(body).object();
         const QString path = root.value(QStringLiteral("data")).toObject()
                                  .value(QStringLiteral("url")).toString();
         if (!root.value(QStringLiteral("success")).toBool() || path.isEmpty()) {
             qWarning() << "[music-url] 解析音质地址失败:" << apiUrl.toString();
-            cb(false, apiUrl);
+            cb(false, apiUrl, status,
+               message.isEmpty() ? QStringLiteral("播放地址解析失败") : message);
             return;
         }
 
         const QUrl resolved = absoluteUrl(path);
         m_cache.insert(key, CacheEntry{resolved, QDateTime::currentMSecsSinceEpoch() + kCacheTtlMs});
-        cb(true, resolved);
+        cb(true, resolved, status, {});
     });
 }

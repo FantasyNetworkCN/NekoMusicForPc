@@ -39,6 +39,29 @@ QString MusicDownloader::cachedAudioFilePath(int musicId, const QString &quality
 #endif
 }
 
+void MusicDownloader::purgeCachedAudio(int musicId)
+{
+    if (musicId <= 0)
+        return;
+#ifdef Q_OS_LINUX
+    const QString cacheDir = LinuxTmpfsCache::audioCacheDir();
+#else
+    const QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
+            + QStringLiteral("/nekomusic-cache");
+#endif
+    QDir dir(cacheDir);
+    if (!dir.exists())
+        return;
+    const QRegularExpression name(
+        QStringLiteral("^%1-.*$").arg(QRegularExpression::escape(QString::number(musicId))));
+    const QFileInfoList entries =
+        dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+    for (const QFileInfo &entry : entries) {
+        if (name.match(entry.fileName()).hasMatch())
+            QFile::remove(entry.absoluteFilePath());
+    }
+}
+
 void MusicDownloader::purgeLegacyMd5CacheFiles()
 {
 #ifdef Q_OS_LINUX
@@ -98,8 +121,15 @@ void MusicDownloader::download(const QUrl &url, int musicId, const QString &qual
     // 音质接口现在返回 200 + JSON，必须先解析成固定媒体地址再下载
     if (MusicUrlResolver::isMusicFileApiUrl(url)) {
         MusicUrlResolver::instance().resolve(url, this,
-            [this, url, musicId, quality](bool ok, const QUrl &resolved) {
-                startDownload(ok ? resolved : url, musicId, quality);
+            [this, musicId, quality]
+            (bool ok, const QUrl &resolved, int, const QString &message) {
+                if (!ok) {
+                    emit downloadError(message.isEmpty()
+                                           ? QStringLiteral("播放地址解析失败")
+                                           : message);
+                    return;
+                }
+                startDownload(resolved, musicId, quality);
             });
         return;
     }

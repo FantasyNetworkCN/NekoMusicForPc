@@ -25,8 +25,9 @@ class MusicUrlResolver : public QObject
 {
     Q_OBJECT
 public:
-    /** ok=false 时 resolvedUrl 为原地址，调用方沿用既有错误路径即可。 */
-    using Callback = std::function<void(bool ok, const QUrl &resolvedUrl)>;
+    /** ok=false 时 resolvedUrl 为原地址，statusCode/message 供调用方区分禁播与网络错误。 */
+    using Callback = std::function<void(bool ok, const QUrl &resolvedUrl,
+                                        int statusCode, const QString &message)>;
 
     static MusicUrlResolver &instance();
 

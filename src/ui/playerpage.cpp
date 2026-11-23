@@ -1790,10 +1790,12 @@ void PlayerPage::scheduleAudioQualityProbe()
     // 音质接口现在返回 200 + JSON，先解析成固定媒体地址再探测
     if (MusicUrlResolver::isMusicFileApiUrl(url)) {
         MusicUrlResolver::instance().resolve(url, this,
-            [this, probeGen, musicId, url, runProbe](bool ok, const QUrl &resolved) {
+            [this, probeGen, musicId, runProbe]
+            (bool ok, const QUrl &resolved, int, const QString &) {
                 if (probeGen != m_qualityProbeGen || musicId != m_musicId)
                     return;
-                runProbe(ok ? resolved : url);
+                if (ok)
+                    runProbe(resolved);
             });
         return;
     }

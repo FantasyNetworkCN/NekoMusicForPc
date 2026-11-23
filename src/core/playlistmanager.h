@@ -29,6 +29,8 @@ public:
     void replacePlaylist(const QList<MusicInfo>& musicList, int currentIndex = 0);
     void removeFromPlaylist(int localId);
     void clearPlaylist();
+    /** 刷新队列中的当前可播放状态；只改内存，不删除用户队列/歌单数据。 */
+    void setPlayable(int musicId, bool playable);
 
     /** 返回内部队列的 const 引用，避免按值返回时与 playlist()[i] 组合产生悬空引用。 */
     const QList<MusicInfo> &playlist() const { return m_playlist; }
