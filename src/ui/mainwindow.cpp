@@ -1461,11 +1461,21 @@ void MainWindow::setupUi()
                         return;
                     if (!ok) {
                         m_playerBar->setLoading(false);
-                        Toast::show(this,
-                                    status == 403
-                                        ? I18n::instance().tr(QStringLiteral("musicNotPlayable"))
-                                        : message,
-                                    Toast::Info);
+                        if (status == 403) {
+                            MusicInfo current = m_engine->currentMusic();
+                            if (current.id == info.id) {
+                                current.playable = false;
+                                m_engine->setCurrentMusic(current);
+                                PlaylistManager::instance().setPlayable(info.id, false);
+                                MusicDownloader::purgeCachedAudio(info.id);
+                            }
+                            Toast::show(this,
+                                        I18n::instance().tr(QStringLiteral("musicNotPlayable")),
+                                        Toast::Info);
+                            QTimer::singleShot(0, this, &MainWindow::playNext);
+                        } else {
+                            Toast::show(this, message, Toast::Info);
+                        }
                         return;
                     }
                     m_engine->switchSourceWithoutRestart(resolved);
@@ -2704,6 +2714,7 @@ void MainWindow::startRemotePlaybackWithBackgroundCache(int musicId, quint64 pla
                         Toast::show(this,
                                     I18n::instance().tr(QStringLiteral("musicNotPlayable")),
                                     Toast::Info);
+                        QTimer::singleShot(0, this, &MainWindow::playNext);
                     } else if (!message.isEmpty()) {
                         Toast::show(this, message, Toast::Info);
                     }
