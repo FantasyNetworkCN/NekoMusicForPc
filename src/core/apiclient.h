@@ -51,6 +51,10 @@ public:
                                            const QString &vocalsUrl,
                                            const QString &accompanimentUrl)>;
     void fetchStemFiles(int musicId, StemFilesCb cb);
+    using StemStreamEventCb = std::function<void(const QString &event, const QVariantMap &data)>;
+    QNetworkReply *streamStemSeparation(int musicId, StemStreamEventCb onEvent,
+                                       std::function<void(int statusCode,
+                                                          const QString &message)> onError);
     
     // 获取歌词
     using LyricsCb = std::function<void(bool, const QString&)>;

@@ -479,6 +479,59 @@ void ApiClient::fetchStemFiles(int musicId, StemFilesCb cb) {
     });
 }
 
+QNetworkReply *ApiClient::streamStemSeparation(
+    int musicId, StemStreamEventCb onEvent,
+    std::function<void(int statusCode, const QString &message)> onError)
+{
+    if (musicId <= 0) {
+        if (onError) onError(0, I18n::instance().tr(QStringLiteral("stemFailed")));
+        return nullptr;
+    }
+    QUrl url(QString::fromUtf8("%1/api/music/file/%2/stream").arg(Theme::kApiBase).arg(musicId));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("separate"), QStringLiteral("1"));
+    url.setQuery(query);
+    QNetworkRequest req(url);
+    req.setRawHeader("Accept", "text/event-stream");
+    req.setTransferTimeout(0);
+    QNetworkReply *reply = m_nam.get(req);
+
+    auto buffer = std::make_shared<QByteArray>();
+    auto eventName = std::make_shared<QString>();
+    auto payload = std::make_shared<QByteArray>();
+    auto terminal = std::make_shared<bool>(false);
+    connect(reply, &QNetworkReply::readyRead, this,
+            [reply, buffer, eventName, payload, terminal, onEvent]() {
+                buffer->append(reply->readAll());
+                consumeSseChunk(*buffer, *eventName, *payload,
+                                [terminal, onEvent](const QString &name, const QByteArray &data) {
+                                    if (name == QLatin1String("done")
+                                        || name == QLatin1String("error")) {
+                                        *terminal = true;
+                                    }
+                                    if (onEvent) {
+                                        onEvent(name, QJsonDocument::fromJson(data).object().toVariantMap());
+                                    }
+                                });
+            });
+    connect(reply, &QNetworkReply::finished, this,
+            [reply, terminal, onError]() {
+                reply->deleteLater();
+                if (*terminal || reply->error() == QNetworkReply::OperationCanceledError)
+                    return;
+                const int status =
+                    reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+                QString message = reply->errorString();
+                const QByteArray body = reply->readAll();
+                const QString serverMessage =
+                    QJsonDocument::fromJson(body).object().value(QStringLiteral("message")).toString();
+                if (!serverMessage.isEmpty())
+                    message = serverMessage;
+                if (onError) onError(status, message);
+            });
+    return reply;
+}
+
 void ApiClient::fetchLyricsPayload(int musicId, LyricsPayloadCb cb) {
     QUrl url(QString::fromUtf8("%1/api/music/info/%2")
                  .arg(QString::fromUtf8(Theme::kApiBase))
