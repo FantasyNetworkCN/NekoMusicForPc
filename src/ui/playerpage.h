@@ -90,6 +90,8 @@ signals:
     void playlistClicked();
     /** 打开评论抽屉（携带当前曲目 id） */
     void commentsClicked(int musicId);
+    /** 打开音量与人声/伴奏统一面板。 */
+    void volumeSettingsClicked(int musicId);
     void desktopLyricsToggled(bool enabled);
     void volumePercentChanged(int percent);
     /** 播放页歌词更新后同步桌面歌词（LRC 文本，空表示无歌词） */

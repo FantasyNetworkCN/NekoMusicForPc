@@ -511,7 +511,6 @@ enum class PbInk : int {
     PlaylistAdd,
     Share,
     Together,
-    Stem,
     Video,
     Download,
     DesktopLyric,
@@ -623,9 +622,6 @@ void PlayerBarInkButton::paintEvent(QPaintEvent *event)
     }
     case PbInk::Video:
         pm = Icons::renderNamed("Video", px, hi ? cA : cN);
-        break;
-    case PbInk::Stem:
-        pm = Icons::renderNamed("Music", px, hi ? cA : cN);
         break;
     case PbInk::Download:
         pm = Icons::renderNamed("Download", px, hi ? cA : cN);
@@ -1119,19 +1115,6 @@ void PlayerBar::setupUi()
     });
     rl->addWidget(m_qualitySelector, 0, Qt::AlignVCenter);
 
-    m_stemMixerBtn = new PlayerBarInkButton(right);
-    m_stemMixerBtn->setObjectName(QStringLiteral("pbStemMixerBtn"));
-    m_stemMixerBtn->setFixedSize(kPbCtrlBtn, kPbCtrlBtn);
-    m_stemMixerBtn->setIconSize(QSize(kPbCtrlIcon, kPbCtrlIcon));
-    m_stemMixerBtn->setProperty("pbInk", int(PbInk::Stem));
-    m_stemMixerBtn->setCursor(Qt::PointingHandCursor);
-    m_stemMixerBtn->setToolTip(I18n::instance().tr(QStringLiteral("stemSeparation")));
-    connect(m_stemMixerBtn, &QPushButton::clicked, this, [this]() {
-        if (m_currentMusicId > 0)
-            emit stemMixerClicked(m_currentMusicId);
-    });
-    rl->addWidget(m_stemMixerBtn);
-
     m_shareBtn = new PlayerBarInkButton(right);
     m_shareBtn->setObjectName(QStringLiteral("pbShareBtn"));
     m_shareBtn->setFixedSize(kPbCtrlBtn, kPbCtrlBtn);
@@ -1199,6 +1182,10 @@ void PlayerBar::setupUi()
     m_volumeBtn->setProperty("pbInk", int(PbInk::Volume));
     m_volumeBtn->setProperty("pbVol", 3);
     m_volumeBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_volumeBtn, &QPushButton::clicked, this, [this]() {
+        if (m_currentMusicId > 0)
+            emit volumeSettingsClicked(m_currentMusicId);
+    });
     volLay->addWidget(m_volumeBtn);
     rl->addWidget(volWrapper);
 
@@ -1384,7 +1371,8 @@ void PlayerBar::showVolumePanelAnimated()
     if (!host)
         host = this;
     const QPoint ref = m_volumeBtn->mapTo(host, QPoint(0, 0));
-    const int x = ref.x() + (m_volumeBtn->width() - m_volumePanel->width()) / 2;
+    const int desiredX = ref.x() + (m_volumeBtn->width() - m_volumePanel->width()) / 2;
+    const int x = qBound(8, desiredX, qMax(8, host->width() - m_volumePanel->width() - 8));
     const int overlap = 8;
     const int y = ref.y() - m_volumePanel->height() + overlap - kVolumePanelExtraLiftPx;
     const QPoint finalPos(x, y);
@@ -1552,8 +1540,6 @@ void PlayerBar::retranslate()
 
     if (m_addToPlaylistBtn)
         m_addToPlaylistBtn->setToolTip(I18n::instance().tr("addToPlaylist"));
-    if (m_stemMixerBtn)
-        m_stemMixerBtn->setToolTip(I18n::instance().tr(QStringLiteral("stemSeparation")));
     if (m_desktopLrcBtn)
         m_desktopLrcBtn->setToolTip(I18n::instance().tr("desktopLyrics"));
     if (m_shareBtn)
@@ -1663,8 +1649,6 @@ void PlayerBar::setCurrentMusicId(int musicId)
         m_addToPlaylistBtn->setEnabled(musicId > 0);
     if (m_downloadBtn)
         m_downloadBtn->setEnabled(musicId > 0);
-    if (m_stemMixerBtn)
-        m_stemMixerBtn->setEnabled(musicId > 0);
     if (changed)
         setMaxQuality(musicId > 0 ? QStringLiteral("hq") : QStringLiteral("standard"), false);
     // 不重置状态，由调用方自行检查收藏状态后设置

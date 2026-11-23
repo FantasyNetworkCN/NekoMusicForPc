@@ -451,6 +451,12 @@ static QMap<QString, QString> zhCN()
     m["playNextAdded"] = QStringLiteral("已添加到下一首播放");
     m["musicNotPlayable"] = QStringLiteral("该音乐暂时无法播放");
     m["stemSeparation"] = QStringLiteral("人声分离");
+    m["stemEnable"] = QStringLiteral("启用人声分离");
+    m["stemEnableHint"] = QStringLiteral("启用后双轨会跟随原有播放进度，主播放器继续负责播放与拖动。");
+    m["stemActive"] = QStringLiteral("人声分离已生效，主音量控制双轨总音量。");
+    m["stemDisabled"] = QStringLiteral("人声分离已关闭，恢复原曲播放。");
+    m["volumeAndStem"] = QStringLiteral("音量与人声伴奏");
+    m["volumeAndStemHint"] = QStringLiteral("主音量独立调节；开始分离双轨后会暂停原曲，关闭面板自动恢复。");
     m["stemPreparing"] = QStringLiteral("正在准备人声与伴奏…");
     m["stemLoadingAudio"] = QStringLiteral("正在加载双轨音频…");
     m["stemReady"] = QStringLiteral("双轨已就绪");
@@ -458,6 +464,7 @@ static QMap<QString, QString> zhCN()
     m["stemVipRequired"] = QStringLiteral("需要有效 VIP 才能使用人声分离");
     m["stemVocals"] = QStringLiteral("人声");
     m["stemAccompaniment"] = QStringLiteral("伴奏");
+    m["stemResetMix"] = QStringLiteral("恢复原声比例");
     m["stemFailed"] = QStringLiteral("人声分离失败");
     m["addToPlaylistTitle"] = QStringLiteral("添加到歌单");
     m["createNewPlaylistRow"] = QStringLiteral("创建新歌单");
@@ -1749,6 +1756,12 @@ static QMap<QString, QString> enUS()
     m["playNextAdded"] = "Added to play next";
     m["musicNotPlayable"] = "This track is temporarily unavailable";
     m["stemSeparation"] = "Stem Separation";
+    m["stemEnable"] = "Enable Stem Separation";
+    m["stemEnableHint"] = "When enabled, separated tracks follow the original playback progress and transport controls.";
+    m["stemActive"] = "Stem separation is active. Main volume controls the overall stem mix.";
+    m["stemDisabled"] = "Stem separation is off. Original playback restored.";
+    m["volumeAndStem"] = "Volume & Stems";
+    m["volumeAndStemHint"] = "Adjust the main volume separately. Starting the stem mix pauses the original track, and closing the panel resumes it.";
     m["stemPreparing"] = "Preparing vocals and accompaniment…";
     m["stemLoadingAudio"] = "Loading separated tracks…";
     m["stemReady"] = "Separated tracks ready";
@@ -1756,6 +1769,7 @@ static QMap<QString, QString> enUS()
     m["stemVipRequired"] = "An active VIP membership is required";
     m["stemVocals"] = "Vocals";
     m["stemAccompaniment"] = "Accompaniment";
+    m["stemResetMix"] = "Reset Mix";
     m["stemFailed"] = "Stem separation failed";
     m["addToPlaylistTitle"] = "Add to Playlist";
     m["createNewPlaylistRow"] = "Create New Playlist";

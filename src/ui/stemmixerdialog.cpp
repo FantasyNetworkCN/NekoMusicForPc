@@ -1,18 +1,15 @@
 #include "stemmixerdialog.h"
 
 #include "core/apiclient.h"
-#include "core/httpmediadevice.h"
 #include "core/i18n.h"
+#include "core/playerengine.h"
 #include "core/usermanager.h"
 #include "theme/thememanager.h"
 
-#include <QAudioOutput>
 #include <QColor>
-#include <QFile>
+#include <QCheckBox>
 #include <QHBoxLayout>
-#include <QIODevice>
 #include <QLabel>
-#include <QMediaPlayer>
 #include <QPushButton>
 #include <QSlider>
 #include <QTimer>
@@ -35,36 +32,37 @@ QString percentText(int value)
 
 } // namespace
 
-StemMixerDialog::StemMixerDialog(ApiClient *apiClient, const MusicInfo &music, QWidget *parent)
+StemMixerDialog::StemMixerDialog(ApiClient *apiClient, PlayerEngine *engine,
+                                 const MusicInfo &music, QWidget *parent)
     : QDialog(parent)
     , m_apiClient(apiClient)
+    , m_engine(engine)
     , m_music(music)
 {
-    setWindowTitle(I18n::instance().tr(QStringLiteral("stemSeparation")));
+    setWindowTitle(I18n::instance().tr(QStringLiteral("volumeAndStem")));
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground, false);
     setModal(true);
-    setFixedSize(460, 292);
+    setFixedSize(520, 410);
     setupUi();
 
     if (!UserManager::instance().isLoggedIn()) {
         setStatus(I18n::instance().tr(QStringLiteral("stemLoginRequired")));
+        m_stemToggle->setEnabled(false);
         return;
     }
     if (!UserManager::instance().isVip()) {
         setStatus(I18n::instance().tr(QStringLiteral("stemVipRequired")));
+        m_stemToggle->setEnabled(false);
         return;
     }
-    fetchFiles();
+    setStatus(I18n::instance().tr(QStringLiteral("stemEnableHint")));
 }
 
 StemMixerDialog::~StemMixerDialog()
 {
+    setStemActive(false);
     stopPlayback();
-    if (m_vocalsDevice)
-        m_vocalsDevice->shutdown();
-    if (m_accompanimentDevice)
-        m_accompanimentDevice->shutdown();
 }
 
 void StemMixerDialog::setupUi()
@@ -81,7 +79,7 @@ void StemMixerDialog::setupUi()
                       "QSlider::groove:horizontal { height: 6px; border-radius: 3px; background: %5; }"
                       "QSlider::sub-page:horizontal { border-radius: 3px; background: %6; }"
                       "QSlider::handle:horizontal { width: 16px; margin: -5px 0; border-radius: 8px; background: %6; }"
-                      "QPushButton#stemPlay { background: %6; color: #10202a; border: none; border-radius: 8px; padding: 8px 20px; font-weight: 600; }"
+                      "QCheckBox#stemToggle { color: %3; spacing: 8px; font-weight: 600; }"
                       "QPushButton#stemClose { background: transparent; color: %4; border: 1px solid %5; border-radius: 8px; padding: 8px 16px; }")
                       .arg(bg.name(QColor::HexArgb), dark ? QStringLiteral("rgba(255,255,255,30)")
                                                            : QStringLiteral("rgba(30,60,90,22)"),
@@ -96,7 +94,7 @@ void StemMixerDialog::setupUi()
 
     m_titleLabel = new QLabel(this);
     m_titleLabel->setText(QStringLiteral("%1 · %2")
-                              .arg(I18n::instance().tr(QStringLiteral("stemSeparation")),
+                              .arg(I18n::instance().tr(QStringLiteral("volumeAndStem")),
                                    m_music.title));
     QFont titleFont = m_titleLabel->font();
     titleFont.setPixelSize(20);
@@ -104,10 +102,48 @@ void StemMixerDialog::setupUi()
     m_titleLabel->setFont(titleFont);
     root->addWidget(m_titleLabel);
 
-    m_statusLabel = new QLabel(this);
-    m_statusLabel->setObjectName(QStringLiteral("stemSub"));
-    m_statusLabel->setWordWrap(true);
-    root->addWidget(m_statusLabel);
+    auto *hint = new QLabel(I18n::instance().tr(QStringLiteral("volumeAndStemHint")), this);
+    hint->setObjectName(QStringLiteral("stemSub"));
+    hint->setWordWrap(true);
+    root->addWidget(hint);
+
+    auto *volumeRow = new QWidget(this);
+    auto *volumeLay = new QHBoxLayout(volumeRow);
+    volumeLay->setContentsMargins(0, 0, 0, 0);
+    volumeLay->setSpacing(12);
+    auto *volumeName = new QLabel(I18n::instance().tr(QStringLiteral("volume")), volumeRow);
+    volumeName->setMinimumWidth(48);
+    m_masterSlider = new QSlider(Qt::Horizontal, volumeRow);
+    m_masterSlider->setRange(0, kSliderMax);
+    const int initialMaster = qBound(0, qRound((m_engine ? m_engine->volume() : 0.8f)
+                                               * kSliderMax), kSliderMax);
+    m_masterSlider->setValue(initialMaster);
+    m_masterValue = new QLabel(percentText(initialMaster), volumeRow);
+    m_masterValue->setMinimumWidth(42);
+    m_masterValue->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    volumeLay->addWidget(volumeName);
+    volumeLay->addWidget(m_masterSlider, 1);
+    volumeLay->addWidget(m_masterValue);
+    root->addWidget(volumeRow);
+    connect(m_masterSlider, &QSlider::valueChanged, this, [this](int value) {
+        m_masterValue->setText(percentText(value));
+        if (m_stemActive)
+            applyStemVolumes();
+        else if (m_engine)
+            m_engine->setVolume(value / qreal(kSliderMax));
+    });
+
+    auto *stemSection = new QLabel(I18n::instance().tr(QStringLiteral("stemSeparation")), this);
+    QFont sectionFont = stemSection->font();
+    sectionFont.setPixelSize(14);
+    sectionFont.setBold(true);
+    stemSection->setFont(sectionFont);
+    root->addWidget(stemSection);
+
+    m_stemToggle = new QCheckBox(I18n::instance().tr(QStringLiteral("stemEnable")), this);
+    m_stemToggle->setObjectName(QStringLiteral("stemToggle"));
+    m_stemToggle->setCursor(Qt::PointingHandCursor);
+    root->addWidget(m_stemToggle);
 
     auto addGainRow = [&](const QString &label, QSlider *&slider, QLabel *&value) {
         auto *row = new QWidget(this);
@@ -130,37 +166,60 @@ void StemMixerDialog::setupUi()
     addGainRow(I18n::instance().tr(QStringLiteral("stemVocals")), m_vocalsSlider, m_vocalsValue);
     addGainRow(I18n::instance().tr(QStringLiteral("stemAccompaniment")),
                m_accompanimentSlider, m_accompanimentValue);
+    m_vocalsSlider->setEnabled(false);
+    m_accompanimentSlider->setEnabled(false);
+
+    m_statusLabel = new QLabel(this);
+    m_statusLabel->setObjectName(QStringLiteral("stemSub"));
+    m_statusLabel->setWordWrap(true);
+    root->addWidget(m_statusLabel);
 
     connect(m_vocalsSlider, &QSlider::valueChanged, this, [this](int value) {
         m_vocalsValue->setText(percentText(value));
-        if (m_vocalsOutput)
-            m_vocalsOutput->setVolume(value / qreal(kSliderMax));
+        applyStemVolumes();
     });
     connect(m_accompanimentSlider, &QSlider::valueChanged, this, [this](int value) {
         m_accompanimentValue->setText(percentText(value));
-        if (m_accompanimentOutput)
-            m_accompanimentOutput->setVolume(value / qreal(kSliderMax));
+        applyStemVolumes();
+    });
+    connect(m_stemToggle, &QCheckBox::toggled, this, [this](bool checked) {
+        if (checked && !m_tracksReady) {
+            m_pendingEnable = true;
+            setStatus(I18n::instance().tr(QStringLiteral("stemPreparing")));
+            m_stemToggle->setEnabled(false);
+            fetchFiles();
+            return;
+        }
+        setStemActive(checked);
     });
 
     auto *actions = new QHBoxLayout();
     actions->addStretch(1);
+    m_resetMixButton = new QPushButton(I18n::instance().tr(QStringLiteral("stemResetMix")), this);
+    m_resetMixButton->setObjectName(QStringLiteral("stemClose"));
     m_closeButton = new QPushButton(I18n::instance().tr(QStringLiteral("close")), this);
     m_closeButton->setObjectName(QStringLiteral("stemClose"));
-    m_playButton = new QPushButton(I18n::instance().tr(QStringLiteral("play")), this);
-    m_playButton->setObjectName(QStringLiteral("stemPlay"));
-    m_playButton->setEnabled(false);
+    actions->addWidget(m_resetMixButton);
     actions->addWidget(m_closeButton);
-    actions->addWidget(m_playButton);
     root->addLayout(actions);
 
     connect(m_closeButton, &QPushButton::clicked, this, &QDialog::reject);
-    connect(m_playButton, &QPushButton::clicked, this, &StemMixerDialog::togglePlayback);
-
+    connect(m_resetMixButton, &QPushButton::clicked, this, [this]() {
+        m_vocalsSlider->setValue(kSliderMax);
+        m_accompanimentSlider->setValue(kSliderMax);
+    });
     m_syncTimer = new QTimer(this);
     m_syncTimer->setInterval(kSyncIntervalMs);
     connect(m_syncTimer, &QTimer::timeout, this, &StemMixerDialog::syncPositions);
+    if (m_engine) {
+        connect(m_engine, &PlayerEngine::stateChanged, this, &StemMixerDialog::syncTransport);
+        connect(m_engine, &PlayerEngine::playbackFinished, this, [this]() {
+            if (m_stemActive)
+                setStemActive(false);
+        });
+    }
 
-    setStatus(I18n::instance().tr(QStringLiteral("stemPreparing")));
+    setStatus(I18n::instance().tr(QStringLiteral("stemEnableHint")));
 }
 
 void StemMixerDialog::setStatus(const QString &text)
@@ -179,122 +238,139 @@ void StemMixerDialog::fetchFiles()
         m_music.id,
         [this](bool ok, const QString &message, const QString &vocals, const QString &accompaniment) {
             if (!ok) {
+                m_pendingEnable = false;
+                m_stemToggle->setEnabled(true);
+                m_stemToggle->setChecked(false);
                 setStatus(message.isEmpty() ? I18n::instance().tr(QStringLiteral("stemFailed"))
                                             : message);
                 return;
             }
-            preparePlayers(QUrl(vocals), QUrl(accompaniment));
+            prepareTracks(QUrl(vocals), QUrl(accompaniment));
         });
 }
 
-void StemMixerDialog::preparePlayers(const QUrl &vocalsUrl, const QUrl &accompanimentUrl)
+void StemMixerDialog::prepareTracks(const QUrl &vocalsUrl, const QUrl &accompanimentUrl)
 {
-    m_vocalsPlayer = new QMediaPlayer(this);
-    m_vocalsOutput = new QAudioOutput(this);
-    m_vocalsPlayer->setAudioOutput(m_vocalsOutput);
-    m_vocalsOutput->setVolume(m_vocalsSlider->value() / qreal(kSliderMax));
-
-    m_accompanimentPlayer = new QMediaPlayer(this);
-    m_accompanimentOutput = new QAudioOutput(this);
-    m_accompanimentPlayer->setAudioOutput(m_accompanimentOutput);
-    m_accompanimentOutput->setVolume(m_accompanimentSlider->value() / qreal(kSliderMax));
-
-    m_vocalsDevice = new HttpMediaDevice(vocalsUrl, this);
-    m_accompanimentDevice = new HttpMediaDevice(accompanimentUrl, this);
-    connect(m_vocalsDevice, &HttpMediaDevice::fetchError, this, [this](const QString &error) {
-        setStatus(error);
-    });
-    connect(m_accompanimentDevice, &HttpMediaDevice::fetchError, this, [this](const QString &error) {
-        setStatus(error);
-    });
-
-    m_vocalsDevice->open(QIODevice::ReadOnly);
-    m_vocalsDevice->start();
-    m_vocalsPlayer->setSourceDevice(m_vocalsDevice, vocalsUrl);
-    m_accompanimentDevice->open(QIODevice::ReadOnly);
-    m_accompanimentDevice->start();
-    m_accompanimentPlayer->setSourceDevice(m_accompanimentDevice, accompanimentUrl);
-
-    connect(m_vocalsPlayer, &QMediaPlayer::mediaStatusChanged, this,
-            [this](QMediaPlayer::MediaStatus status) {
-                if (status == QMediaPlayer::LoadedMedia || status == QMediaPlayer::BufferedMedia) {
-                    m_vocalsReady = true;
-                    updatePlayButton();
-                } else if (status == QMediaPlayer::EndOfMedia) {
-                    if (m_accompanimentPlayer)
-                        m_accompanimentPlayer->stop();
-                    if (m_syncTimer)
-                        m_syncTimer->stop();
-                    if (m_playButton)
-                        m_playButton->setText(I18n::instance().tr(QStringLiteral("play")));
-                }
-            });
-    connect(m_accompanimentPlayer, &QMediaPlayer::mediaStatusChanged, this,
-            [this](QMediaPlayer::MediaStatus status) {
-                if (status == QMediaPlayer::LoadedMedia || status == QMediaPlayer::BufferedMedia) {
-                    m_accompanimentReady = true;
-                    updatePlayButton();
-                }
-            });
-    connect(m_vocalsPlayer, &QMediaPlayer::errorOccurred, this,
-            [this](QMediaPlayer::Error, const QString &message) {
-                setStatus(message.isEmpty() ? I18n::instance().tr(QStringLiteral("stemFailed"))
-                                            : message);
-            });
-    connect(m_accompanimentPlayer, &QMediaPlayer::errorOccurred, this,
-            [this](QMediaPlayer::Error, const QString &message) {
-                setStatus(message.isEmpty() ? I18n::instance().tr(QStringLiteral("stemFailed"))
-                                            : message);
-            });
-
-    setStatus(I18n::instance().tr(QStringLiteral("stemLoadingAudio")));
+    m_vocalsUrl = vocalsUrl;
+    m_accompanimentUrl = accompanimentUrl;
+    m_tracksReady = !vocalsUrl.isEmpty() && !accompanimentUrl.isEmpty();
+    updateStemControls();
+    if (m_pendingEnable) {
+        m_pendingEnable = false;
+        setStemActive(true);
+    }
 }
 
-void StemMixerDialog::updatePlayButton()
+void StemMixerDialog::updateStemControls()
 {
-    if (!m_playButton || !m_vocalsReady || !m_accompanimentReady)
+    if (!m_tracksReady)
         return;
-    m_playButton->setEnabled(true);
+    m_vocalsSlider->setEnabled(true);
+    m_accompanimentSlider->setEnabled(true);
+    m_stemToggle->setEnabled(true);
     setStatus(I18n::instance().tr(QStringLiteral("stemReady")));
 }
 
-void StemMixerDialog::togglePlayback()
+void StemMixerDialog::setStemActive(bool active)
 {
-    if (!m_vocalsPlayer || !m_accompanimentPlayer)
+    if (active == m_stemActive)
         return;
-    if (m_vocalsPlayer->playbackState() == QMediaPlayer::PlayingState) {
-        m_vocalsPlayer->pause();
-        m_accompanimentPlayer->pause();
+    if (!active) {
+        m_stemActive = false;
         m_syncTimer->stop();
-        m_playButton->setText(I18n::instance().tr(QStringLiteral("play")));
+        if (m_vocalsEngine)
+            m_vocalsEngine->stop();
+        if (m_accompanimentEngine)
+            m_accompanimentEngine->stop();
+        if (m_engine)
+            m_engine->setVolume(m_masterSlider->value() / qreal(kSliderMax));
+        setStatus(I18n::instance().tr(QStringLiteral("stemDisabled")));
         return;
     }
-    if (m_vocalsPlayer->position() > 0)
-        m_accompanimentPlayer->setPosition(m_vocalsPlayer->position());
-    m_vocalsPlayer->play();
-    m_accompanimentPlayer->play();
+    if (!m_tracksReady) {
+        m_pendingEnable = true;
+        return;
+    }
+
+    if (!m_vocalsEngine) {
+        m_vocalsEngine = new PlayerEngine(this);
+        m_accompanimentEngine = new PlayerEngine(this);
+        connect(m_vocalsEngine, &PlayerEngine::mediaError, this, [this](const QString &message) {
+            setStatus(message.isEmpty() ? I18n::instance().tr(QStringLiteral("stemFailed"))
+                                        : message);
+        });
+        connect(m_accompanimentEngine, &PlayerEngine::mediaError, this, [this](const QString &message) {
+            setStatus(message.isEmpty() ? I18n::instance().tr(QStringLiteral("stemFailed"))
+                                        : message);
+        });
+        connect(m_vocalsEngine, &PlayerEngine::playbackFinished, this, [this]() {
+            if (m_accompanimentEngine)
+                m_accompanimentEngine->stop();
+            if (m_syncTimer)
+                m_syncTimer->stop();
+        });
+    }
+
+    m_stemActive = true;
+    if (m_engine)
+        m_engine->setVolume(0.0f);
+    applyStemVolumes();
+    const qint64 position = m_engine ? m_engine->position() : 0;
+    m_vocalsEngine->playResuming(m_vocalsUrl, position);
+    m_accompanimentEngine->playResuming(m_accompanimentUrl, position);
+    syncTransport();
     m_syncTimer->start();
-    m_playButton->setText(I18n::instance().tr(QStringLiteral("pause")));
+    setStatus(I18n::instance().tr(QStringLiteral("stemActive")));
+}
+
+void StemMixerDialog::applyStemVolumes()
+{
+    if (!m_stemActive || !m_vocalsEngine || !m_accompanimentEngine)
+        return;
+    const qreal master = m_masterSlider->value() / qreal(kSliderMax);
+    m_vocalsEngine->setVolume(master * m_vocalsSlider->value() / qreal(kSliderMax));
+    m_accompanimentEngine->setVolume(master * m_accompanimentSlider->value() / qreal(kSliderMax));
+}
+
+void StemMixerDialog::syncTransport()
+{
+    if (!m_stemActive || !m_engine || !m_vocalsEngine || !m_accompanimentEngine)
+        return;
+    switch (m_engine->playbackState()) {
+    case PlayerEngine::Playing:
+        m_vocalsEngine->play();
+        m_accompanimentEngine->play();
+        break;
+    case PlayerEngine::Paused:
+        m_vocalsEngine->pause();
+        m_accompanimentEngine->pause();
+        break;
+    case PlayerEngine::Stopped:
+        m_vocalsEngine->stop();
+        m_accompanimentEngine->stop();
+        break;
+    }
 }
 
 void StemMixerDialog::syncPositions()
 {
-    if (!m_vocalsPlayer || !m_accompanimentPlayer)
+    if (!m_stemActive || !m_engine || !m_vocalsEngine || !m_accompanimentEngine)
         return;
-    if (m_vocalsPlayer->playbackState() != QMediaPlayer::PlayingState)
+    if (m_engine->playbackState() != PlayerEngine::Playing)
         return;
-    const qint64 vocalsPos = m_vocalsPlayer->position();
-    const qint64 accompanimentPos = m_accompanimentPlayer->position();
-    if (qAbs(vocalsPos - accompanimentPos) > kSyncDriftMs)
-        m_accompanimentPlayer->setPosition(vocalsPos);
+    const qint64 clock = m_engine->position();
+    if (qAbs(m_vocalsEngine->position() - clock) > kSyncDriftMs)
+        m_vocalsEngine->setPosition(clock);
+    if (qAbs(m_accompanimentEngine->position() - clock) > kSyncDriftMs)
+        m_accompanimentEngine->setPosition(clock);
 }
 
 void StemMixerDialog::stopPlayback()
 {
     if (m_syncTimer)
         m_syncTimer->stop();
-    if (m_vocalsPlayer)
-        m_vocalsPlayer->stop();
-    if (m_accompanimentPlayer)
-        m_accompanimentPlayer->stop();
+    if (m_vocalsEngine)
+        m_vocalsEngine->stop();
+    if (m_accompanimentEngine)
+        m_accompanimentEngine->stop();
 }

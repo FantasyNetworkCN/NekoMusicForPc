@@ -666,11 +666,12 @@ void MainWindow::setupUi()
     // 播放栏（横跨整个窗口底部）
     m_playerBar = new PlayerBar(m_engine, this);
     mainV->addWidget(m_playerBar);
-    connect(m_playerBar, &PlayerBar::stemMixerClicked, this, &MainWindow::openStemMixer);
+    connect(m_playerBar, &PlayerBar::volumeSettingsClicked, this, &MainWindow::openStemMixer);
     logPage("PlayerBar");
 
     // 播放页面 — 全屏覆盖层（覆盖侧边栏和标题栏，不覆盖播放栏）
     m_playerPage = new PlayerPage(m_engine, m_apiClient, m_midWidget);
+    connect(m_playerPage, &PlayerPage::volumeSettingsClicked, this, &MainWindow::openStemMixer);
     m_playerPage->hide();
     logPage("PlayerPage");
 
@@ -2059,15 +2060,8 @@ void MainWindow::openStemMixer(int musicId)
         return;
     }
 
-    const bool resumeAfter = m_engine->isActuallyPlaying();
-    if (resumeAfter)
-        m_engine->pause();
-
-    StemMixerDialog dialog(m_apiClient, info, this);
+    StemMixerDialog dialog(m_apiClient, m_engine, info, this);
     dialog.exec();
-
-    if (resumeAfter && m_engine->currentMusic().id == musicId)
-        m_engine->play();
 }
 
 void MainWindow::playAllMusic(const QList<MusicInfo> &songs, int startIndex)

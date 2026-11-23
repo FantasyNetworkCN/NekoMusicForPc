@@ -2233,10 +2233,8 @@ void PlayerPage::connectPlayerControlEngine()
         emit seekRequested(position);
     });
     connect(m_ppVolumeBtn, &QPushButton::clicked, this, [this]() {
-        if (m_ppVolumePanel && m_ppVolumePanel->isVisible() && !m_ppVolumePanelClosing)
-            hideVolumePanel();
-        else
-            showVolumePanel();
+        if (m_musicId > 0)
+            emit volumeSettingsClicked(m_musicId);
     });
     connect(m_ppVolumeSlider, &QSlider::valueChanged, this, [this](int v) {
         setVolumePercentSynced(v);
