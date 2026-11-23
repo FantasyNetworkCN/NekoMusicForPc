@@ -1901,6 +1901,101 @@ void SettingsPage::verifyMusicSourceGithub(const QString &baseUrl, const QString
             failMusicSourceVerification();
             return;
         }
+        const QString defaultBranch =
+            repository.value(QStringLiteral("default_branch")).toString().trimmed();
+        if (defaultBranch.isEmpty()) {
+            failMusicSourceVerification();
+            return;
+        }
+        verifyMusicSourceGithubTree(baseUrl, segments[0], segments[1], defaultBranch);
+    });
+}
+
+void SettingsPage::verifyMusicSourceGithubTree(const QString &baseUrl, const QString &owner,
+                                               const QString &repository,
+                                               const QString &defaultBranch)
+{
+    const QString encodedBranch =
+        QString::fromUtf8(QUrl::toPercentEncoding(defaultBranch));
+    QNetworkRequest sourceRequest(QUrl(QStringLiteral(
+        "https://api.github.com/repos/%1/%2/git/trees/%3?recursive=1")
+                                            .arg(owner, repository, encodedBranch)));
+    sourceRequest.setRawHeader("Accept", "application/vnd.github+json");
+    sourceRequest.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
+    sourceRequest.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                               QNetworkRequest::NoLessSafeRedirectPolicy);
+    auto *sourceReply = m_nam->get(sourceRequest);
+    m_musicSourceRepositoryReply = sourceReply;
+    QTimer::singleShot(15000, sourceReply, &QNetworkReply::abort);
+    connect(sourceReply, &QNetworkReply::finished, this, [this, sourceReply, baseUrl]() {
+        if (m_musicSourceRepositoryReply == sourceReply)
+            m_musicSourceRepositoryReply = nullptr;
+        sourceReply->deleteLater();
+        if (!m_musicSourceVerificationBusy)
+            return;
+        const int status =
+            sourceReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (sourceReply->error() != QNetworkReply::NoError || status < 200 || status >= 400) {
+            failMusicSourceVerification();
+            return;
+        }
+        QJsonParseError parseError{};
+        const QJsonDocument document = QJsonDocument::fromJson(sourceReply->readAll(), &parseError);
+        const QJsonObject tree = document.object();
+        if (parseError.error != QJsonParseError::NoError || !document.isObject()
+            || tree.value(QStringLiteral("truncated")).toBool()) {
+            failMusicSourceVerification();
+            return;
+        }
+
+        const QJsonArray entries = tree.value(QStringLiteral("tree")).toArray();
+        QHash<QString, qint64> blobs;
+        qint64 totalBytes = 0;
+        for (const QJsonValue &value : entries) {
+            const QJsonObject entry = value.toObject();
+            if (entry.value(QStringLiteral("type")).toString() != QStringLiteral("blob")) {
+                continue;
+            }
+            const QString path = entry.value(QStringLiteral("path")).toString();
+            const qint64 size = entry.value(QStringLiteral("size")).toInteger();
+            if (!path.isEmpty()) {
+                blobs.insert(path, size);
+                totalBytes += size;
+            }
+        }
+        static const QHash<QString, qint64> requiredFiles = {
+            {QStringLiteral("backend/pom.xml"), 4096},
+            {QStringLiteral("backend/src/main/java/com/neko/music/Main.java"), 1024},
+            {QStringLiteral("backend/src/main/java/com/neko/music/handlers/AgplSourceManifestHandler.java"), 1024},
+            {QStringLiteral("backend/src/main/java/com/neko/music/handlers/ServletRegistrar.java"), 4096},
+            {QStringLiteral("frontend/package.json"), 256},
+            {QStringLiteral("frontend/src/main.js"), 256},
+            {QStringLiteral("README.md"), 256},
+        };
+        static const QStringList licensePaths = {
+            QStringLiteral("LICENSE"),
+            QStringLiteral("LICENSE.txt"),
+            QStringLiteral("LICENSE.md"),
+            QStringLiteral("COPYING"),
+            QStringLiteral("COPYING.txt"),
+        };
+        bool hasLicense = false;
+        for (const QString &path : licensePaths) {
+            if (blobs.contains(path)) {
+                hasLicense = true;
+                break;
+            }
+        }
+        if (blobs.size() < 50 || totalBytes < 100000 || !hasLicense) {
+            failMusicSourceVerification();
+            return;
+        }
+        for (auto it = requiredFiles.cbegin(); it != requiredFiles.cend(); ++it) {
+            if (blobs.value(it.key(), 0) < it.value()) {
+                failMusicSourceVerification();
+                return;
+            }
+        }
         applyMusicSource(baseUrl, !m_musicSourceComplianceCheck);
     });
 }

@@ -85,6 +85,8 @@ private:
     void refreshBackdropColorSwatch();
     void verifyMusicSource(bool complianceCheck = false);
     void verifyMusicSourceGithub(const QString &baseUrl, const QString &sourceUrl);
+    void verifyMusicSourceGithubTree(const QString &baseUrl, const QString &owner,
+                                     const QString &repository, const QString &defaultBranch);
     void applyMusicSource(const QString &baseUrl, bool notify = true);
     void setMusicSourceBusy(bool busy);
     void failMusicSourceVerification();
