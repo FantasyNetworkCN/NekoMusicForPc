@@ -2,11 +2,13 @@
 
 #include <QDialog>
 #include <QUrl>
+#include <functional>
 
 #include "core/musicinfo.h"
 
 class ApiClient;
 class PlayerEngine;
+class NekoNetworkAccessManager;
 class QLabel;
 class QCheckBox;
 class QPushButton;
@@ -30,8 +32,11 @@ public:
 private:
     void setupUi();
     void fetchFiles();
+    void loadCachedOrDownload(const QString &vocalsUrl, const QString &accompanimentUrl);
+    QString stemCacheDir() const;
     void prepareTracks(const QUrl &vocalsUrl, const QUrl &accompanimentUrl);
     void setStemActive(bool active);
+    void finishStemSwitch();
     void applyStemVolumes();
     void syncTransport();
     void syncPositions();
@@ -57,10 +62,14 @@ private:
 
     PlayerEngine *m_vocalsEngine = nullptr;
     PlayerEngine *m_accompanimentEngine = nullptr;
+    NekoNetworkAccessManager *m_cacheNam = nullptr;
     QUrl m_vocalsUrl;
     QUrl m_accompanimentUrl;
     QTimer *m_syncTimer = nullptr;
     bool m_tracksReady = false;
     bool m_stemActive = false;
+    bool m_stemSwitched = false;
+    bool m_vocalsLoaded = false;
+    bool m_accompanimentLoaded = false;
     bool m_pendingEnable = false;
 };

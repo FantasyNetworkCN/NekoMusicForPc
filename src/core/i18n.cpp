@@ -453,6 +453,7 @@ static QMap<QString, QString> zhCN()
     m["stemSeparation"] = QStringLiteral("人声分离");
     m["stemEnable"] = QStringLiteral("启用人声分离");
     m["stemEnableHint"] = QStringLiteral("启用后双轨会跟随原有播放进度，主播放器继续负责播放与拖动。");
+    m["stemLoadingCache"] = QStringLiteral("正在下载并缓存分离音频，原曲继续播放…");
     m["stemActive"] = QStringLiteral("人声分离已生效，主音量控制双轨总音量。");
     m["stemDisabled"] = QStringLiteral("人声分离已关闭，恢复原曲播放。");
     m["volumeAndStem"] = QStringLiteral("音量与人声伴奏");
@@ -1758,6 +1759,7 @@ static QMap<QString, QString> enUS()
     m["stemSeparation"] = "Stem Separation";
     m["stemEnable"] = "Enable Stem Separation";
     m["stemEnableHint"] = "When enabled, separated tracks follow the original playback progress and transport controls.";
+    m["stemLoadingCache"] = "Downloading and caching separated tracks; original playback continues…";
     m["stemActive"] = "Stem separation is active. Main volume controls the overall stem mix.";
     m["stemDisabled"] = "Stem separation is off. Original playback restored.";
     m["volumeAndStem"] = "Volume & Stems";
