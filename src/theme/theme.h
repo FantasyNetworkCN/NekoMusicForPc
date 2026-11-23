@@ -6,6 +6,7 @@
  */
 
 #include <QColor>
+#include <QString>
 
 namespace Theme
 {
@@ -78,6 +79,16 @@ namespace Theme
     constexpr int kAnimSlow = 400;
     constexpr int kCarouselMs = 5000;
 
-    constexpr const char *kApiBase = "https://music.nekocore.cn";
+    /** 官方默认音乐连接源。 */
+    constexpr const char *kDefaultApiBase = "https://music.nekocore.cn";
+
+    /**
+     * 当前音乐连接源。为兼容既有调用点保留该符号，启动时由 QSettings 初始化，
+     * 设置页校验通过后可在运行时切换；新代码优先使用 [apiBase]。
+     */
+    extern const char *kApiBase;
+
+    QString apiBase();
+    void setApiBase(const QString &baseUrl);
 
 } // namespace Theme

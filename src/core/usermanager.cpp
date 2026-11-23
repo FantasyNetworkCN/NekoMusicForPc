@@ -4,6 +4,7 @@
  */
 
 #include "usermanager.h"
+#include "theme/theme.h"
 #include <QSettings>
 
 UserManager::UserManager(QObject *parent)
@@ -101,6 +102,7 @@ void UserManager::saveToSettings()
     // 顺便清掉旧版本残留的 userInfo 缓存。
     m_settings->setValue("auth/token", m_token);
     m_settings->setValue("auth/idToken", m_idToken);
+    m_settings->setValue("auth/apiBase", Theme::apiBase());
     m_settings->remove("auth/userInfo");
     m_settings->sync();
 }
@@ -109,6 +111,16 @@ void UserManager::loadFromSettings()
 {
     m_token = m_settings->value("auth/token").toString();
     m_idToken = m_settings->value("auth/idToken").toString();
+    const QString tokenBase = m_settings->value("auth/apiBase").toString();
+    const bool tokenBelongsToCurrentServer =
+        tokenBase == Theme::apiBase()
+        || (tokenBase.isEmpty()
+            && Theme::apiBase() == QString::fromLatin1(Theme::kDefaultApiBase));
+    if (!m_token.isEmpty() && !tokenBelongsToCurrentServer) {
+        m_token.clear();
+        m_idToken.clear();
+        saveToSettings();
+    }
     m_userInfo.clear();
     m_isVip = false;
     m_vipExpiresAt.clear();

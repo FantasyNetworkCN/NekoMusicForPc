@@ -4,13 +4,38 @@
  */
 
 #include "thememanager.h"
+#include "theme/theme.h"
 #include <QFile>
 #include <QApplication>
+#include <QByteArray>
 #include <QStyleHints>
 #include <QMap>
 
 namespace Theme
 {
+
+namespace
+{
+QByteArray gApiBase = QByteArrayLiteral("https://music.nekocore.cn");
+}
+
+const char *kApiBase = gApiBase.constData();
+
+QString apiBase()
+{
+    return QString::fromUtf8(gApiBase);
+}
+
+void setApiBase(const QString &baseUrl)
+{
+    QString normalized = baseUrl.trimmed();
+    while (normalized.endsWith(QLatin1Char('/')))
+        normalized.chop(1);
+    if (normalized.isEmpty())
+        normalized = QString::fromLatin1(kDefaultApiBase);
+    gApiBase = normalized.toUtf8();
+    kApiBase = gApiBase.constData();
+}
 
 ThemeManager &ThemeManager::instance()
 {

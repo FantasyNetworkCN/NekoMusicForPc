@@ -32,10 +32,13 @@ QNetworkReply *NekoNetworkAccessManager::createRequest(Operation op,
                                                       QIODevice *outgoingData)
 {
     QNetworkRequest req(request);
-    if (isBackendRequest(req.url())) {
+    const QString scheme = req.url().scheme().toLower();
+    if (scheme == QStringLiteral("http") || scheme == QStringLiteral("https")) {
         const QString version = QString::fromUtf8(APP_VERSION);
         req.setHeader(QNetworkRequest::UserAgentHeader,
                       QStringLiteral("NekoMusic-PC/%1").arg(version));
+    }
+    if (isBackendRequest(req.url())) {
         const QString token = UserManager::instance().token();
         if (!token.isEmpty() && !req.hasRawHeader("Authorization")) {
             req.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + token.toUtf8());

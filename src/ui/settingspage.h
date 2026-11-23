@@ -82,6 +82,10 @@ private:
     void updateBackdropOptionRows();
     void refreshBackdropPathLabel();
     void refreshBackdropColorSwatch();
+    void verifyMusicSource();
+    void applyMusicSource(const QString &baseUrl);
+    void setMusicSourceBusy(bool busy);
+    void failMusicSourceVerification();
 
     QLabel *m_mcpTitleLabel = nullptr;
     QLabel *m_mcpEnableLabel = nullptr;
@@ -192,6 +196,15 @@ private:
     QLabel *m_sysNotifyLabel = nullptr;
     QLabel *m_sysNotifyHintLabel = nullptr;
     ToggleSwitch *m_sysNotifyToggle = nullptr;
+    QLabel *m_musicSourceLabel = nullptr;
+    QLabel *m_musicSourceHintLabel = nullptr;
+    QLabel *m_musicSourceStatusLabel = nullptr;
+    QLineEdit *m_musicSourceEdit = nullptr;
+    QPushButton *m_musicSourceVerifyBtn = nullptr;
+    QPushButton *m_musicSourceResetBtn = nullptr;
+    QNetworkReply *m_musicSourceManifestReply = nullptr;
+    QNetworkReply *m_musicSourceRepositoryReply = nullptr;
+    bool m_musicSourceVerificationBusy = false;
     QLabel *m_micSyncSectionLabel = nullptr;
     QLabel *m_micSyncEnableLabel = nullptr;
     ToggleSwitch *m_micSyncToggle = nullptr;

@@ -30,6 +30,7 @@
 #include "core/i18n.h"
 #include "core/legaltext.h"
 #include "core/playlistdb.h"
+#include "theme/theme.h"
 #include "core/landevicemanager.h"
 #include "core/localmusicmeta.h"
 #include "version.h"
@@ -355,6 +356,9 @@ int main(int argc, char *argv[])
     QSettings settings;
     int lang = settings.value("language", static_cast<int>(I18n::ZhCN)).toInt();
     I18n::instance().setLanguage(static_cast<I18n::Language>(lang));
+    Theme::setApiBase(settings.value(QStringLiteral("network/apiBase"),
+                                     QString::fromLatin1(Theme::kDefaultApiBase))
+                          .toString());
 
     // i18n 键集合自检：三张表对不上的键打到日志里，避免界面上直接显示标识符
     // （tr() 现在已经会回退到简中兜底，这里只是把缺口暴露出来便于补齐）
