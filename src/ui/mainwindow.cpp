@@ -2873,6 +2873,7 @@ void MainWindow::handleCurrentTrackUnplayable(int musicId)
     m_playerBar->setLoading(false);
     refreshSystemMediaIntegration();
     Toast::show(this, I18n::instance().tr(QStringLiteral("musicNotPlayable")), Toast::Info);
+    playNext();
 }
 
 void MainWindow::refreshFavoriteCount(int musicId)
@@ -3065,8 +3066,33 @@ void MainWindow::playNext()
     if (manager.count() == 0) return;
 
     int nextIdx = manager.nextIndex();
+    if (manager.count() > 1
+        && manager.currentIndex() >= 0
+        && manager.currentIndex() < manager.playlist().size()
+        && !manager.playlist().at(manager.currentIndex()).playable
+        && manager.playMode() == QStringLiteral("single")) {
+        // 单曲循环下当前曲已禁播，必须跳出当前索引，不能反复重播同一首。
+        nextIdx = (manager.currentIndex() + 1) % manager.count();
+    }
+    int skipped = 0;
+    while (nextIdx >= 0 && nextIdx < manager.count()
+           && !manager.playlist().at(nextIdx).playable
+           && skipped < manager.count()) {
+        if (manager.playMode() == QStringLiteral("single")) {
+            nextIdx = (nextIdx + 1) % manager.count();
+        } else {
+            manager.setCurrentIndex(nextIdx);
+            nextIdx = manager.nextIndex();
+        }
+        ++skipped;
+    }
     if (nextIdx < 0 || nextIdx >= manager.count()) {
         qWarning() << "[MainWindow] playNext: 无法取得下一首，队列大小:" << manager.count();
+        return;
+    }
+    if (!manager.playlist().at(nextIdx).playable) {
+        m_playerBar->setLoading(false);
+        Toast::show(this, I18n::instance().tr(QStringLiteral("musicNotPlayable")), Toast::Info);
         return;
     }
     const MusicInfo info = manager.playlist()[nextIdx];
