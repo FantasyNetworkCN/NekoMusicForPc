@@ -202,6 +202,7 @@ set(SOURCES
         src/ui/musiclistpage.cpp
         src/ui/playerpage.cpp
         src/ui/videorenderdialog.cpp
+        src/ui/stemmixerdialog.cpp
         src/ui/vippage.cpp
         src/ui/vippillbutton.cpp
         src/ui/desktoplrc.cpp
@@ -302,6 +303,7 @@ set(HEADERS
         src/ui/musiclistpage.h
         src/ui/playerpage.h
         src/ui/videorenderdialog.h
+        src/ui/stemmixerdialog.h
         src/ui/vippage.h
         src/ui/vippillbutton.h
         src/ui/desktoplrc.h

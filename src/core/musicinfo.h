@@ -20,6 +20,8 @@ struct MusicInfo {
     qint64 uploadedAtMs = 0;
     /** 搜索 API：该曲是否有有效歌词（仅 query 搜索会设置） */
     bool lrc = false;
+    /** 当前请求身份下是否允许播放；禁播曲目仍出现在搜索/歌单中。 */
+    bool playable = true;
     /** 搜索 API：该曲支持的最高音质（standard/hq/sq/hires/dolby），未探测过为空 */
     QString maxQuality;
 

@@ -39,6 +39,7 @@ signals:
     void playPauseRequested();
     void seekRequested(qint64 positionMs);
     void videoShareClicked();
+    void stemMixerClicked(int musicId);
     void playModeClicked();
     void volumePercentChanged(int percent);
     void audioQualityChanged(const QString &quality);
@@ -134,6 +135,7 @@ private:
     QPushButton *m_shareBtn = nullptr;
     QPushButton *m_togetherBtn = nullptr;
     QPushButton *m_videoShareBtn = nullptr;
+    QPushButton *m_stemMixerBtn = nullptr;
     QSlider *m_progress = nullptr;
     
     QWidget *m_volumePanel = nullptr;

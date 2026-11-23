@@ -9,6 +9,7 @@
 
 class QLabel;
 class QPushButton;
+class QGraphicsOpacityEffect;
 
 /** SPlayer SongCard.vue — 90px 行、序号悬停播放、封面 50、专辑/时长/收藏 */
 class SongCardWidget : public QWidget
@@ -115,6 +116,7 @@ private:
     QString m_coverKey;
 
     QWidget *m_content = nullptr;
+    QGraphicsOpacityEffect *m_contentOpacity = nullptr;
     QWidget *m_numCol = nullptr;
     QLabel *m_indexLbl = nullptr;
     /** 批量模式下的左侧复选框（与「编号」标签同位置，二者互斥显示） */

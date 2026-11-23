@@ -34,6 +34,7 @@
 #include "ui/defaultmusicplayerdialog.h"
 #include "ui/searchpage.h"
 #include "ui/desktoplrc.h"
+#include "ui/stemmixerdialog.h"
 #include <QSettings>
 #include <QUrlQuery>
 #include <QSet>
@@ -665,6 +666,7 @@ void MainWindow::setupUi()
     // 播放栏（横跨整个窗口底部）
     m_playerBar = new PlayerBar(m_engine, this);
     mainV->addWidget(m_playerBar);
+    connect(m_playerBar, &PlayerBar::stemMixerClicked, this, &MainWindow::openStemMixer);
     logPage("PlayerBar");
 
     // 播放页面 — 全屏覆盖层（覆盖侧边栏和标题栏，不覆盖播放栏）
@@ -2025,6 +2027,10 @@ void MainWindow::showPlaylistDetailPage(int localId)
 
 void MainWindow::playMusicFromInfo(const MusicInfo &info)
 {
+    if (!info.playable) {
+        Toast::show(this, I18n::instance().tr(QStringLiteral("musicNotPlayable")), Toast::Info);
+        return;
+    }
     if (m_together && m_together->isActive()) {
         if (info.isLocalFile() || info.id <= 0) {
             Toast::show(this, QStringLiteral("一起听房间中无法播放本地音乐，请先离开一起听"),
@@ -2041,19 +2047,54 @@ void MainWindow::playMusicFromInfo(const MusicInfo &info)
     playMusicById(info.id, info.title, info.artist, info.coverUrl);
 }
 
+void MainWindow::openStemMixer(int musicId)
+{
+    if (musicId <= 0 || !m_engine || !m_apiClient)
+        return;
+    MusicInfo info = m_engine->currentMusic();
+    if (info.id != musicId)
+        info = musicInfoForPlayerAction(musicId);
+    if (info.id <= 0 || info.isLocalFile()) {
+        Toast::show(this, I18n::instance().tr(QStringLiteral("musicNotPlayable")), Toast::Info);
+        return;
+    }
+
+    const bool resumeAfter = m_engine->isActuallyPlaying();
+    if (resumeAfter)
+        m_engine->pause();
+
+    StemMixerDialog dialog(m_apiClient, info, this);
+    dialog.exec();
+
+    if (resumeAfter && m_engine->currentMusic().id == musicId)
+        m_engine->play();
+}
+
 void MainWindow::playAllMusic(const QList<MusicInfo> &songs, int startIndex)
 {
     if (songs.isEmpty())
         return;
 
+    const MusicInfo clicked = songs.value(startIndex);
+    QList<MusicInfo> playableSongs;
+    playableSongs.reserve(songs.size());
+    for (const MusicInfo &song : songs) {
+        if (song.playable)
+            playableSongs.append(song);
+    }
+    if (playableSongs.isEmpty()) {
+        Toast::show(this, I18n::instance().tr(QStringLiteral("musicNotPlayable")), Toast::Info);
+        return;
+    }
+
     if (m_together && m_together->isActive()) {
         QList<int> ids;
         int roomStart = 0;
-        for (int i = 0; i < songs.size(); ++i) {
-            const MusicInfo &song = songs.at(i);
+        for (int i = 0; i < playableSongs.size(); ++i) {
+            const MusicInfo &song = playableSongs.at(i);
             if (song.id <= 0 || song.isLocalFile())
                 continue;
-            if (i == startIndex)
+            if (song.id == clicked.id)
                 roomStart = ids.size();
             if (!ids.contains(song.id))
                 ids.append(song.id);
@@ -2067,9 +2108,15 @@ void MainWindow::playAllMusic(const QList<MusicInfo> &songs, int startIndex)
     }
 
     PlaylistManager::instance().clearPlaylist();
-    PlaylistManager::instance().addAllToPlaylist(songs);
-    const int index = qBound(0, startIndex, songs.size() - 1);
-    playMusicFromInfo(songs.at(index));
+    PlaylistManager::instance().addAllToPlaylist(playableSongs);
+    int index = 0;
+    for (int i = 0; i < playableSongs.size(); ++i) {
+        if (playableSongs.at(i).id == clicked.id) {
+            index = i;
+            break;
+        }
+    }
+    playMusicFromInfo(playableSongs.at(index));
 }
 
 void MainWindow::queueAsNextTrack(const MusicInfo &info)

@@ -45,6 +45,12 @@ public:
     // 获取音乐信息
     using MusicInfoCb = std::function<void(bool, const QVariantMap&)>;
     void fetchMusicInfo(int musicId, MusicInfoCb cb);
+
+    // 获取服务端人声/伴奏分离媒体地址
+    using StemFilesCb = std::function<void(bool ok, const QString &message,
+                                           const QString &vocalsUrl,
+                                           const QString &accompanimentUrl)>;
+    void fetchStemFiles(int musicId, StemFilesCb cb);
     
     // 获取歌词
     using LyricsCb = std::function<void(bool, const QString&)>;

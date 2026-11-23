@@ -8,6 +8,7 @@
 #include "core/appearancesettings.h"
 #include "ui/localmusicbadgelabel.h"
 #include "ui/liquidglass.h"
+#include "ui/toast.h"
 #include "theme/theme.h"
 #include "theme/thememanager.h"
 #include "ui/svgicon.h"
@@ -29,6 +30,7 @@
 #include <QStyleOption>
 #include <QPainterPath>
 #include <QPixmap>
+#include <QGraphicsOpacityEffect>
 
 namespace {
 
@@ -189,6 +191,9 @@ void SongCardWidget::rebuildLayout()
 
     m_content = new QWidget(this);
     m_content->setObjectName(QStringLiteral("songCardContent"));
+    m_contentOpacity = new QGraphicsOpacityEffect(m_content);
+    m_contentOpacity->setOpacity(1.0);
+    m_content->setGraphicsEffect(m_contentOpacity);
     auto *lay = new QHBoxLayout(m_content);
     lay->setContentsMargins(12, 8, 12, 8);
     lay->setSpacing(0);
@@ -447,7 +452,12 @@ bool SongCardWidget::eventFilter(QObject *watched, QEvent *event)
     case QEvent::MouseButtonDblClick: {
         auto *me = static_cast<QMouseEvent *>(event);
         if (me->button() == Qt::LeftButton && onActivate) {
-            onActivate(m_info);
+            if (m_info.playable) {
+                onActivate(m_info);
+            } else {
+                QWidget *host = window() ? window() : this;
+                Toast::show(host, I18n::instance().tr(QStringLiteral("musicNotPlayable")), Toast::Info);
+            }
             return true;
         }
         break;
@@ -483,6 +493,7 @@ void SongCardWidget::bind(const MusicInfo &info, int index)
         && m_info.coverUrl == info.coverUrl
         && m_info.localPath == info.localPath
         && m_info.maxQuality == info.maxQuality
+        && m_info.playable == info.playable
         && m_coverKey == newCoverKey;
     const int oldIndex = m_index;
     m_index = index;
@@ -499,6 +510,9 @@ void SongCardWidget::bind(const MusicInfo &info, int index)
 
     setHover(false);
     m_info = info;
+    if (m_contentOpacity)
+        m_contentOpacity->setOpacity(info.playable ? 1.0 : 0.45);
+    setToolTip(info.playable ? QString() : I18n::instance().tr(QStringLiteral("musicNotPlayable")));
     m_titleLbl->setText(info.title);
     m_artistLbl->setText(info.artist);
     updateLocalBadge();
@@ -984,7 +998,12 @@ void SongCardWidget::mouseDoubleClickEvent(QMouseEvent *event)
         return;
     }
     if (event->button() == Qt::LeftButton && onActivate)
-        onActivate(m_info);
+        if (m_info.playable) {
+            onActivate(m_info);
+        } else {
+            QWidget *host = window() ? window() : this;
+            Toast::show(host, I18n::instance().tr(QStringLiteral("musicNotPlayable")), Toast::Info);
+        }
     QWidget::mouseDoubleClickEvent(event);
 }
 

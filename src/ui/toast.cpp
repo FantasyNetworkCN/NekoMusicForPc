@@ -30,13 +30,18 @@ Toast::Toast(QWidget *parent, const QString &message, Type type, int durationMs)
 void Toast::show(QWidget *parent, const QString &message, Type type, int durationMs)
 {
     qDebug() << "[Toast] 创建Toast:" << message << ", type =" << type << ", duration =" << durationMs;
-    auto *toast = new Toast(parent, message, type, durationMs);
+    // 调用方经常传入曲目行、按钮等子控件；Toast 必须锚定顶层窗口，
+    // 否则会按子控件的小矩形计算位置，出现在列表内部甚至右侧屏幕外。
+    QWidget *anchor = parent ? parent->window() : nullptr;
+    if (!anchor)
+        anchor = parent;
+    auto *toast = new Toast(anchor, message, type, durationMs);
 
     // 确保窗口大小已计算
     toast->adjustSize();
     int toastW = toast->width();
     int toastH = toast->height();
-    int parentW = parent->width();
+    int parentW = anchor ? anchor->width() : 800;
 
     // 计算位置：标题栏下方，右上角
     int targetX = parentW - toastW - 24;

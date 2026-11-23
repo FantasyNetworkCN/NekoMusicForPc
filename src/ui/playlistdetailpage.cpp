@@ -1067,6 +1067,7 @@ void PlaylistDetailPage::loadPlaylist(int playlistId, bool autoPlay)
                                                     info.album = m.value(QStringLiteral("album")).toString();
                                                     info.duration = m.value(QStringLiteral("duration")).toInt();
                                                     info.maxQuality = m.value(QStringLiteral("maxQuality")).toString();
+                                                    info.playable = m.value(QStringLiteral("playable"), true).toBool();
                                                     info.coverUrl = m.value(QStringLiteral("coverUrl")).toString();
                                                     if (info.coverUrl.isEmpty())
                                                         info.coverUrl = m.value(QStringLiteral("coverPath")).toString();

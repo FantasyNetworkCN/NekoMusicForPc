@@ -178,6 +178,7 @@ QList<MusicInfo> tracksFromArtistMap(const QVariantMap &artist)
         info.album = m.value(QStringLiteral("album")).toString();
         info.duration = m.value(QStringLiteral("duration")).toInt();
         info.maxQuality = m.value(QStringLiteral("maxQuality")).toString();
+        info.playable = m.value(QStringLiteral("playable"), true).toBool();
         info.coverUrl = QString::fromUtf8("%1/api/music/cover/%2").arg(Theme::kApiBase).arg(info.id);
         list.append(info);
     }
@@ -652,6 +653,7 @@ MusicInfo SearchPage::musicFromMap(const QVariantMap &item)
     info.coverUrl = QString::fromUtf8("%1/api/music/cover/%2").arg(Theme::kApiBase).arg(info.id);
     info.lrc = item.value(QStringLiteral("lrc")).toBool();
     info.maxQuality = item.value(QStringLiteral("maxQuality")).toString();
+    info.playable = item.value(QStringLiteral("playable"), true).toBool();
     return info;
 }
 
