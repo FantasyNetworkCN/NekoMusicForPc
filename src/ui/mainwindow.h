@@ -248,6 +248,8 @@ private:
     McpServer *m_mcpServer = nullptr;
     McpBridge *m_mcpBridge = nullptr;
     TogetherRoomClient *m_together = nullptr;
+    StemMixerDialog *m_stemMixerDialog = nullptr;
+    int m_stemMixerMusicId = -1;
     QTimer *m_togetherSyncTimer = nullptr;
     QString m_pendingTogetherToken;
 

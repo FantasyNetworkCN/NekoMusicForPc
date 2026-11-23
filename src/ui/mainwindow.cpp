@@ -2060,8 +2060,18 @@ void MainWindow::openStemMixer(int musicId)
         return;
     }
 
-    StemMixerDialog dialog(m_apiClient, m_engine, info, this);
-    dialog.exec();
+    if (m_stemMixerDialog && m_stemMixerMusicId != info.id) {
+        delete m_stemMixerDialog;
+        m_stemMixerDialog = nullptr;
+        m_stemMixerMusicId = -1;
+    }
+    if (!m_stemMixerDialog) {
+        m_stemMixerDialog = new StemMixerDialog(m_apiClient, m_engine, info, this);
+        m_stemMixerMusicId = info.id;
+    }
+    m_stemMixerDialog->show();
+    m_stemMixerDialog->raise();
+    m_stemMixerDialog->activateWindow();
 }
 
 void MainWindow::playAllMusic(const QList<MusicInfo> &songs, int startIndex)

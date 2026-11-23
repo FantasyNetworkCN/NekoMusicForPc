@@ -57,6 +57,7 @@ private:
     void saveChunkManifest(int index, const QVariantMap &chunk) const;
     void updateProgress();
     void updateStemControls();
+    void persistGains() const;
     void setStatus(const QString &text);
     void setStemActive(bool active);
     void finishStemSwitch();
