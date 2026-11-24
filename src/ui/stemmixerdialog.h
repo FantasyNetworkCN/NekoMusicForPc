@@ -18,6 +18,7 @@ class QCheckBox;
 class QPushButton;
 class QProgressBar;
 class QSlider;
+class QTimer;
 
 /**
  * 人声 / 伴奏分离控制器与音量面板。
@@ -51,7 +52,7 @@ private:
     void updateProgress();
     void updateStemControls();
     void refreshStemAccess();
-    void persistGains() const;
+    void persistGains();
     void setStatus(const QString &text);
     void setStemActive(bool active);
     void applyStemVolumes();
@@ -87,6 +88,8 @@ private:
     QCheckBox *m_stemToggle = nullptr;
     QPushButton *m_resetMixButton = nullptr;
     QPushButton *m_closeButton = nullptr;
+    QTimer *m_gainSaveTimer = nullptr;
+    bool m_gainsDirty = false;
 
     StemAudioMixer *m_audioMixer = nullptr;
     NekoNetworkAccessManager *m_cacheNam = nullptr;

@@ -485,10 +485,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_systemMedia, &SystemMediaController::volumeSetByOs, this, [this](double v) {
         if (m_engine)
             m_engine->setVolume(static_cast<float>(v));
-        if (m_playerBar)
-            m_playerBar->setVolumePercentSynced(qBound(0, static_cast<int>(qRound(v * 100.0)), 100));
-        if (m_playerPage)
-            m_playerPage->setVolumePercentSynced(qBound(0, static_cast<int>(qRound(v * 100.0)), 100));
     });
     connect(m_engine, &PlayerEngine::stateChanged, this, &MainWindow::refreshSystemMediaIntegration);
     connect(m_engine, &PlayerEngine::mediaPlaybackStateChanged, this, &MainWindow::refreshSystemMediaIntegration);
@@ -500,10 +496,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         refreshSystemMediaIntegration();
         syncPlayModeUi();
     });
-    connect(m_playerBar, &PlayerBar::volumePercentChanged, this, [this](int p) {
-        if (m_systemMedia)
-            m_systemMedia->syncVolumeFromEngine(p / 100.0);
-    });
+    connect(m_engine, &PlayerEngine::volumeChanged, m_systemMedia,
+            &SystemMediaController::syncVolumeFromEngine);
     refreshSystemMediaIntegration();
 
     // 连接主题变化信号
@@ -1434,7 +1428,6 @@ void MainWindow::setupUi()
     connect(m_playerPage, &PlayerPage::desktopLyricsToggled, this, [this](bool enabled) {
         applyDesktopLyricsEnabled(enabled, true);
     });
-    connect(m_playerBar, &PlayerBar::volumePercentChanged, m_playerPage, &PlayerPage::setVolumePercentSynced);
     connect(m_playerBar, &PlayerBar::audioQualityChanged, this, [this](const QString &quality) {
         const MusicInfo info = m_engine ? m_engine->currentMusic() : MusicInfo{};
         if (info.id <= 0 || info.isLocalFile())
@@ -1483,11 +1476,6 @@ void MainWindow::setupUi()
                 });
         }
         m_playerBar->setLoading(false);
-    });
-    connect(m_playerPage, &PlayerPage::volumePercentChanged, m_playerBar, &PlayerBar::setVolumePercentSynced);
-    connect(m_playerPage, &PlayerPage::volumePercentChanged, this, [this](int p) {
-        if (m_systemMedia)
-            m_systemMedia->syncVolumeFromEngine(p / 100.0);
     });
 
     // 播放位置变化时更新歌词高亮

@@ -158,11 +158,9 @@ void StemAudioMixer::setOutputDevice(const QAudioDevice &device)
 
 void StemAudioMixer::setGains(qreal master, qreal vocals, qreal accompaniment)
 {
-    m_master = qBound(0.0, master, 1.0);
-    m_vocals = qBound(0.0, vocals, 1.0);
-    m_accompaniment = qBound(0.0, accompaniment, 1.0);
-    if (m_sink)
-        m_sink->setVolume(m_master);
+    m_targetGains = {float(qBound(0.0, master, 1.0)),
+                     float(qBound(0.0, vocals, 1.0)),
+                     float(qBound(0.0, accompaniment, 1.0))};
 }
 
 void StemAudioMixer::addChunk(int index, double startSec, double endSec,
@@ -495,7 +493,24 @@ void StemAudioMixer::processOriginalBuffer(const QAudioBuffer &buffer,
         return;
     }
     int usedIndex = -1;
+    if (!m_mixOutputActive)
+        m_appliedGains = m_targetGains;
+    // 在 PCM 上平滑应用增益；拖动滑杆不调用声卡接口，骤变也不会形成爆音。
+    auto &gains = m_appliedGains;
+    const bool ramping = gains.master != m_targetGains.master || gains.vocals != m_targetGains.vocals
+        || gains.accompaniment != m_targetGains.accompaniment;
+    const float gainStep = 1.0f / (rate * 0.015f);
+    const auto advanceGain = [gainStep](float current, float target) {
+        if (target > current)
+            return qMin(current + gainStep, target);
+        return qMax(current - gainStep, target);
+    };
     for (qsizetype frame = 0; frame < frames; ++frame) {
+        if (ramping) {
+            gains.master = advanceGain(gains.master, m_targetGains.master);
+            gains.vocals = advanceGain(gains.vocals, m_targetGains.vocals);
+            gains.accompaniment = advanceGain(gains.accompaniment, m_targetGains.accompaniment);
+        }
         const double timeSec = startSec + qreal(frame) / rate;
         if (!chunk || timeSec < chunk->startSec || timeSec >= chunk->endSec) {
             chunk = chunkAt(timeSec);
@@ -527,10 +542,8 @@ void StemAudioMixer::processOriginalBuffer(const QAudioBuffer &buffer,
                 const float vocalRight = sample(true, 1);
                 const float accompanimentLeft = sample(false, 0);
                 const float accompanimentRight = sample(false, 1);
-                mixedLeft = vocalLeft * m_vocals
-                        + accompanimentLeft * m_accompaniment;
-                mixedRight = vocalRight * m_vocals
-                        + accompanimentRight * m_accompaniment;
+                mixedLeft = vocalLeft * gains.vocals + accompanimentLeft * gains.accompaniment;
+                mixedRight = vocalRight * gains.vocals + accompanimentRight * gains.accompaniment;
                 usedIndex = chunk->index;
                 separated = true;
             }
@@ -539,8 +552,8 @@ void StemAudioMixer::processOriginalBuffer(const QAudioBuffer &buffer,
             float vl, vr, al, ar;
             if (full->vocals.sample(timeSec, vl, vr)
                 && full->accompaniment.sample(timeSec, al, ar)) {
-                mixedLeft = vl * m_vocals + al * m_accompaniment;
-                mixedRight = vr * m_vocals + ar * m_accompaniment;
+                mixedLeft = vl * gains.vocals + al * gains.accompaniment;
+                mixedRight = vr * gains.vocals + ar * gains.accompaniment;
                 usedIndex = kFullTrackIndex;
             }
         }
@@ -548,12 +561,12 @@ void StemAudioMixer::processOriginalBuffer(const QAudioBuffer &buffer,
         if (channels == 1) {
             writeNormalized(destination + frame * frameBytes, 0,
                             format.sampleFormat(),
-                            (mixedLeft + mixedRight) * 0.5f);
+                            (mixedLeft + mixedRight) * 0.5f * gains.master);
         } else {
             writeNormalized(destination + frame * frameBytes, 0,
-                            format.sampleFormat(), mixedLeft);
+                            format.sampleFormat(), mixedLeft * gains.master);
             writeNormalized(destination + frame * frameBytes, 1,
-                            format.sampleFormat(), mixedRight);
+                            format.sampleFormat(), mixedRight * gains.master);
         }
     }
 
@@ -609,7 +622,6 @@ void StemAudioMixer::ensureSink(const QAudioFormat &format)
             ? new QAudioSink(format, this)
             : new QAudioSink(m_device, format, this);
     m_sink->setBufferSize(format.bytesForDuration(400000));
-    m_sink->setVolume(m_master);
     m_sinkDevice = m_sink->start();
     if (!m_sinkDevice || m_sink->error() != QtAudio::NoError) {
         const QString error = QStringLiteral("无法启动分离混音输出（错误码 %1）")

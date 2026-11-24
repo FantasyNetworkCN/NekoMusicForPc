@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QMediaMetaData>
+#include <QSettings>
 #include <QSignalBlocker>
 #include <QUrl>
 #include <QTimer>
@@ -14,11 +15,22 @@
 #include <cmath>
 #include <memory>
 
+namespace {
+const auto kVolumeSettingsKey = QStringLiteral("player/volume");
+}
+
 PlayerEngine::PlayerEngine(QObject *parent)
     : QObject(parent)
     , m_player(new QMediaPlayer(this))
     , m_audioOutput(new QAudioOutput(this))
 {
+    const int savedVolume = QSettings().value(kVolumeSettingsKey, 80).toInt();
+    m_targetVolume = qBound(0, savedVolume, 100) / 100.0f;
+    m_audioOutput->setVolume(m_targetVolume);
+    m_volumeSaveTimer = new QTimer(this);
+    m_volumeSaveTimer->setSingleShot(true);
+    m_volumeSaveTimer->setInterval(250);
+    connect(m_volumeSaveTimer, &QTimer::timeout, this, &PlayerEngine::persistVolume);
     m_player->setAudioOutput(m_audioOutput);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     m_audioBufferOutput = new QAudioBufferOutput(this);
@@ -32,6 +44,8 @@ PlayerEngine::PlayerEngine(QObject *parent)
 
 PlayerEngine::~PlayerEngine()
 {
+    if (m_volumeSaveTimer->isActive())
+        persistVolume();
     qInfo().noquote() << QStringLiteral("[Player] 引擎析构，开始停止播放器");
     if (m_player)
         m_player->stop();
@@ -485,13 +499,18 @@ void PlayerEngine::cancelQualitySwitch()
 void PlayerEngine::setVolume(float volume)
 {
     const float target = qBound(0.0f, volume, 1.0f);
-    const bool changed = m_targetVolume != target;
+    if (m_targetVolume == target)
+        return;
     m_targetVolume = target;
-    if (m_audioOutput) {
+    if (!m_fadingIn && !m_fadingOut)
         m_audioOutput->setVolume(m_targetVolume);
-    }
-    if (changed)
-        emit volumeChanged(m_targetVolume);
+    m_volumeSaveTimer->start();
+    emit volumeChanged(m_targetVolume);
+}
+
+void PlayerEngine::persistVolume()
+{
+    QSettings().setValue(kVolumeSettingsKey, qRound(m_targetVolume * 100.0f));
 }
 
 void PlayerEngine::setOriginalAudioMuted(bool muted)
@@ -726,7 +745,7 @@ void PlayerEngine::analyzeAudioBuffer(const QAudioBuffer &buffer)
 
 float PlayerEngine::volume() const
 {
-    return m_audioOutput ? m_audioOutput->volume() : 0.0f;
+    return m_targetVolume;
 }
 
 void PlayerEngine::setPosition(qint64 position)

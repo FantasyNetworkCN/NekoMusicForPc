@@ -73,7 +73,6 @@ constexpr qreal kCoverScalePlaying = 1.0;
 constexpr int kCoverScaleAnimMs = 500;
 constexpr int kVolumePanelExtraLiftPx = 12;
 constexpr int kVolumeLeaveAutoHideMs = 3000;
-const QString kSettingsKeyVolume = QStringLiteral("player/volume");
 
 const QColor kPpIconAccent = QColor(138, 223, 245, 255);
 
@@ -2157,9 +2156,10 @@ void PlayerPage::connectPlayerControlEngine()
     if (!m_engine)
         return;
 
-    QSettings volSettings;
-    const int initialVol = qBound(0, volSettings.value(kSettingsKeyVolume, 80).toInt(), 100);
-    setVolumePercentSynced(initialVol);
+    setVolumePercentSynced(qRound(m_engine->volume() * 100.0f));
+    connect(m_engine, &PlayerEngine::volumeChanged, this, [this](float volume) {
+        setVolumePercentSynced(qRound(volume * 100.0f));
+    });
 
     connect(m_ppPlayBtn, &QPushButton::clicked, this, [this]() {
         emit playPauseRequested();
@@ -2212,14 +2212,7 @@ void PlayerPage::connectPlayerControlEngine()
             emit volumeSettingsClicked(m_musicId);
     });
     connect(m_ppVolumeSlider, &QSlider::valueChanged, this, [this](int v) {
-        setVolumePercentSynced(v);
-        emit volumePercentChanged(v);
-    });
-    connect(m_ppVolumeSlider, &QSlider::sliderReleased, this, [this]() {
-        if (!m_ppVolumeSlider)
-            return;
-        QSettings s;
-        s.setValue(kSettingsKeyVolume, m_ppVolumeSlider->value());
+        m_engine->setVolume(v / 100.0f);
     });
 }
 
@@ -2494,10 +2487,7 @@ void PlayerPage::setDesktopLyricsChecked(bool checked)
 
 void PlayerPage::setVolumePercentSynced(int percent)
 {
-    if (!m_engine)
-        return;
     percent = qBound(0, percent, 100);
-    m_engine->setVolume(static_cast<float>(percent / 100.0));
     if (m_ppVolumeSlider) {
         const QSignalBlocker blocker(m_ppVolumeSlider);
         m_ppVolumeSlider->setValue(percent);
@@ -2719,8 +2709,7 @@ void PlayerPage::wheelEvent(QWheelEvent *event)
             v += (delta > 0 ? 0.05 : -0.05);
             v = qBound(0.0, v, 1.0);
             const int pct = qBound(0, static_cast<int>(qRound(v * 100.0)), 100);
-            setVolumePercentSynced(pct);
-            emit volumePercentChanged(pct);
+            m_engine->setVolume(pct / 100.0f);
             event->accept();
             return;
         }

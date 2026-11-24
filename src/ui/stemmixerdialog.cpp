@@ -29,6 +29,7 @@
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -88,6 +89,11 @@ StemMixerDialog::StemMixerDialog(ApiClient *apiClient, PlayerEngine *engine,
     setWindowModality(Qt::NonModal);
     setFixedSize(520, 452);
     m_cacheNam = new NekoNetworkAccessManager(this);
+    m_gainSaveTimer = new QTimer(this);
+    m_gainSaveTimer->setSingleShot(true);
+    m_gainSaveTimer->setInterval(250);
+    connect(m_gainSaveTimer, &QTimer::timeout, this, &StemMixerDialog::persistGains);
+    connect(this, &QDialog::finished, this, [this]() { persistGains(); });
     setupUi();
     loadCachedStems();
 
@@ -99,6 +105,7 @@ StemMixerDialog::StemMixerDialog(ApiClient *apiClient, PlayerEngine *engine,
 
 StemMixerDialog::~StemMixerDialog()
 {
+    persistGains();
     m_stemActive = false;
     stopStemStream();
     stopPlayback();
@@ -157,12 +164,10 @@ void StemMixerDialog::setupUi()
     auto *volumeName = new QLabel(I18n::instance().tr(QStringLiteral("volume")), volumeRow);
     volumeName->setMinimumWidth(48);
     m_masterSlider = new QSlider(Qt::Horizontal, volumeRow);
+    m_masterSlider->setObjectName(QStringLiteral("stemMasterSlider"));
     m_masterSlider->setRange(0, kSliderMax);
     QSettings savedGains;
-    const int defaultMaster = qBound(0, qRound((m_engine ? m_engine->volume() : 0.8f)
-                                               * kSliderMax), kSliderMax);
-    const int initialMaster = m_engine ? defaultMaster : qBound(0, savedGains.value(
-        QStringLiteral("stem/masterGain"), defaultMaster).toInt(), kSliderMax);
+    const int initialMaster = qRound((m_engine ? m_engine->volume() : 0.8f) * kSliderMax);
     m_masterSlider->setValue(initialMaster);
     m_masterValue = new QLabel(percentText(initialMaster), volumeRow);
     m_masterValue->setMinimumWidth(42);
@@ -172,11 +177,10 @@ void StemMixerDialog::setupUi()
     volumeLay->addWidget(m_masterValue);
     root->addWidget(volumeRow);
     connect(m_masterSlider, &QSlider::valueChanged, this, [this](int value) {
-        m_masterValue->setText(percentText(value));
-        persistGains();
         if (m_engine)
-            m_engine->setVolume(value / qreal(kSliderMax));
-        applyStemVolumes();
+            m_engine->setVolume(value / float(kSliderMax));
+        else
+            m_masterValue->setText(percentText(value));
     });
 
     auto *stemSection = new QLabel(I18n::instance().tr(QStringLiteral("stemSeparation")), this);
@@ -218,6 +222,8 @@ void StemMixerDialog::setupUi()
                m_vocalsSlider, m_vocalsValue);
     addGainRow(I18n::instance().tr(QStringLiteral("stemAccompaniment")), initialAccompaniment,
                m_accompanimentSlider, m_accompanimentValue);
+    m_vocalsSlider->setObjectName(QStringLiteral("stemVocalsSlider"));
+    m_accompanimentSlider->setObjectName(QStringLiteral("stemAccompanimentSlider"));
     m_vocalsSlider->setEnabled(false);
     m_accompanimentSlider->setEnabled(false);
 
@@ -231,16 +237,23 @@ void StemMixerDialog::setupUi()
     m_statusLabel->setWordWrap(true);
     root->addWidget(m_statusLabel);
 
-    connect(m_vocalsSlider, &QSlider::valueChanged, this, [this](int value) {
-        m_vocalsValue->setText(percentText(value));
-        persistGains();
-        applyStemVolumes();
-    });
-    connect(m_accompanimentSlider, &QSlider::valueChanged, this, [this](int value) {
-        m_accompanimentValue->setText(percentText(value));
-        persistGains();
-        applyStemVolumes();
-    });
+    const auto bindStemGain = [this](QSlider *slider, QLabel *label) {
+        connect(slider, &QSlider::sliderPressed, m_gainSaveTimer, &QTimer::stop);
+        connect(slider, &QSlider::sliderReleased, this, [this]() {
+            if (m_gainsDirty)
+                m_gainSaveTimer->start();
+        });
+        connect(slider, &QSlider::valueChanged, this, [this, slider, label](int value) {
+            label->setText(percentText(value));
+            applyStemVolumes();
+            m_gainsDirty = true;
+            // 拖动时只改混音目标；键盘、滚轮和重置操作也合并保存。
+            if (!slider->isSliderDown())
+                m_gainSaveTimer->start();
+        });
+    };
+    bindStemGain(m_vocalsSlider, m_vocalsValue);
+    bindStemGain(m_accompanimentSlider, m_accompanimentValue);
     connect(m_stemToggle, &QCheckBox::toggled, this, [this](bool checked) {
         setStemActive(checked);
     });
@@ -734,10 +747,13 @@ void StemMixerDialog::refreshStemAccess()
     updateStemControls();
 }
 
-void StemMixerDialog::persistGains() const
+void StemMixerDialog::persistGains()
 {
+    if (!m_gainsDirty)
+        return;
+    m_gainSaveTimer->stop();
+    m_gainsDirty = false;
     QSettings settings;
-    settings.setValue(QStringLiteral("stem/masterGain"), m_masterSlider->value());
     settings.setValue(QStringLiteral("stem/vocalsGain"), m_vocalsSlider->value());
     settings.setValue(QStringLiteral("stem/accompanimentGain"),
                       m_accompanimentSlider->value());
@@ -802,7 +818,8 @@ void StemMixerDialog::applyStemVolumes()
 {
     if (!m_stemActive || !m_audioMixer || m_mixerOutputFailed)
         return;
-    const qreal master = m_masterSlider->value() / qreal(kSliderMax);
+    const qreal master = m_engine ? m_engine->volume()
+                                 : m_masterSlider->value() / qreal(kSliderMax);
     m_audioMixer->setGains(master,
                            m_vocalsSlider->value() / qreal(kSliderMax),
                            m_accompanimentSlider->value() / qreal(kSliderMax));

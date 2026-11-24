@@ -59,7 +59,6 @@ public:
     /** 设置评论数角标；<=0 时隐藏 */
     void setCommentCount(int count);
     void setDesktopLyricsChecked(bool checked);
-    void setVolumePercentSynced(int percent);
     void layoutPlayerPageChrome();
     /** 抓取 host 并模糊，对齐 SPlayer .full-player backdrop-filter，避免透出背后清晰界面 */
     void refreshUnderlayBackdrop(QWidget *source, const QSize &targetSize = QSize());
@@ -93,7 +92,6 @@ signals:
     /** 打开音量与人声/伴奏统一面板。 */
     void volumeSettingsClicked(int musicId);
     void desktopLyricsToggled(bool enabled);
-    void volumePercentChanged(int percent);
     /** 播放页歌词更新后同步桌面歌词（LRC 文本，空表示无歌词） */
     void lyricsPayloadReady(const QString &lrcText);
     /** 底栏艺人行：当前歌词行（含翻译括号）；lineIndex&lt;0 表示尚无对应当前时间的行 */
@@ -104,6 +102,7 @@ private:
     void setupPlayerControl();
     void connectPlayerControlEngine();
     void updatePlayControlState();
+    void setVolumePercentSynced(int percent);
     void updateVolumeIcon(int percent);
     void showVolumePanel();
     void hideVolumePanel();

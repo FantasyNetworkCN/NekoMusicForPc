@@ -128,9 +128,13 @@ private:
     QAudioSink *m_sink = nullptr;
     QIODevice *m_sinkDevice = nullptr;
     QAudioFormat m_sinkFormat;
-    qreal m_master = 1.0;
-    qreal m_vocals = 0.8;
-    qreal m_accompaniment = 0.8;
+    struct Gains {
+        float master = 1.0f;
+        float vocals = 0.8f;
+        float accompaniment = 0.8f;
+    };
+    Gains m_targetGains;
+    Gains m_appliedGains;
     qint64 m_lastEndUs = -1;
     int m_lastActiveIndex = -1;
     bool m_enabled = false;

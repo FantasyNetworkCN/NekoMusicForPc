@@ -471,7 +471,6 @@ constexpr int kPbPlayIcon = 26;
 constexpr int kPbSliderHostH = 16;
 constexpr int kVolumePanelExtraLiftPx = 16;
 constexpr int kVolumeLeaveAutoHideMs = 3000;
-const QString kSettingsKeyVolume = QStringLiteral("player/volume");
 
 inline QColor pbCtrlIdleColor()
 {
@@ -1223,10 +1222,7 @@ void PlayerBar::setupUi()
     m_volumeSlider->setRange(0, 100);
     vpLay->addWidget(m_volumeSlider, 1, Qt::AlignHCenter);
 
-    QSettings volSettings;
-    const int initialVol = qBound(0, volSettings.value(kSettingsKeyVolume, 80).toInt(), 100);
-
-    m_volumeLabel = new QLabel(QStringLiteral("%1%").arg(initialVol), m_volumePanel);
+    m_volumeLabel = new QLabel(m_volumePanel);
     m_volumeLabel->setObjectName("pbVolumeLabel");
     m_volumeLabel->setAlignment(Qt::AlignCenter);
     vpLay->addWidget(m_volumeLabel);
@@ -1267,15 +1263,9 @@ void PlayerBar::setupUi()
     if (m_engine) {
         connect(m_volumeSlider, &QSlider::valueChanged, this, [this](int v) {
             m_engine->setVolume(v / 100.0f);
-            m_volumeLabel->setText(QString("%1%").arg(v));
-            updateVolumeIcon(v);
-            emit volumePercentChanged(v);
         });
-        connect(m_volumeSlider, &QSlider::sliderReleased, this, [this]() {
-            if (!m_volumeSlider)
-                return;
-            QSettings s;
-            s.setValue(kSettingsKeyVolume, m_volumeSlider->value());
+        connect(m_engine, &PlayerEngine::volumeChanged, this, [this](float volume) {
+            setVolumePercentSynced(qRound(volume * 100.0f));
         });
         connect(m_playBtn, &QPushButton::clicked, this, [this]() {
             if (m_isLoading)
@@ -1303,9 +1293,8 @@ void PlayerBar::setupUi()
                 emit seekRequested(position);
             }
         });
-        m_volumeSlider->setValue(initialVol);
-        updateVolumeIcon(initialVol);
     }
+    setVolumePercentSynced(m_engine ? qRound(m_engine->volume() * 100.0f) : 80);
 }
 
 PlayerBar::~PlayerBar()
@@ -1315,12 +1304,11 @@ PlayerBar::~PlayerBar()
 
 void PlayerBar::setVolumePercentSynced(int percent)
 {
-    if (!m_volumeSlider || !m_engine)
+    if (!m_volumeSlider)
         return;
     percent = qBound(0, percent, 100);
     QSignalBlocker blocker(m_volumeSlider);
     m_volumeSlider->setValue(percent);
-    m_engine->setVolume(percent / 100.0f);
     if (m_volumeLabel)
         m_volumeLabel->setText(QStringLiteral("%1%").arg(percent));
     updateVolumeIcon(percent);

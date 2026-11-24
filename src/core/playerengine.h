@@ -44,6 +44,7 @@ public:
     /** 当前音频输出设备（麦克风同步会临时切到虚拟声卡，关闭时还原）。 */
     QAudioDevice outputDevice() const;
     void setOutputDevice(const QAudioDevice &device);
+    /** 主音量设置，不受淡入淡出过程或原声静音影响。 */
     float volume() const;
     void setPosition(qint64 position);
     void fadeIn();
@@ -91,6 +92,7 @@ private:
     /** 延迟析构旧设备：FFmpeg 解复用线程可能仍在收尾，立即析构有 UAF 风险。 */
     void retireStreamDevice(HttpMediaDevice *device);
     void cancelFade();
+    void persistVolume();
     void onMediaStateChanged(QMediaPlayer::PlaybackState state);
     void onFadeTick();
     /** 等底层 Stopped 后再 setSource，避免切歌/重试时 FFmpeg demuxer 竞态。 */
@@ -110,6 +112,7 @@ private:
     bool m_originalAudioMuted = false;
     PlaybackState m_state = Stopped;
     float m_targetVolume = 1.0f;
+    QTimer *m_volumeSaveTimer = nullptr;
     QTimer *m_fadeTimer = nullptr;
     bool m_fadingIn = false;
     bool m_fadingOut = false;

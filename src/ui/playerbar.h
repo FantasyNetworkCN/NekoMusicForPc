@@ -41,14 +41,12 @@ signals:
     void videoShareClicked();
     void volumeSettingsClicked(int musicId);
     void playModeClicked();
-    void volumePercentChanged(int percent);
     void audioQualityChanged(const QString &quality);
 
 public:
     explicit PlayerBar(PlayerEngine *engine, QWidget *parent = nullptr);
     ~PlayerBar() override;
     void retranslate();
-    void setVolumePercentSynced(int percent);
     void setSongInfo(const QString &title, const QString &artist, const QString &coverUrl = QString());
     void setCoverVisible(bool visible);
     void setCurrentMusicId(int musicId);
@@ -103,6 +101,7 @@ private:
     void updateState();
     void setCoverPixmap(const QPixmap &pm);
     void setCoverUnknownPlaceholder();
+    void setVolumePercentSynced(int percent);
     void updateVolumeIcon(int value);
     void showVolumePanelAnimated();
     void hideVolumePanelAnimated();

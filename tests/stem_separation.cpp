@@ -3,6 +3,7 @@
 #include "core/stemaudiomixer.h"
 #include "core/usermanager.h"
 #include "theme/theme.h"
+#include "ui/playerbar.h"
 #include "ui/stemmixerdialog.h"
 
 #include <QApplication>
@@ -10,10 +11,12 @@
 #include <QDataStream>
 #include <QFile>
 #include <QFileInfo>
+#include <QLabel>
 #include <QMediaDevices>
 #include <QNetworkProxy>
 #include <QSettings>
 #include <QSignalSpy>
+#include <QSlider>
 #include <QStandardPaths>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -46,9 +49,38 @@ class StemTest : public QObject
     Q_OBJECT
 
 private slots:
+    void masterVolumeFollowsEngine();
     void cachedJobWithOnlyDone();
     void reportsHttpErrorBody();
 };
+
+void StemTest::masterVolumeFollowsEngine()
+{
+    const auto volumeKey = QStringLiteral("player/volume");
+    QSettings().setValue(volumeKey, 47);
+    PlayerEngine engine;
+    QWidget host;
+    PlayerBar bar(&engine, &host);
+    StemMixerDialog dialog(nullptr, &engine, {});
+    auto *popup = host.findChild<QSlider *>(QStringLiteral("pbVolumeSlider"));
+    auto *percentage = host.findChild<QLabel *>(QStringLiteral("pbVolumeLabel"));
+    auto *master = dialog.findChild<QSlider *>(QStringLiteral("stemMasterSlider"));
+    QVERIFY(popup && percentage && master);
+    QCOMPARE(popup->value(), 47);
+    QCOMPARE(master->value(), 47);
+    QSignalSpy changes(&engine, &PlayerEngine::volumeChanged);
+    master->setValue(66);
+    QCOMPARE(popup->value(), 66);
+    QCOMPARE(percentage->text(), QStringLiteral("66%"));
+    popup->setValue(15);
+    QCOMPARE(master->value(), 15);
+    engine.setVolume(0.394f);
+    QCOMPARE(master->value(), 39);
+    QCOMPARE(popup->value(), 39);
+    QCOMPARE(engine.volume(), 0.394f);
+    QCOMPARE(changes.size(), 3);
+    QTRY_COMPARE(QSettings().value(volumeKey).toInt(), 39);
+}
 
 void StemTest::cachedJobWithOnlyDone()
 {
@@ -119,6 +151,25 @@ void StemTest::cachedJobWithOnlyDone()
     toggle->setChecked(true);
     QCOMPARE(streamRequests, 1);
 
+    auto *vocals = dialog.findChild<QSlider *>(QStringLiteral("stemVocalsSlider"));
+    auto *accompaniment = dialog.findChild<QSlider *>(QStringLiteral("stemAccompanimentSlider"));
+    QVERIFY(vocals && accompaniment);
+    QSignalSpy masterChanges(&engine, &PlayerEngine::volumeChanged);
+    const auto vocalKey = QStringLiteral("stem/vocalsGain");
+    const auto accompanimentKey = QStringLiteral("stem/accompanimentGain");
+    vocals->setSliderDown(true);
+    for (int gain = 100; gain >= 37; --gain)
+        vocals->setSliderPosition(gain);
+    QTest::qWait(320);
+    QVERIFY(!QSettings().contains(vocalKey));
+    QCOMPARE(vocals->value(), 37);
+    vocals->setSliderDown(false);
+    accompaniment->setValue(61);
+    QTRY_COMPARE(QSettings().value(vocalKey).toInt(), 37);
+    QCOMPARE(QSettings().value(accompanimentKey).toInt(), 61);
+    QCOMPARE(engine.volume(), 0.42f);
+    QVERIFY(masterChanges.isEmpty());
+
     // 手动运行可用隔离声卡验证 PCM 接管和缺片回退；默认测试不向用户声卡写入。
     if (qEnvironmentVariableIsSet("NEKO_STEM_TEST_AUDIO")) {
         const auto device = QMediaDevices::defaultAudioOutput();
@@ -135,6 +186,15 @@ void StemTest::cachedJobWithOnlyDone()
         engine.play(QUrl::fromLocalFile(wave.fileName()));
         QTRY_VERIFY_WITH_TIMEOUT(original->isMuted() && !output.isEmpty(), 5000);
         QVERIFY(output.last().first().toBool());
+        const auto outputChanges = output.size();
+        accompaniment->setSliderDown(true);
+        for (int gain = 0; gain <= 100; ++gain)
+            accompaniment->setSliderPosition(gain);
+        QTest::qWait(120);
+        QCOMPARE(output.size(), outputChanges);
+        QCOMPARE(QSettings().value(accompanimentKey).toInt(), 61);
+        QVERIFY(original->isMuted());
+        accompaniment->setSliderDown(false);
         engine.setPosition(1400);
         QTRY_VERIFY_WITH_TIMEOUT(engine.position() >= 1400 && !original->isMuted(), 5000);
         QTest::qWait(170);
