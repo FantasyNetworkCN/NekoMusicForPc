@@ -15,13 +15,13 @@ class QAudioBuffer;
 class QAudioDecoder;
 class QAudioSink;
 class QIODevice;
+class QTemporaryFile;
 
 /**
  * 单路 PCM 人声 / 伴奏混音器。
  *
- * 原曲仍由 PlayerEngine 解码和推进时钟。启用后主音频输出静音，
- * 本类接管同一条 PCM 流：有当前分片时直接混入人声与伴奏，缺片时原样输出
- * 原曲。不会创建第二、第三个播放器，也不会重新打开媒体源。
+ * 原曲仍由 PlayerEngine 解码和推进时钟。只有可输出分离 PCM 时才
+ * 接管音频，缺片时继续使用播放器的原声输出。
  */
 class StemAudioMixer final : public QObject
 {
@@ -38,6 +38,9 @@ public:
     /** 登记一段可混音缓存；真正解码在当前播放位置附近按需进行。 */
     void addChunk(int index, double startSec, double endSec,
                   const QString &vocalsPath, const QString &accompanimentPath);
+    /** 服务端缓存命中时可能只返回全曲双轨；解码到临时文件，按播放位置读小窗口。 */
+    void loadFullTracks(const QString &vocalsPath, const QString &accompanimentPath);
+    void resetOutput();
     void clearChunks();
 
 public slots:
@@ -47,7 +50,10 @@ public slots:
 signals:
     void chunkDecoding(int index);
     void playbackActive(int index);
+    void mixOutputChanged(bool active);
     void playbackFallback();
+    void fullTracksReady();
+    void fullTracksFailed(const QString &message);
     void chunkDecodeFailed(int index, const QString &message);
     void outputUnavailable(const QString &message);
 
@@ -86,12 +92,27 @@ private:
     using DecodeFileCb =
         std::function<void(bool ok, const QVector<float> &samples, int sampleRate,
                            const QString &message)>;
+    struct FullTrack {
+        std::shared_ptr<QTemporaryFile> pcm;
+        int sampleRate = 0;
+        qint64 frames = 0;
+        qint64 firstFrame = -1;
+        QVector<float> window;
+
+        bool sample(double seconds, float &left, float &right);
+    };
+    struct FullTracks {
+        FullTrack vocals;
+        FullTrack accompaniment;
+        bool ready = false;
+    };
 
     void ensureChunkLoaded(int index);
     void finishLoadIfReady(const std::shared_ptr<ChunkLoad> &load);
     void decodeFile(const QString &path, DecodeFileCb callback);
+    void decodeAudio(const QString &path, std::function<bool(const QAudioBuffer &)> consume,
+                     std::function<void(bool, const QString &)> finished);
     void ensureSink(const QAudioFormat &format);
-    void restartSink(const QAudioFormat &format);
     void stopSink();
     void evictChunksAround(int index);
     const DecodedChunk *chunkAt(double timeSec) const;
@@ -102,6 +123,7 @@ private:
     QHash<int, std::shared_ptr<DecodedChunk>> m_chunks;
     QHash<int, std::shared_ptr<ChunkLoad>> m_loads;
     QSet<int> m_failedLoads;
+    std::shared_ptr<FullTracks> m_fullTracks;
     QAudioDevice m_device;
     QAudioSink *m_sink = nullptr;
     QIODevice *m_sinkDevice = nullptr;
@@ -112,5 +134,6 @@ private:
     qint64 m_lastEndUs = -1;
     int m_lastActiveIndex = -1;
     bool m_enabled = false;
+    bool m_mixOutputActive = false;
     bool m_outputFailureReported = false;
 };

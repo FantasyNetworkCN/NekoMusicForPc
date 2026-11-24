@@ -452,35 +452,45 @@ QNetworkReply *ApiClient::streamStemSeparation(
     url.setQuery(query);
     QNetworkRequest req(url);
     req.setRawHeader("Accept", "text/event-stream");
-    req.setTransferTimeout(0);
+    // 分离期间允许长时间等待；无任何数据超过两分钟则退出，允许重新开启。
+    req.setTransferTimeout(120000);
     QNetworkReply *reply = m_nam.get(req);
 
     auto buffer = std::make_shared<QByteArray>();
     auto eventName = std::make_shared<QString>();
     auto payload = std::make_shared<QByteArray>();
     auto terminal = std::make_shared<bool>(false);
-    connect(reply, &QNetworkReply::readyRead, this,
-            [reply, buffer, eventName, payload, terminal, onEvent]() {
-                buffer->append(reply->readAll());
-                consumeSseChunk(*buffer, *eventName, *payload,
-                                [terminal, onEvent](const QString &name, const QByteArray &data) {
-                                    if (name == QLatin1String("done")
-                                        || name == QLatin1String("error")) {
-                                        *terminal = true;
-                                    }
-                                    if (onEvent) {
-                                        onEvent(name, QJsonDocument::fromJson(data).object().toVariantMap());
-                                    }
-                                });
-            });
+    const auto readEvents = [reply, buffer, eventName, payload, terminal, onEvent](bool atEnd) {
+        if (*terminal || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200)
+            return;
+        buffer->append(reply->readAll());
+        // 最后一帧可能没有空行；结束时仍要派发收到的 done 或 error。
+        if (atEnd && (!buffer->isEmpty() || !payload->isEmpty()))
+            buffer->append("\n\n");
+        consumeSseChunk(*buffer, *eventName, *payload,
+                        [terminal, onEvent](const QString &name, const QByteArray &data) {
+                            if (*terminal)
+                                return;
+                            const auto json = QJsonDocument::fromJson(data);
+                            if (!json.isObject())
+                                return;
+                            *terminal = name == QLatin1String("done") || name == QLatin1String("error");
+                            if (onEvent)
+                                onEvent(name, json.object().toVariantMap());
+                        });
+    };
+    connect(reply, &QNetworkReply::readyRead, this, [readEvents]() { readEvents(false); });
     connect(reply, &QNetworkReply::finished, this,
-            [reply, terminal, onError]() {
+            [reply, terminal, onError, readEvents]() {
+                if (reply->error() != QNetworkReply::OperationCanceledError)
+                    readEvents(true);
                 reply->deleteLater();
                 if (*terminal || reply->error() == QNetworkReply::OperationCanceledError)
                     return;
                 const int status =
                     reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-                QString message = reply->errorString();
+                QString message = reply->error() == QNetworkReply::NoError
+                    ? QStringLiteral("服务端分离连接提前结束") : reply->errorString();
                 const QByteArray body = reply->readAll();
                 const QString serverMessage =
                     QJsonDocument::fromJson(body).object().value(QStringLiteral("message")).toString();

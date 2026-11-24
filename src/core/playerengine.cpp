@@ -120,6 +120,7 @@ void PlayerEngine::setOutputDevice(const QAudioDevice &device)
     QElapsedTimer timer;
     timer.start();
     m_audioOutput->setDevice(device);
+    emit outputDeviceChanged(device);
     const qint64 cost = timer.elapsed();
     // 播放中换设备会同步停/启 QAudioSink，是已知的可卡顿点，记录下来。
     if (cost >= 200) {
@@ -195,6 +196,7 @@ void PlayerEngine::switchSourceWithoutRestart(const QUrl &url)
             *handedOff = true;
 
             const qint64 handoffPosition = qMax<qint64>(0, oldPlayer->position());
+            emit seekStarted();
             candidate->setPosition(handoffPosition);
             if (wasPlaying)
                 candidate->play();
@@ -218,6 +220,7 @@ void PlayerEngine::switchSourceWithoutRestart(const QUrl &url)
             disconnect(candidate, nullptr, this, nullptr);
             connectPlayerSignals(candidate);
             candidateOutput->setVolume(m_targetVolume);
+            candidateOutput->setMuted(m_originalAudioMuted);
             m_state = previousState;
             emit durationChanged(candidate->duration());
             emit positionChanged(handoffPosition);
@@ -481,10 +484,21 @@ void PlayerEngine::cancelQualitySwitch()
 
 void PlayerEngine::setVolume(float volume)
 {
-    m_targetVolume = qBound(0.0f, volume, 1.0f);
+    const float target = qBound(0.0f, volume, 1.0f);
+    const bool changed = m_targetVolume != target;
+    m_targetVolume = target;
     if (m_audioOutput) {
         m_audioOutput->setVolume(m_targetVolume);
     }
+    if (changed)
+        emit volumeChanged(m_targetVolume);
+}
+
+void PlayerEngine::setOriginalAudioMuted(bool muted)
+{
+    m_originalAudioMuted = muted;
+    if (m_audioOutput)
+        m_audioOutput->setMuted(muted);
 }
 
 void PlayerEngine::fadeIn()
@@ -721,6 +735,8 @@ void PlayerEngine::setPosition(qint64 position)
     if (m_seekLimitMs >= 0 && position > m_seekLimitMs) {
         position = m_seekLimitMs;
     }
+    if (m_player->position() != position && m_player->isSeekable())
+        emit seekStarted();
     m_player->setPosition(position);
 }
 

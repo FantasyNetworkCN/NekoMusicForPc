@@ -22,9 +22,8 @@ class QSlider;
 /**
  * 人声 / 伴奏分离控制器与音量面板。
  *
- * 原曲继续由 PlayerEngine 解码并推进唯一播放时钟。启用后主音频输出静音，
- * StemAudioMixer 在同一条 PCM 流里混入当前人声/伴奏分片；缺片时原样输出
- * 原曲。不会创建额外播放器，也不会因分片切换重启媒体源。
+ * 原曲继续由 PlayerEngine 解码并推进唯一播放时钟。分轨可以输出时才静音
+ * 原声；等待、跳转至缺片位置或输出失败时保持原曲可听。
  */
 class StemMixerDialog final : public QDialog
 {
@@ -44,10 +43,14 @@ private:
     void onStemStreamError(int statusCode, const QString &message);
     void onMixerOutputUnavailable(const QString &message);
     void onMixerChunkFailure(int index, const QString &message);
+    void finishStemPreparation();
+    void prepareFullTracks();
+    bool allChunksReady() const;
     void cacheChunk(int index, const QVariantMap &data);
     void saveChunkManifest(int index, const QVariantMap &chunk) const;
     void updateProgress();
     void updateStemControls();
+    void refreshStemAccess();
     void persistGains() const;
     void setStatus(const QString &text);
     void setStemActive(bool active);
@@ -58,6 +61,7 @@ private:
     QString chunkVocalsPath(int index) const;
     QString chunkAccompanimentPath(int index) const;
     QString chunkManifestPath(int index) const;
+    QString fullTrackPath(bool vocals) const;
 
     using DownloadFileCb = std::function<void(bool ok, const QString &message)>;
     using DownloadPairCb = std::function<void(bool ok, const QString &message)>;
@@ -91,8 +95,12 @@ private:
     QMap<int, QVariantMap> m_readyChunks;
     QSet<int> m_chunkDownloads;
     QSet<QString> m_seenChunkEvents;
+    QVariantMap m_fullStemData;
     int m_totalChunks = 0;
     bool m_streamDone = false;
+    bool m_fullDownloadPending = false;
+    bool m_fullDecodePending = false;
+    bool m_fullReady = false;
     bool m_stemActive = false;
     bool m_mixerOutputFailed = false;
 };

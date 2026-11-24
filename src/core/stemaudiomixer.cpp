@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <QFileInfo>
 #include <QIODevice>
+#include <QTemporaryFile>
 #include <QUrl>
 
 #include <algorithm>
@@ -17,6 +18,7 @@ namespace {
 constexpr int kStemSampleRate = 44100;
 constexpr int kMp3DelayAt44k = 1105;
 constexpr qint64 kSeekResetThresholdUs = 300000;
+constexpr int kFullTrackIndex = -2;
 
 float normalizedSample(const uchar *base, qsizetype index,
                        QAudioFormat::SampleFormat format)
@@ -138,13 +140,11 @@ void StemAudioMixer::setEnabled(bool enabled)
     if (m_enabled == enabled)
         return;
     m_enabled = enabled;
-    m_lastEndUs = -1;
-    m_lastActiveIndex = -1;
     m_outputFailureReported = false;
     if (enabled)
         m_failedLoads.clear();
     else
-        stopSink();
+        resetOutput();
 }
 
 void StemAudioMixer::setOutputDevice(const QAudioDevice &device)
@@ -153,7 +153,7 @@ void StemAudioMixer::setOutputDevice(const QAudioDevice &device)
         return;
     m_device = device;
     if (m_enabled)
-        stopSink();
+        resetOutput();
 }
 
 void StemAudioMixer::setGains(qreal master, qreal vocals, qreal accompaniment)
@@ -169,7 +169,8 @@ void StemAudioMixer::addChunk(int index, double startSec, double endSec,
                               const QString &vocalsPath,
                               const QString &accompanimentPath)
 {
-    if (index < 0 || endSec <= startSec
+    if (index < 0 || !std::isfinite(startSec) || !std::isfinite(endSec)
+        || startSec < 0 || endSec <= startSec
         || !QFileInfo(vocalsPath).isFile()
         || !QFileInfo(accompanimentPath).isFile()) {
         return;
@@ -205,7 +206,91 @@ void StemAudioMixer::clearChunks()
     m_loads.clear();
     m_failedLoads.clear();
     m_specs.clear();
+    m_fullTracks.reset();
+    resetOutput();
+}
+
+bool StemAudioMixer::FullTrack::sample(double seconds, float &left, float &right)
+{
+    const double offset = seconds * sampleRate;
+    if (offset < 0 || offset >= frames)
+        return false;
+    const qint64 first = qint64(offset);
+    const qint64 next = qMin(first + 1, frames - 1);
+    if (firstFrame < 0 || first < firstFrame || next >= firstFrame + window.size() / 2) {
+        // 只把当前短窗口留在内存中；多读一帧用于区间末端插值。
+        const qint64 framesPerWindow = qint64(sampleRate) * 4;
+        firstFrame = first / framesPerWindow * framesPerWindow;
+        const qint64 count = qMin(frames - firstFrame, framesPerWindow + 1);
+        window.resize(count * 2);
+        const qint64 bytes = count * 2 * sizeof(float);
+        if (!pcm->seek(firstFrame * 2 * sizeof(float))
+            || pcm->read(reinterpret_cast<char *>(window.data()), bytes) != bytes) {
+            firstFrame = -1;
+            window.clear();
+            return false;
+        }
+    }
+    const qsizetype a = (first - firstFrame) * 2;
+    const qsizetype b = (next - firstFrame) * 2;
+    const float fraction = float(offset - first);
+    left = window[a] + (window[b] - window[a]) * fraction;
+    right = window[a + 1] + (window[b + 1] - window[a + 1]) * fraction;
+    return true;
+}
+
+void StemAudioMixer::loadFullTracks(const QString &vocalsPath, const QString &accompanimentPath)
+{
+    if (m_fullTracks)
+        return;
+    auto tracks = std::make_shared<FullTracks>();
+    for (auto *track : {&tracks->vocals, &tracks->accompaniment}) {
+        track->pcm = std::make_shared<QTemporaryFile>();
+        if (!track->pcm->open()) {
+            emit fullTracksFailed(track->pcm->errorString());
+            return;
+        }
+    }
+    m_fullTracks = tracks;
+    const auto decodeTrack = [this, tracks](const QString &path, FullTrack *track) {
+        decodeAudio(path, [this, tracks, track](const QAudioBuffer &buffer) {
+            if (m_fullTracks != tracks)
+                return false;
+            QVector<float> samples;
+            appendStereo(buffer, samples, &track->sampleRate);
+            const qint64 bytes = samples.size() * sizeof(float);
+            return !samples.isEmpty()
+                && track->pcm->write(reinterpret_cast<const char *>(samples.constData()), bytes) == bytes;
+        }, [this, tracks, track](bool ok, const QString &message) {
+            if (m_fullTracks != tracks)
+                return;
+            if (ok && track->pcm->flush())
+                track->frames = track->pcm->size() / (2 * sizeof(float));
+            if (track->frames <= 1 || track->sampleRate <= 0) {
+                m_fullTracks.reset();
+                emit fullTracksFailed(message.isEmpty() ? QStringLiteral("全曲分离音轨为空或无法写入缓存") : message);
+                return;
+            }
+            if (tracks->vocals.frames > 1 && tracks->accompaniment.frames > 1) {
+                tracks->ready = true;
+                emit fullTracksReady();
+            }
+        });
+    };
+    decodeTrack(vocalsPath, &tracks->vocals);
+    if (m_fullTracks == tracks)
+        decodeTrack(accompanimentPath, &tracks->accompaniment);
+}
+
+void StemAudioMixer::resetOutput()
+{
+    stopSink();
+    m_lastEndUs = -1;
     m_lastActiveIndex = -1;
+    if (m_mixOutputActive) {
+        m_mixOutputActive = false;
+        emit mixOutputChanged(false);
+    }
 }
 
 void StemAudioMixer::ensureChunkLoaded(int index)
@@ -300,6 +385,7 @@ void StemAudioMixer::finishLoadIfReady(const std::shared_ptr<ChunkLoad> &load)
     decoded->accompaniment =
         finalize(load->accompaniment, load->accompanimentRate);
     if (decoded->frames() <= 1) {
+        m_failedLoads.insert(spec.index);
         emit chunkDecodeFailed(spec.index, QStringLiteral("分离分片采样为空"));
         return;
     }
@@ -308,44 +394,49 @@ void StemAudioMixer::finishLoadIfReady(const std::shared_ptr<ChunkLoad> &load)
 
 void StemAudioMixer::decodeFile(const QString &path, DecodeFileCb callback)
 {
-    auto *decoder = new QAudioDecoder(this);
-    QAudioFormat requested;
-    requested.setSampleRate(kStemSampleRate);
-    requested.setChannelCount(2);
-    requested.setSampleFormat(QAudioFormat::Float);
-    decoder->setAudioFormat(requested);
-
     auto samples = std::make_shared<QVector<float>>();
     auto sampleRate = std::make_shared<int>(0);
+    decodeAudio(path, [samples, sampleRate](const QAudioBuffer &buffer) {
+        appendStereo(buffer, *samples, sampleRate.get());
+        return true;
+    }, [samples, sampleRate, callback](bool ok, const QString &message) {
+        callback(ok && !samples->isEmpty(), *samples, *sampleRate, message);
+    });
+}
+
+void StemAudioMixer::decodeAudio(const QString &path,
+                                std::function<bool(const QAudioBuffer &)> consume,
+                                std::function<void(bool, const QString &)> finished)
+{
+    auto *decoder = new QAudioDecoder(this);
+    // 保留解码器原生格式，在客户端统一转为浮点双声道。
     auto completed = std::make_shared<bool>(false);
-    auto complete = [decoder, callback, completed, samples, sampleRate]
-            (bool ok, const QString &message) {
+    const auto complete = [decoder, finished, completed](bool ok, const QString &message) {
         if (*completed)
             return;
         *completed = true;
         decoder->deleteLater();
-        callback(ok, *samples, *sampleRate,
-                 message.isEmpty() && !ok
-                     ? QStringLiteral("分离音频解码失败")
-                     : message);
+        finished(ok, message.isEmpty() && !ok ? QStringLiteral("分离音频解码失败") : message);
     };
-
-    connect(decoder, &QAudioDecoder::bufferReady, this,
-            [decoder, samples, sampleRate]() {
-                while (decoder->bufferAvailable()) {
-                    const QAudioBuffer buffer = decoder->read();
-                    if (buffer.isValid())
-                        appendStereo(buffer, *samples, sampleRate.get());
-                }
-            });
-    connect(decoder, &QAudioDecoder::finished, this,
-            [decoder, samples, complete]() {
-                if (decoder->error() != QAudioDecoder::NoError || samples->isEmpty()) {
-                    complete(false, decoder->errorString());
-                    return;
-                }
-                complete(true, {});
-            });
+    const auto drain = [decoder, completed, consume, complete]() {
+        if (*completed)
+            return;
+        while (decoder->bufferAvailable()) {
+            const QAudioBuffer buffer = decoder->read();
+            if (!buffer.isValid())
+                break;
+            if (!consume(buffer)) {
+                complete(false, QStringLiteral("无法保存解码后的分离音轨"));
+                decoder->stop();
+                break;
+            }
+        }
+    };
+    connect(decoder, &QAudioDecoder::bufferReady, this, drain);
+    connect(decoder, &QAudioDecoder::finished, decoder, [decoder, drain, complete]() {
+        drain();
+        complete(decoder->error() == QAudioDecoder::NoError, decoder->errorString());
+    }, Qt::QueuedConnection);
     connect(decoder, qOverload<QAudioDecoder::Error>(&QAudioDecoder::error),
             this, [decoder, complete](QAudioDecoder::Error) {
                 complete(false, decoder->errorString());
@@ -371,10 +462,6 @@ void StemAudioMixer::processOriginalBuffer(const QAudioBuffer &buffer,
         return;
     }
 
-    ensureSink(format);
-    if (!m_sinkDevice)
-        return;
-
     qint64 startUs = buffer.startTime();
     if (startUs < 0)
         startUs = enginePositionMs >= 0 ? enginePositionMs * 1000 : m_lastEndUs;
@@ -382,9 +469,7 @@ void StemAudioMixer::processOriginalBuffer(const QAudioBuffer &buffer,
         startUs = 0;
 
     if (m_lastEndUs >= 0 && qAbs(startUs - m_lastEndUs) > kSeekResetThresholdUs)
-        restartSink(format);
-    if (!m_sinkDevice)
-        return;
+        resetOutput();
 
     const qsizetype frames = buffer.frameCount();
     const qsizetype frameBytes = format.bytesPerFrame();
@@ -403,21 +488,17 @@ void StemAudioMixer::processOriginalBuffer(const QAudioBuffer &buffer,
     }
 
     const DecodedChunk *chunk = chunkAt(startSec);
-    if (chunk && chunk->index != m_lastActiveIndex) {
-        m_lastActiveIndex = chunk->index;
-        evictChunksAround(chunk->index);
-        emit playbackActive(chunk->index);
+    auto *full = m_fullTracks && m_fullTracks->ready ? m_fullTracks.get() : nullptr;
+    if (m_chunks.isEmpty() && !full) {
+        resetOutput();
+        m_lastEndUs = startUs + buffer.duration();
+        return;
     }
     int usedIndex = -1;
     for (qsizetype frame = 0; frame < frames; ++frame) {
         const double timeSec = startSec + qreal(frame) / rate;
         if (!chunk || timeSec < chunk->startSec || timeSec >= chunk->endSec) {
             chunk = chunkAt(timeSec);
-            if (chunk && chunk->index != m_lastActiveIndex) {
-                m_lastActiveIndex = chunk->index;
-                evictChunksAround(chunk->index);
-                emit playbackActive(chunk->index);
-            }
         }
 
         const uchar *sourceFrame = source + frame * frameBytes;
@@ -429,6 +510,7 @@ void StemAudioMixer::processOriginalBuffer(const QAudioBuffer &buffer,
 
         float mixedLeft = originalLeft;
         float mixedRight = originalRight;
+        bool separated = false;
         if (chunk) {
             const double position = (timeSec - chunk->startSec) * chunk->sampleRate;
             const int first = int(position);
@@ -450,6 +532,16 @@ void StemAudioMixer::processOriginalBuffer(const QAudioBuffer &buffer,
                 mixedRight = vocalRight * m_vocals
                         + accompanimentRight * m_accompaniment;
                 usedIndex = chunk->index;
+                separated = true;
+            }
+        }
+        if (!separated && full) {
+            float vl, vr, al, ar;
+            if (full->vocals.sample(timeSec, vl, vr)
+                && full->accompaniment.sample(timeSec, al, ar)) {
+                mixedLeft = vl * m_vocals + al * m_accompaniment;
+                mixedRight = vr * m_vocals + ar * m_accompaniment;
+                usedIndex = kFullTrackIndex;
             }
         }
 
@@ -465,11 +557,19 @@ void StemAudioMixer::processOriginalBuffer(const QAudioBuffer &buffer,
         }
     }
 
-    if (usedIndex < 0 && m_lastActiveIndex >= 0) {
-        m_lastActiveIndex = -1;
-        emit playbackFallback();
+    const qint64 endUs = startUs + qint64(qreal(frames) * 1000000.0 / rate);
+    if (usedIndex == -1) {
+        const bool wasActive = m_mixOutputActive;
+        resetOutput();
+        m_lastEndUs = endUs;
+        if (wasActive)
+            emit playbackFallback();
+        return;
     }
-    m_lastEndUs = startUs + qint64(qreal(frames) * 1000000.0 / rate);
+    m_lastEndUs = endUs;
+    ensureSink(format);
+    if (!m_sinkDevice)
+        return;
     const qint64 expectedBytes = output.size();
     qint64 written = 0;
     while (written < expectedBytes && m_sinkDevice) {
@@ -478,6 +578,24 @@ void StemAudioMixer::processOriginalBuffer(const QAudioBuffer &buffer,
         if (n <= 0)
             break;
         written += n;
+    }
+    if (m_sink && m_sink->state() == QtAudio::StoppedState && m_sink->error() != QtAudio::NoError) {
+        const auto error = m_sink->error();
+        resetOutput();
+        emit outputUnavailable(QStringLiteral("分离混音输出失败（错误码 %1）").arg(int(error)));
+        return;
+    }
+    if (written > 0) {
+        if (!m_mixOutputActive) {
+            m_mixOutputActive = true;
+            emit mixOutputChanged(true);
+        }
+        if (m_lastActiveIndex != usedIndex) {
+            m_lastActiveIndex = usedIndex;
+            if (usedIndex >= 0)
+                evictChunksAround(usedIndex);
+            emit playbackActive(usedIndex >= 0 ? usedIndex : -1);
+        }
     }
 }
 
@@ -490,7 +608,7 @@ void StemAudioMixer::ensureSink(const QAudioFormat &format)
     m_sink = m_device.isNull()
             ? new QAudioSink(format, this)
             : new QAudioSink(m_device, format, this);
-    m_sink->setBufferFrameCount(qMax(1024, format.sampleRate() / 10));
+    m_sink->setBufferSize(format.bytesForDuration(400000));
     m_sink->setVolume(m_master);
     m_sinkDevice = m_sink->start();
     if (!m_sinkDevice || m_sink->error() != QtAudio::NoError) {
@@ -504,13 +622,6 @@ void StemAudioMixer::ensureSink(const QAudioFormat &format)
         return;
     }
     m_outputFailureReported = false;
-}
-
-void StemAudioMixer::restartSink(const QAudioFormat &format)
-{
-    stopSink();
-    ensureSink(format);
-    m_lastEndUs = -1;
 }
 
 void StemAudioMixer::stopSink()

@@ -46,6 +46,28 @@ set_tests_properties(amll-motion PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 15)
 
+set(stem_sources
+    stem_separation.cpp
+    "${PROJECT_SOURCE_DIR}/src/core/apiclient.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/applog.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/httpmediadevice.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/i18n.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/linuxtmpfscache.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/nekonetworkaccessmanager.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/playerengine.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/stemaudiomixer.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/usermanager.cpp"
+    "${PROJECT_SOURCE_DIR}/src/theme/thememanager.cpp"
+    "${PROJECT_SOURCE_DIR}/src/ui/stemmixerdialog.cpp")
+add_executable(NekoMusicStemTest ${stem_sources})
+target_include_directories(NekoMusicStemTest PRIVATE $<TARGET_PROPERTY:NekoMusic,INCLUDE_DIRECTORIES>)
+target_link_libraries(NekoMusicStemTest PRIVATE
+    Qt6::Widgets Qt6::Network Qt6::Multimedia Qt6::Test)
+add_test(NAME stem-separation COMMAND NekoMusicStemTest)
+set_tests_properties(stem-separation PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 25)
+
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ui_smoke.cpp")
     return()
 endif()

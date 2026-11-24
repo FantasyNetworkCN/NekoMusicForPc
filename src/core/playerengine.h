@@ -39,6 +39,8 @@ public:
     void pause();
     void stop();
     void setVolume(float volume);
+    /** 分离混音接管输出时，仅静音原声，不改主音量或淡入淡出状态。 */
+    void setOriginalAudioMuted(bool muted);
     /** 当前音频输出设备（麦克风同步会临时切到虚拟声卡，关闭时还原）。 */
     QAudioDevice outputDevice() const;
     void setOutputDevice(const QAudioDevice &device);
@@ -63,6 +65,9 @@ public:
 
 signals:
     void stateChanged(PlaybackState state);
+    void volumeChanged(float volume);
+    void outputDeviceChanged(const QAudioDevice &device);
+    void seekStarted();
     /** QMediaPlayer::playbackState 每次变化时发出（与 m_state 是否被淡出逻辑屏蔽无关）。 */
     void mediaPlaybackStateChanged();
     void positionChanged(qint64 position);
@@ -102,6 +107,7 @@ private:
 
     QMediaPlayer *m_player;
     QAudioOutput *m_audioOutput;
+    bool m_originalAudioMuted = false;
     PlaybackState m_state = Stopped;
     float m_targetVolume = 1.0f;
     QTimer *m_fadeTimer = nullptr;
