@@ -392,8 +392,6 @@ void StemMixerDialog::ensureMixer()
         QFile::remove(fullTrackPath(false));
         onMixerChunkFailure(-1, message);
     });
-    for (auto it = m_readyChunks.cbegin(); it != m_readyChunks.cend(); ++it)
-        registerReadyChunk(it.key(), it.value());
 }
 
 void StemMixerDialog::registerReadyChunk(int index, const QVariantMap &chunk)
@@ -840,6 +838,9 @@ void StemMixerDialog::setStemActive(bool active)
     m_mixerOutputFailed = false;
     m_seenChunkEvents.clear();
     ensureMixer();
+    // 切歌会清空混音器里的旧分片，但保留混音器本身。每次启用都要登记当前歌曲的缓存。
+    for (auto it = m_readyChunks.cbegin(); it != m_readyChunks.cend(); ++it)
+        registerReadyChunk(it.key(), it.value());
     if (m_audioMixer && m_engine)
         m_audioMixer->setOutputDevice(m_engine->outputDevice());
     applyStemVolumes();

@@ -9,6 +9,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QDataStream>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QLabel>
@@ -55,6 +56,7 @@ private slots:
     void masterVolumeFollowsEngine();
     void cachedJobWithOnlyDone();
     void followsTracksAndRestoresPreference();
+    void cachedChunksFollowTrackChanges();
     void reportsHttpErrorBody();
 };
 
@@ -315,6 +317,79 @@ void StemTest::followsTracksAndRestoresPreference()
         auto *toggle = dialog.findChild<QCheckBox *>(QStringLiteral("stemToggle"));
         QVERIFY(toggle && !toggle->isChecked());
         QCOMPARE(started.size(), 4);
+    }
+}
+
+void StemTest::cachedChunksFollowTrackChanges()
+{
+    constexpr int firstId = 72001;
+    constexpr int secondId = 72002;
+    const auto writeCache = [](int id) {
+        const QDir cache(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+                         + QStringLiteral("/stem-cache/") + QString::number(id));
+        if (!QDir().mkpath(cache.absolutePath()))
+            return false;
+        const auto write = [&](const QString &name, const QByteArray &bytes) {
+            QFile file(cache.filePath(name));
+            return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.flush();
+        };
+        const QByteArray audio = trackFixture(4);
+        return write(QStringLiteral("vocals-chunk-000.mp3"), audio)
+            && write(QStringLiteral("accompaniment-chunk-000.mp3"), audio)
+            && write(QStringLiteral("chunk-000.json"),
+                     R"({"index":0,"startSec":0,"endSec":4,"totalChunks":1})");
+    };
+    QVERIFY(writeCache(firstId));
+    QVERIFY(writeCache(secondId));
+    UserManager::instance().setLoginInfo(QStringLiteral("fixture"), {{QStringLiteral("isVip"), true}});
+    QSettings().setValue(QStringLiteral("stem/enabled"), true);
+    PlayerEngine engine;
+    MusicInfo song;
+    song.id = firstId;
+    engine.setCurrentMusic(song);
+    StemMixerDialog dialog(nullptr, &engine);
+    auto *mixer = dialog.findChild<StemAudioMixer *>();
+    QVERIFY(mixer);
+    QSignalSpy decoding(mixer, &StemAudioMixer::chunkDecoding);
+    QSignalSpy playback(mixer, &StemAudioMixer::playbackActive);
+
+    if (qEnvironmentVariableIsSet("NEKO_STEM_TEST_AUDIO")) {
+        // 虚拟声卡上走真实播放链路，分别确认两首缓存曲目都能接管原声。
+        const auto device = QMediaDevices::defaultAudioOutput();
+        QVERIFY(!device.isNull());
+        engine.setOutputDevice(device);
+        QTemporaryDir source;
+        QVERIFY(source.isValid());
+        QFile wave(source.filePath(QStringLiteral("original.wav")));
+        const auto audio = trackFixture(4);
+        QVERIFY(wave.open(QIODevice::WriteOnly));
+        QCOMPARE(wave.write(audio), audio.size());
+        wave.close();
+        engine.play(QUrl::fromLocalFile(wave.fileName()));
+        QTRY_COMPARE_WITH_TIMEOUT(playback.size(), 1, 5000);
+        engine.stop();
+        song.id = secondId;
+        engine.setCurrentMusic(song);
+        QCOMPARE(dialog.findChild<StemAudioMixer *>(), mixer);
+        engine.play(QUrl::fromLocalFile(wave.fileName()));
+        QTRY_COMPARE_WITH_TIMEOUT(playback.size(), 2, 5000);
+        QCOMPARE(playback.last().first().toInt(), 0);
+        engine.stop();
+    } else {
+        // 只送入触发首片解码的 PCM，不需要真实声卡。
+        QAudioFormat format;
+        format.setSampleRate(44100);
+        format.setChannelCount(1);
+        format.setSampleFormat(QAudioFormat::Int16);
+        const QAudioBuffer buffer(QByteArray(format.bytesForFrames(128), '\0'), format, 0);
+        mixer->processOriginalBuffer(buffer, 0);
+        QCOMPARE(decoding.size(), 1);
+        song.id = secondId;
+        engine.setCurrentMusic(song);
+        QCOMPARE(dialog.findChild<StemAudioMixer *>(), mixer);
+        mixer->processOriginalBuffer(buffer, 0);
+        QCOMPARE(decoding.size(), 2);
+        QCOMPARE(decoding.last().first().toInt(), 0);
     }
 }
 
