@@ -34,6 +34,18 @@ set_tests_properties(control-glass PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 30)
 
+add_executable(NekoMusicAmllMotionTest
+    amll_motion.cpp
+    "${PROJECT_SOURCE_DIR}/src/ui/amllbackgroundwidget.cpp"
+    "${PROJECT_SOURCE_DIR}/src/ui/amlllyricsview.cpp"
+    "${PROJECT_SOURCE_DIR}/src/core/lyriceffectsettings.cpp")
+target_include_directories(NekoMusicAmllMotionTest PRIVATE "${PROJECT_SOURCE_DIR}/src")
+target_link_libraries(NekoMusicAmllMotionTest PRIVATE Qt6::OpenGLWidgets Qt6::Test)
+add_test(NAME amll-motion COMMAND NekoMusicAmllMotionTest)
+set_tests_properties(amll-motion PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 15)
+
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ui_smoke.cpp")
     return()
 endif()

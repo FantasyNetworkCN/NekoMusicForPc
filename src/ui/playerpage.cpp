@@ -744,20 +744,6 @@ PlayerPage::PlayerPage(PlayerEngine *engine, ApiClient *apiClient, QWidget *pare
     m_controlHideTimer->setInterval(kControlHideMs);
     connect(m_controlHideTimer, &QTimer::timeout, this, [this]() { hidePlayerChrome(); });
 
-    // 逐字扫亮使用独立帧时钟：播放器 positionChanged 频率不足，仅靠它会造成整词跳变。
-    m_lyricFrameTimer = new QTimer(this);
-    m_lyricFrameTimer->setTimerType(Qt::PreciseTimer);
-    m_lyricFrameTimer->setInterval(16);
-    connect(m_lyricFrameTimer, &QTimer::timeout, this, [this]() {
-        if (!isVisible() || !m_engine || m_engine->playbackState() != PlayerEngine::Playing
-            || m_lyrics.isEmpty()) {
-            if (m_lyricFrameTimer)
-                m_lyricFrameTimer->stop();
-            return;
-        }
-        if (m_amllLyricsView)
-            m_amllLyricsView->setPosition(m_engine->position());
-    });
     if (m_controlBar)
         m_controlBar->installEventFilter(this);
     if (m_menuBar)
@@ -1408,22 +1394,6 @@ void PlayerPage::renderKaraokeLine(int lineIndex, qint64 positionMs)
         label->setTextFormat(Qt::RichText);
     if (label->text() != html)
         label->setText(html);
-}
-
-void PlayerPage::syncKaraokeAnimation()
-{
-    if (!m_lyricFrameTimer)
-        return;
-    const bool shouldAnimate = !m_lyrics.isEmpty() && isVisible() && m_engine
-        && m_engine->playbackState() == PlayerEngine::Playing;
-    if (shouldAnimate) {
-        if (!m_lyricFrameTimer->isActive())
-            m_lyricFrameTimer->start();
-    } else {
-        m_lyricFrameTimer->stop();
-    }
-    if (m_amllLyricsView && m_engine)
-        m_amllLyricsView->setPosition(m_engine->position());
 }
 
 void PlayerPage::scrollLyricsToActiveLine(int line)
@@ -2215,8 +2185,11 @@ void PlayerPage::connectPlayerControlEngine()
     connect(m_engine, &PlayerEngine::stateChanged, this, [this](PlayerEngine::PlaybackState st) {
         if (st == PlayerEngine::Playing && m_musicId > 0)
             QTimer::singleShot(300, this, [this]() { refreshAudioQuality(); });
-        if (m_amllLyricsView)
+        if (m_amllLyricsView) {
             m_amllLyricsView->setPlaying(st == PlayerEngine::Playing);
+            if (st == PlayerEngine::Playing)
+                m_amllLyricsView->setPosition(m_engine->position());
+        }
         if (m_amllBackgroundWidget)
             m_amllBackgroundWidget->setPlaying(st == PlayerEngine::Playing);
         // 暂停期间歌词不做自动定位，恢复播放时重新定位回当前行
@@ -3579,8 +3552,6 @@ void PlayerPage::updateLyricHighlight(qint64 positionMs)
     updateLyricCountdown(positionMs);
 
     if (m_lyrics.isEmpty()) {
-        if (m_lyricFrameTimer)
-            m_lyricFrameTimer->stop();
         if (m_currentLyricLine != -1) {
             m_currentLyricLine = -1;
             m_currentLyricWord = -1;
@@ -3600,19 +3571,13 @@ void PlayerPage::updateLyricHighlight(qint64 positionMs)
     const int word = line >= 0
         ? LyricsParser::wordIndexAt(m_lyrics.at(line), positionMs)
         : -1;
-    if (line == m_currentLyricLine && word == m_currentLyricWord) {
-        if (m_amllLyricsView)
-            m_amllLyricsView->setPosition(positionMs);
+    if (m_amllLyricsView)
+        m_amllLyricsView->setPosition(positionMs);
+    if (line == m_currentLyricLine && word == m_currentLyricWord)
         return;
-    }
-    const int previousLine = m_currentLyricLine;
     m_currentLyricLine = line;
     m_currentLyricWord = word;
     emitBarLyricUpdate(line);
-
-    if (m_amllLyricsView)
-        m_amllLyricsView->setPosition(positionMs, line >= 0 && previousLine >= 0 && line < previousLine);
-    syncKaraokeAnimation();
 }
 
 int PlayerPage::trackDurationSec() const

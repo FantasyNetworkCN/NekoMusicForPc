@@ -23,7 +23,7 @@ constexpr int kSubdivisions = 50;
 constexpr int kControlSize = 5;
 constexpr int kVertexWidth = (kControlSize - 1) * kSubdivisions;
 constexpr int kVertexHeight = (kControlSize - 1) * kSubdivisions;
-constexpr qreal kLayerFadeSecs = 0.5;
+constexpr qreal kLayerFadeSecs = 0.65;
 
 // AMLL 5x5 控制点预设之一。只取位置；切线/缩放由 Catmull-Rom 采样近似，
 // 视觉效果与上游 MeshGradientRenderer 的有机流动保持一致。
@@ -143,13 +143,7 @@ AmllBackgroundWidget::AmllBackgroundWidget(QWidget *parent)
     m_frameTimer->setTimerType(Qt::PreciseTimer);
     m_frameTimer->setInterval(16);
     connect(m_frameTimer, &QTimer::timeout, this, [this]() {
-        const bool fading = std::any_of(
-            m_layers.begin(), m_layers.end(), [](const Layer &layer) {
-                return qAbs(layer.alpha - layer.targetAlpha) > 0.002;
-            });
-        const bool animated = m_playing
-            && (m_flowSpeed > 0.001 || m_bassGain > 0.001);
-        if (animated || m_pendingTextureDirty || fading) {
+        if (isVisible() && isAnimating()) {
             update();
         } else {
             m_frameTimer->stop();
@@ -201,7 +195,8 @@ void AmllBackgroundWidget::setFlowSpeed(qreal speed)
 void AmllBackgroundWidget::setLowFreqVolume(qreal volume)
 {
     m_lowFreqVolume = std::clamp<qreal>(volume, 0.0, 1.0);
-    scheduleFrame();
+    if (!m_frameTimer->isActive() && m_playing && m_bassGain > 0.001)
+        scheduleFrame();
 }
 
 void AmllBackgroundWidget::setBassGain(qreal gain)
@@ -218,16 +213,27 @@ void AmllBackgroundWidget::setScrimStrength(qreal strength)
 
 void AmllBackgroundWidget::scheduleFrame()
 {
-    if (!m_frameTimer)
+    if (!isVisible())
         return;
-    if (!m_frameTimer->isActive())
+    if (!m_frameTimer->isActive()) {
+        m_frameClock.start();
         m_frameTimer->start();
+    }
     update();
+}
+
+bool AmllBackgroundWidget::isAnimating() const
+{
+    const qreal volume = m_playing ? m_lowFreqVolume * m_bassGain / 10.0 : 0.0;
+    return m_pendingTextureDirty || m_fadeProgress < 1.0 || m_flowVelocity > 0.001
+        || (m_playing && m_flowSpeed > 0.001)
+        || qAbs(volume - m_smoothedVolume) > 0.0001;
 }
 
 void AmllBackgroundWidget::showEvent(QShowEvent *event)
 {
     QOpenGLWidget::showEvent(event);
+    scheduleFrame();
     QTimer::singleShot(400, this, [this]() {
         if (m_available && !isValid()) {
             m_available = false;
@@ -235,6 +241,12 @@ void AmllBackgroundWidget::showEvent(QShowEvent *event)
             emit rendererUnavailable();
         }
     });
+}
+
+void AmllBackgroundWidget::hideEvent(QHideEvent *event)
+{
+    m_frameTimer->stop();
+    QOpenGLWidget::hideEvent(event);
 }
 
 QImage AmllBackgroundWidget::prepareTextureImage(const QPixmap &album,
@@ -343,7 +355,6 @@ varying vec3 v_color;
 varying vec2 v_uv;
 uniform sampler2D u_texture;
 uniform float u_volume;
-uniform float u_alpha;
 uniform float u_sinAngle;
 uniform float u_cosAngle;
 float gradientNoise(in vec2 uv) {
@@ -359,12 +370,10 @@ void main() {
     );
     vec2 finalUV = rotatedUV * max(0.001, 1.0 - volumeEffect) + vec2(0.5);
     vec4 result = texture2D(u_texture, finalUV);
-    float alphaVolumeFactor = u_alpha * max(0.5, 1.0 - u_volume * 0.5);
-    result.rgb *= v_color * alphaVolumeFactor;
-    result.a *= alphaVolumeFactor;
+    result.rgb *= v_color * max(0.5, 1.0 - u_volume * 0.5);
     result.rgb += vec3(dither);
     float dist = distance(v_uv, vec2(0.5));
-    float vignette = smoothstep(0.8, 0.3, dist);
+    float vignette = 1.0 - smoothstep(0.3, 0.8, dist);
     result.rgb *= 0.6 + vignette * 0.4;
     gl_FragColor = result;
 }
@@ -384,8 +393,8 @@ uniform float u_alpha;
 uniform float u_scrim;
 void main() {
     vec4 color = texture2D(u_texture, v_uv);
-    float edgeY = smoothstep(0.20, 0.0, v_uv.y)
-        + smoothstep(0.20, 0.0, 1.0 - v_uv.y);
+    float edgeY = 2.0 - smoothstep(0.0, 0.20, v_uv.y)
+        - smoothstep(0.0, 0.20, 1.0 - v_uv.y);
     vec3 scrim = vec3(4.0, 9.0, 11.0) / 255.0;
     color.rgb = mix(color.rgb, scrim,
                     clamp(u_scrim + edgeY * (1.0 - u_scrim) * 0.50, 0.0, 1.0));
@@ -480,8 +489,14 @@ void AmllBackgroundWidget::uploadPendingTexture()
     if (!m_runtimeReady || !m_pendingTextureDirty || m_pendingTexture.isNull())
         return;
 
+    // 切歌打断过渡时，以当前已混合的画面为起点，不先淡到遮罩底色。
+    if (m_layers.size() >= 4) {
+        const auto faintest = std::min_element(m_layers.begin(), m_layers.end(),
+            [](const Layer &a, const Layer &b) { return a.weight < b.weight; });
+        m_layers.erase(faintest);
+    }
     for (Layer &layer : m_layers)
-        layer.targetAlpha = 0;
+        layer.fadeStartWeight = layer.weight;
 
     Layer layer;
     layer.texture = std::make_unique<QOpenGLTexture>(
@@ -489,13 +504,10 @@ void AmllBackgroundWidget::uploadPendingTexture()
     layer.texture->setMinificationFilter(QOpenGLTexture::Linear);
     layer.texture->setMagnificationFilter(QOpenGLTexture::Linear);
     layer.texture->setWrapMode(QOpenGLTexture::MirroredRepeat);
-    layer.alpha = 0;
-    layer.targetAlpha = 1;
+    m_fadeProgress = m_layers.empty() ? 1.0 : 0.0;
+    layer.weight = m_layers.empty() ? 1.0 : 0.0;
     m_layers.push_back(std::move(layer));
     m_pendingTextureDirty = false;
-
-    while (m_layers.size() > 3)
-        m_layers.erase(m_layers.begin());
 }
 
 void AmllBackgroundWidget::updateAnimation()
@@ -504,26 +516,30 @@ void AmllBackgroundWidget::updateAnimation()
         return;
     const qreal deltaSecs = std::clamp<qreal>(
         m_frameClock.restart() / 1000.0, 0.001, 0.10);
-    if (m_playing)
-        m_flowTimeMs += deltaSecs * 1000.0 * m_flowSpeed;
+    const qreal flowTarget = m_playing ? m_flowSpeed : 0.0;
+    const qreal lastVelocity = m_flowVelocity;
+    m_flowVelocity += (flowTarget - m_flowVelocity) * (1.0 - std::exp(-deltaSecs / 0.125));
+    if (qAbs(m_flowVelocity - flowTarget) < 0.001)
+        m_flowVelocity = flowTarget;
+    m_flowTimeMs += deltaSecs * 500.0 * (lastVelocity + m_flowVelocity);
 
     const qreal volumeTarget =
         m_playing ? m_lowFreqVolume * m_bassGain / 10.0 : 0.0;
-    const qreal lerp = std::min<qreal>(1.0, deltaSecs / 0.10);
-    m_smoothedVolume += (volumeTarget - m_smoothedVolume) * lerp;
+    const qreal smoothingTime = volumeTarget > m_smoothedVolume ? 0.070 : 0.19;
+    m_smoothedVolume += (volumeTarget - m_smoothedVolume)
+        * (1.0 - std::exp(-deltaSecs / smoothingTime));
+    if (qAbs(m_smoothedVolume - volumeTarget) < 0.0001)
+        m_smoothedVolume = volumeTarget;
 
-    for (Layer &layer : m_layers) {
-        const qreal maxStep = deltaSecs / kLayerFadeSecs;
-        if (layer.alpha < layer.targetAlpha)
-            layer.alpha = qMin(layer.targetAlpha, layer.alpha + maxStep);
-        else if (layer.alpha > layer.targetAlpha)
-            layer.alpha = qMax(layer.targetAlpha, layer.alpha - maxStep);
-    }
-    for (auto it = m_layers.begin(); it != m_layers.end();) {
-        if (it->targetAlpha <= 0.001 && it->alpha <= 0.001)
-            it = m_layers.erase(it);
-        else
-            ++it;
+    if (m_fadeProgress < 1.0 && m_layers.size() > 1) {
+        m_fadeProgress = qMin(1.0, m_fadeProgress + deltaSecs / kLayerFadeSecs);
+        const qreal t = m_fadeProgress;
+        const qreal fade = t * t * (3.0 - 2.0 * t);
+        m_layers.back().weight = fade;
+        for (auto it = m_layers.begin(); it != m_layers.end() - 1; ++it)
+            it->weight = it->fadeStartWeight * (1.0 - fade);
+        if (t >= 1.0)
+            m_layers.erase(m_layers.begin(), m_layers.end() - 1);
     }
 }
 
@@ -553,9 +569,13 @@ void AmllBackgroundWidget::paintGL()
         : 1.0;
     const qreal angle = (m_flowTimeMs / 10000.0 + m_smoothedVolume) * 2.0;
 
+    qreal accumulatedWeight = 0.0;
     for (const Layer &layer : m_layers) {
-        if (!layer.texture || layer.alpha <= 0.001)
+        if (!layer.texture || layer.weight <= 0.001)
             continue;
+        // 将混合权重转换成叠绘的透明度；最底层保持不透明。
+        accumulatedWeight += layer.weight;
+        const qreal opacity = layer.weight / accumulatedWeight;
 
         m_fbo->bind();
         glViewport(0, 0, m_fbo->width(), m_fbo->height());
@@ -567,7 +587,6 @@ void AmllBackgroundWidget::paintGL()
         m_meshProgram->setUniformValue("u_aspect", float(aspect));
         m_meshProgram->setUniformValue("u_texture", 0);
         m_meshProgram->setUniformValue("u_volume", float(m_smoothedVolume));
-        m_meshProgram->setUniformValue("u_alpha", 1.0f);
         m_meshProgram->setUniformValue("u_sinAngle", float(std::sin(angle)));
         m_meshProgram->setUniformValue("u_cosAngle", float(std::cos(angle)));
 
@@ -598,13 +617,9 @@ void AmllBackgroundWidget::paintGL()
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
                             GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
-        const qreal eased = -(std::cos(
-                                  std::clamp<qreal>(layer.alpha, 0.0, 1.0) * M_PI)
-                              - 1.0)
-            / 2.0;
         m_quadProgram->bind();
         m_quadProgram->setUniformValue("u_texture", 0);
-        m_quadProgram->setUniformValue("u_alpha", float(eased));
+        m_quadProgram->setUniformValue("u_alpha", float(opacity));
         m_quadProgram->setUniformValue("u_scrim", float(m_scrimStrength));
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, m_fbo->texture());

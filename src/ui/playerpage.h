@@ -133,7 +133,6 @@ private:
     void syncAmllLyricsStyle();
     void syncLyricLinesVisual(int activeLine, int previousLine = -1);
     void renderKaraokeLine(int lineIndex, qint64 positionMs);
-    void syncKaraokeAnimation();
     /** 视口中心清晰、上下渐模糊（对齐 Apple Music / SPlayer 歌词聚焦） */
     void applyLyricViewportFocusBlur();
     void scheduleLyricFocusBlurUpdate();
@@ -287,7 +286,6 @@ private:
     bool m_lyricUserScrolling = false;
     QTimer *m_lyricScrollResumeTimer = nullptr;
     QTimer *m_lyricBlurTimer = nullptr;
-    QTimer *m_lyricFrameTimer = nullptr;
     QTimer *m_underlayResizeTimer = nullptr;
     /** 每次发起/清空歌词请求自增，用于丢弃过期的异步回调（本地曲歌词 id 可与 m_musicId 不一致） */
     int m_lyricsFetchGeneration = 0;

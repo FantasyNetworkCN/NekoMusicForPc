@@ -52,8 +52,10 @@ protected:
 
 private:
     void rebuildLayout(bool preservePosition);
-    bool updateTimeline(qint64 positionMs, bool seek);
+    void updateTimeline(qint64 positionMs, bool jumped);
     void updateLineTargets(bool stagger, bool seeking);
+    void updateBlurTargets();
+    void scheduleFrame();
     QImage sharpLineImage(int index);
     void drawKaraokeLine(QPainter &painter, int index);
     int lineIndexAt(const QPointF &position) const;

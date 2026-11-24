@@ -14,6 +14,7 @@ class QOpenGLBuffer;
 class QOpenGLFramebufferObject;
 class QOpenGLShaderProgram;
 class QOpenGLTexture;
+class QHideEvent;
 class QShowEvent;
 class QTimer;
 
@@ -45,6 +46,7 @@ signals:
 
 protected:
     void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
     void initializeGL() override;
     void resizeGL(int width, int height) override;
     void paintGL() override;
@@ -52,8 +54,8 @@ protected:
 private:
     struct Layer {
         std::unique_ptr<QOpenGLTexture> texture;
-        qreal alpha = 0;
-        qreal targetAlpha = 0;
+        qreal weight = 1;
+        qreal fadeStartWeight = 1;
     };
 
     static QImage prepareTextureImage(const QPixmap &album, const QColor &fallback);
@@ -65,6 +67,7 @@ private:
     void ensureFrameBuffer();
     void updateAnimation();
     void scheduleFrame();
+    bool isAnimating() const;
 
     std::unique_ptr<QOpenGLShaderProgram> m_meshProgram;
     std::unique_ptr<QOpenGLShaderProgram> m_quadProgram;
@@ -86,7 +89,9 @@ private:
     qreal m_bassGain = 1.0;
     qreal m_scrimStrength = 0.68;
     qreal m_smoothedVolume = 0.0;
+    qreal m_flowVelocity = 0.0;
     qreal m_flowTimeMs = 0;
+    qreal m_fadeProgress = 1.0;
     QElapsedTimer m_frameClock;
     int m_indexCount = 0;
     int m_pixelWidth = 0;

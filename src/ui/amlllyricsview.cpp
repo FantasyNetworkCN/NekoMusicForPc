@@ -7,6 +7,7 @@
 #include <QFont>
 #include <QHash>
 #include <QImage>
+#include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -23,7 +24,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
 #include <functional>
 #include <optional>
 #include <vector>
@@ -37,6 +37,7 @@ constexpr qint64 kTailMs = 8000;
 constexpr qint64 kInterludeMinGapMs = 7000;
 constexpr qint64 kAutoAlignResumeDelayMs = 500;
 constexpr qreal kMaxFrameDeltaSecs = 0.10;
+constexpr qint64 kMaxVisualLeadMs = 120;
 constexpr qreal kPi = 3.14159265358979323846;
 
 int effectiveFontPx(int baseFontPx)
@@ -64,16 +65,14 @@ struct Spring {
 
     void setTarget(qreal target, qreal delaySecs = 0)
     {
-        if (delaySecs <= 0 && qAbs(m_target - target) < 0.001) {
-            m_queuedTarget.reset();
-            return;
-        }
-        if (delaySecs > 0) {
+        if (delaySecs > 0 && qAbs(m_target - target) >= 0.001) {
+            if (m_queuedTarget && qAbs(m_queuedTarget->position - target) < 0.001)
+                return;
             m_queuedTarget = QueuedTarget{target, delaySecs};
             return;
         }
         m_queuedTarget.reset();
-        if (qAbs(m_target - target) < 0.0001)
+        if (qAbs(m_target - target) < 0.001)
             return;
         const qreal velocity = m_velocity(m_time);
         m_target = target;
@@ -109,13 +108,14 @@ struct Spring {
     {
         if (deltaSecs <= 0)
             return;
-        if (m_queuedTarget) {
+        if (m_queuedTarget && m_queuedTarget->remaining <= deltaSecs) {
+            const auto queued = *m_queuedTarget;
+            m_time += queued.remaining;
+            m_current = m_value(m_time);
+            deltaSecs -= queued.remaining;
+            setTarget(queued.position);
+        } else if (m_queuedTarget) {
             m_queuedTarget->remaining -= deltaSecs;
-            if (m_queuedTarget->remaining <= 0) {
-                const qreal target = m_queuedTarget->position;
-                m_queuedTarget.reset();
-                setTarget(target);
-            }
         }
         m_time += deltaSecs;
         m_current = m_value(m_time);
@@ -139,53 +139,59 @@ private:
         const qreal mass = m_mass;
         const qreal stiffness = m_stiffness;
         const qreal damping = m_damping;
-        const qreal delta = to - from;
+        const qreal offset = from - to;
         const qreal omega = std::sqrt(stiffness / mass);
         const qreal zeta = damping / (2.0 * std::sqrt(stiffness * mass));
         m_time = 0;
 
-        if (zeta >= 1.0) {
-            const qreal leftover = omega * delta - initialVelocity;
-            m_value = [from, to, omega, delta, leftover](qreal t) {
-                if (t <= 0)
-                    return from;
-                return to - (delta + t * leftover) * std::exp(-omega * t);
+        // 换目标时保留瞬时速度；三种阻尼都从当前坐标连续起步。
+        if (zeta > 1.0001) {
+            const qreal root = std::sqrt(zeta * zeta - 1.0);
+            const qreal slow = -omega / (zeta + root);
+            const qreal fast = -omega * (zeta + root);
+            const qreal a = (initialVelocity - fast * offset) / (slow - fast);
+            const qreal b = offset - a;
+            m_value = [to, slow, fast, a, b](qreal t) {
+                return to + a * std::exp(slow * t) + b * std::exp(fast * t);
             };
-            m_velocity = [omega, delta, leftover](qreal t) {
-                if (t <= 0)
-                    return 0.0;
-                return std::exp(-omega * t)
-                    * (omega * (delta + t * leftover) - leftover);
+            m_velocity = [slow, fast, a, b](qreal t) {
+                return slow * a * std::exp(slow * t) + fast * b * std::exp(fast * t);
             };
-            m_acceleration = [omega, delta, leftover](qreal t) {
-                if (t <= 0)
-                    return 0.0;
-                return std::exp(-omega * t) * omega
-                    * (leftover - omega * (delta + t * leftover));
+            m_acceleration = [slow, fast, a, b](qreal t) {
+                return slow * slow * a * std::exp(slow * t)
+                    + fast * fast * b * std::exp(fast * t);
+            };
+            return;
+        }
+        if (zeta >= 0.9999) {
+            const qreal slope = initialVelocity + omega * offset;
+            m_value = [to, omega, offset, slope](qreal t) {
+                return to + (offset + t * slope) * std::exp(-omega * t);
+            };
+            m_velocity = [omega, initialVelocity, slope](qreal t) {
+                return (initialVelocity - omega * t * slope) * std::exp(-omega * t);
+            };
+            m_acceleration = [omega, initialVelocity, slope](qreal t) {
+                return -omega * (slope + initialVelocity - omega * t * slope)
+                    * std::exp(-omega * t);
             };
             return;
         }
 
         const qreal omegaD = omega * std::sqrt(1.0 - zeta * zeta);
-        const qreal a = delta;
+        const qreal a = offset;
         const qreal b = (initialVelocity + zeta * omega * a) / omegaD;
-        m_value = [from, to, omega, zeta, omegaD, a, b](qreal t) {
-            if (t <= 0)
-                return from;
+        m_value = [to, omega, zeta, omegaD, a, b](qreal t) {
             return to + std::exp(-zeta * omega * t)
                 * (a * std::cos(omegaD * t) + b * std::sin(omegaD * t));
         };
         m_velocity = [omega, zeta, omegaD, a, b](qreal t) {
-            if (t <= 0)
-                return 0.0;
             const qreal decay = std::exp(-zeta * omega * t);
             return decay
                 * ((-zeta * omega * a + omegaD * b) * std::cos(omegaD * t)
                    + (-zeta * omega * b - omegaD * a) * std::sin(omegaD * t));
         };
         m_acceleration = [omega, zeta, omegaD, a, b](qreal t) {
-            if (t <= 0)
-                return 0.0;
             const qreal decay = std::exp(-zeta * omega * t);
             const qreal c = -zeta * omega * a + omegaD * b;
             const qreal d = -zeta * omega * b - omegaD * a;
@@ -219,30 +225,43 @@ struct WordSpan {
     int length = 0;
     qint64 startMs = 0;
     qint64 endMs = 0;
-    int sourceIndex = -1;
+    bool canEmphasize = false;
+    qreal sweepWidth = 0;
+};
+
+struct GlyphMotion {
+    QString text;
+    qreal x = 0;
+    qreal advance = 0;
+    qreal baseline = 0;
+    int word = -1;
+    qreal sweepStart = 0;
+    qreal sweepEnd = 0;
 };
 
 struct LineLayout {
-    LyricLine source;
     qint64 startMs = 0;
     qint64 endMs = 0;
+    bool background = false;
     TextBlock main;
     TextBlock romanization;
     TextBlock translation;
     std::vector<WordSpan> words;
+    std::vector<GlyphMotion> glyphs;
     qreal top = 0;
     qreal height = 0;
     Spring y;
     Spring scale{1.0};
-    qreal opacity = 1.0;
+    qreal highlight = 0.0;
+    qreal hover = 0.0;
     qreal blur = 0.0;
+    qreal blurTarget = 0.0;
     bool highlighted = false;
     bool playing = false;
     QRectF screenRect;
     QImage sharpCache;
     QHash<int, QImage> blurCache;
     int cacheWidth = 0;
-    bool cacheValid = false;
 };
 
 struct Interlude {
@@ -271,6 +290,15 @@ qreal easeOutCubic(qreal value)
 {
     const qreal t = 1.0 - std::clamp(value, 0.0, 1.0);
     return 1.0 - t * t * t;
+}
+
+bool approach(qreal &value, qreal target, qreal step)
+{
+    if (value == target)
+        return false;
+    value = value < target ? qMin(target, value + step)
+                           : qMax(target, value - step);
+    return value != target;
 }
 
 bool isCjkText(const QString &text)
@@ -328,17 +356,11 @@ QTextLayout *buildTextBlock(TextBlock &block, const QString &text,
 }
 
 std::vector<WordSpan> buildWordSpans(const QString &text,
-                                     const QVector<LyricWord> &words,
-                                     qint64 lineStartMs, qint64 lineEndMs)
+                                     const QVector<LyricWord> &words, qint64 lineEndMs)
 {
     std::vector<WordSpan> spans;
-    if (text.isEmpty())
+    if (text.isEmpty() || words.isEmpty())
         return spans;
-    if (words.isEmpty()) {
-        spans.push_back(WordSpan{0, int(text.size()), lineStartMs,
-                                 lineEndMs, -1});
-        return spans;
-    }
 
     int searchFrom = 0;
     for (int i = 0; i < words.size(); ++i) {
@@ -351,21 +373,22 @@ std::vector<WordSpan> buildWordSpans(const QString &text,
         if (start < 0)
             continue;
         spans.push_back(WordSpan{start, int(word.text.size()), word.startMs,
-                                 word.endMs, i});
+                                 word.endMs});
         searchFrom = start + word.text.size();
     }
-    if (spans.empty())
-        spans.push_back(WordSpan{0, int(text.size()), lineStartMs,
-                                 lineEndMs, -1});
     for (int i = 0; i < static_cast<int>(spans.size()); ++i) {
         WordSpan &span = spans[static_cast<std::size_t>(i)];
-        if (span.endMs > span.startMs)
-            continue;
-        const qint64 nextStart = i + 1 < static_cast<int>(spans.size())
-            ? spans[static_cast<std::size_t>(i + 1)].startMs
-            : lineEndMs;
-        span.endMs = nextStart > span.startMs ? nextStart
-                                              : span.startMs + 140;
+        if (span.endMs <= span.startMs) {
+            const qint64 nextStart = i + 1 < static_cast<int>(spans.size())
+                ? spans[static_cast<std::size_t>(i + 1)].startMs
+                : lineEndMs;
+            span.endMs = nextStart > span.startMs ? nextStart : span.startMs + 140;
+        }
+        if (span.endMs - span.startMs >= 1000) {
+            const QString wordText = text.mid(span.start, span.length).trimmed();
+            span.canEmphasize = isCjkText(wordText)
+                || (wordText.size() > 1 && wordText.size() <= 7);
+        }
     }
     return spans;
 }
@@ -388,6 +411,45 @@ QVector<QString> graphemeSegments(const QString &text, QVector<int> *offsets = n
         offset = next;
     }
     return out;
+}
+
+void buildGlyphMotion(LineLayout &line)
+{
+    if (!line.main.layout || line.words.empty())
+        return;
+
+    QVector<int> offsets;
+    const auto graphemes = graphemeSegments(line.main.text, &offsets);
+    for (int li = 0, gi = 0; li < line.main.layout->lineCount(); ++li) {
+        const QTextLine row = line.main.layout->lineAt(li);
+        const int end = row.textStart() + row.textLength();
+        for (; gi < offsets.size() && offsets.at(gi) < end; ++gi) {
+            const int start = offsets.at(gi);
+            const qreal x = row.cursorToX(start);
+            const qreal advance = row.cursorToX(start, QTextLine::Trailing) - x;
+            const auto &text = graphemes.at(gi);
+            GlyphMotion glyph{text.trimmed().isEmpty() ? QString() : text,
+                              x, advance, row.y() + row.ascent()};
+            for (int wi = 0; wi < static_cast<int>(line.words.size()); ++wi) {
+                auto &word = line.words[static_cast<std::size_t>(wi)];
+                if (start < word.start || start >= word.start + word.length)
+                    continue;
+                glyph.word = wi;
+                glyph.sweepStart = word.sweepWidth;
+                word.sweepWidth += qMax(1.0, qAbs(advance));
+                glyph.sweepEnd = word.sweepWidth;
+                break;
+            }
+            line.glyphs.push_back(std::move(glyph));
+        }
+    }
+    for (auto &glyph : line.glyphs) {
+        if (glyph.word < 0)
+            continue;
+        const qreal wordWidth = line.words[static_cast<std::size_t>(glyph.word)].sweepWidth;
+        glyph.sweepStart /= wordWidth;
+        glyph.sweepEnd /= wordWidth;
+    }
 }
 
 QImage blurImage(const QImage &source, qreal radius)
@@ -415,7 +477,7 @@ void setPosYSpringPolicy(LineLayout &line, bool seeking, bool interlude,
                            damping * fx.springDamping(), 0.9);
     };
     if (seeking || interlude) {
-        apply(line, 90, 15);
+        apply(line, 125, 21);
         return;
     }
     if (endOfSong) {
@@ -430,7 +492,7 @@ void setPosYSpringPolicy(LineLayout &line, bool seeking, bool interlude,
     qreal ratio = 1.0 - (clamped - 100.0) / 700.0;
     ratio = std::pow(ratio, 0.2);
     const qreal stiffness = 170.0 + ratio * 50.0;
-    apply(line, stiffness, std::sqrt(stiffness) * 2.2);
+    apply(line, stiffness, std::sqrt(stiffness) * 1.75);
 }
 
 } // namespace
@@ -447,7 +509,9 @@ struct AmllLyricsView::Impl {
     QString emptyText;
 
     qint64 positionMs = 0;
-    qint64 lastPositionMs = 0;
+    qint64 sampledPositionMs = 0;
+    QElapsedTimer sampleClock;
+    bool waitingForSeek = false;
     qint64 maxEndMs = 0;
     bool playing = false;
     bool endOfSong = false;
@@ -455,6 +519,9 @@ struct AmllLyricsView::Impl {
     int scrollToIndex = 0;
     int latestHighlighted = -1;
     int activeInterlude = -1;
+    int visibleInterlude = -1;
+    qint64 interludePositionMs = 0;
+    qreal interludeVisibility = 0.0;
     int hoveredIndex = -1;
     bool pointerInside = false;
 
@@ -462,7 +529,8 @@ struct AmllLyricsView::Impl {
     qreal manualScrollMin = 0;
     qreal manualScrollMax = 0;
     bool autoAlignSuspended = false;
-    int frozenFocusIndex = -1;
+    qreal anchorBase = 0;
+    qreal frozenAnchorBase = 0;
     qint64 interactionEndMs = 0;
     qreal inertiaVelocity = 0;
     bool touchScrolling = false;
@@ -486,7 +554,6 @@ AmllLyricsView::AmllLyricsView(QWidget *parent)
     setFocusPolicy(Qt::NoFocus);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    m_impl->frameClock.start();
     m_impl->frameTimer = new QTimer(this);
     m_impl->frameTimer->setTimerType(Qt::PreciseTimer);
     m_impl->frameTimer->setInterval(16);
@@ -498,23 +565,49 @@ AmllLyricsView::AmllLyricsView(QWidget *parent)
         const qreal delta = std::clamp<qreal>(
             m_impl->frameClock.restart() / 1000.0, 0.001, kMaxFrameDeltaSecs);
 
+        bool clockMoving = false;
+        if (m_impl->playing && m_impl->sampleClock.isValid() && !m_impl->waitingForSeek) {
+            const qint64 elapsed = m_impl->sampleClock.elapsed();
+            const qint64 position = m_impl->sampledPositionMs
+                + qMin(elapsed, kMaxVisualLeadMs);
+            if (position > m_impl->positionMs)
+                updateTimeline(position, false);
+            clockMoving = elapsed < kMaxVisualLeadMs;
+        }
+
         if (!qFuzzyIsNull(m_impl->inertiaVelocity)) {
-            m_impl->manualScroll += m_impl->inertiaVelocity * delta;
-            m_impl->inertiaVelocity *= std::pow(0.95, delta * 60.0);
-            if (qAbs(m_impl->inertiaVelocity) < 4.0)
-                m_impl->inertiaVelocity = 0;
+            const qreal decay = std::exp(-5.6 * delta);
+            const qreal next = m_impl->manualScroll
+                + m_impl->inertiaVelocity * (1.0 - decay) / 5.6;
+            m_impl->manualScroll = next;
+            m_impl->inertiaVelocity *= decay;
             updateLineTargets(false, false);
+            if (m_impl->manualScroll != next || qAbs(m_impl->inertiaVelocity) < 20.0)
+                m_impl->inertiaVelocity = 0;
         }
 
         bool moving = false;
-        for (LineLayout &line : m_impl->lines) {
-            line.y.update(delta);
-            line.scale.update(delta);
+        for (int i = 0; i < static_cast<int>(m_impl->lines.size()); ++i) {
+            auto &line = m_impl->lines[static_cast<std::size_t>(i)];
+            if (!line.y.arrived())
+                line.y.update(delta);
+            if (!line.scale.arrived())
+                line.scale.update(delta);
+            moving |= approach(line.highlight, line.highlighted ? 1.0 : 0.0,
+                               delta / (line.highlighted ? 0.14 : 0.23));
+            moving |= approach(line.hover,
+                               m_impl->pointerInside && m_impl->hoveredIndex == i ? 1.0 : 0.0,
+                               delta / 0.16);
+            moving |= approach(line.blur, line.blurTarget, delta * 44.0);
             moving = moving || !line.y.arrived() || !line.scale.arrived();
         }
+        moving |= approach(m_impl->interludeVisibility,
+                           m_impl->activeInterlude >= 0 ? 1.0 : 0.0,
+                           delta / (m_impl->activeInterlude >= 0 ? 0.24 : 0.18));
+        if (m_impl->interludeVisibility <= 0.0)
+            m_impl->visibleInterlude = -1;
         update();
-        if (!m_impl->playing && !moving
-            && qFuzzyIsNull(m_impl->inertiaVelocity)) {
+        if (!clockMoving && !moving && qFuzzyIsNull(m_impl->inertiaVelocity)) {
             m_impl->frameTimer->stop();
         }
     });
@@ -537,14 +630,18 @@ void AmllLyricsView::setLyrics(const QVector<LyricLine> &lyrics)
 {
     m_impl->lyrics = lyrics;
     m_impl->positionMs = 0;
-    m_impl->lastPositionMs = 0;
+    m_impl->sampledPositionMs = 0;
+    m_impl->sampleClock.invalidate();
+    m_impl->waitingForSeek = false;
     m_impl->scrollToIndex = 0;
     m_impl->latestHighlighted = -1;
     m_impl->activeInterlude = -1;
+    m_impl->visibleInterlude = -1;
+    m_impl->interludeVisibility = 0;
     m_impl->manualScroll = 0;
     m_impl->inertiaVelocity = 0;
     m_impl->autoAlignSuspended = false;
-    m_impl->frozenFocusIndex = -1;
+    m_impl->touchScrolling = false;
     m_impl->hoveredIndex = -1;
     m_impl->endOfSong = false;
 
@@ -563,8 +660,7 @@ void AmllLyricsView::setLyrics(const QVector<LyricLine> &lyrics)
     rebuildLayout(false);
     updateTimeline(0, true);
     resetView();
-    if (isVisible())
-        m_impl->frameTimer->start();
+    scheduleFrame();
     update();
 }
 
@@ -578,12 +674,15 @@ void AmllLyricsView::rebuildLayout(bool preservePosition)
 
     std::vector<qreal> previousY;
     std::vector<qreal> previousScale;
+    std::vector<qreal> previousHighlight;
     if (preservePosition) {
         previousY.reserve(m_impl->lines.size());
         previousScale.reserve(m_impl->lines.size());
+        previousHighlight.reserve(m_impl->lines.size());
         for (const LineLayout &line : m_impl->lines) {
             previousY.push_back(line.y.current());
             previousScale.push_back(line.scale.current());
+            previousHighlight.push_back(line.highlight);
         }
     }
 
@@ -610,9 +709,9 @@ void AmllLyricsView::rebuildLayout(bool preservePosition)
     for (int i = 0; i < m_impl->lyrics.size(); ++i) {
         const LyricLine &source = m_impl->lyrics.at(i);
         LineLayout line;
-        line.source = source;
         line.startMs = source.time;
         line.endMs = lyricLineEndMs(m_impl->lyrics, i);
+        line.background = source.background;
         QString mainText = source.text;
         if (mainText.isEmpty() && !source.words.isEmpty()) {
             for (const LyricWord &word : source.words)
@@ -621,8 +720,8 @@ void AmllLyricsView::rebuildLayout(bool preservePosition)
         buildTextBlock(line.main, mainText, mainFont, contentWidth);
         buildTextBlock(line.romanization, source.romanization, romanFont, contentWidth);
         buildTextBlock(line.translation, source.translation, subFont, contentWidth);
-        line.words = buildWordSpans(line.main.text, source.words,
-                                    line.startMs, line.endMs);
+        line.words = buildWordSpans(line.main.text, source.words, line.endMs);
+        buildGlyphMotion(line);
 
         const qreal mainH = qMax<qreal>(fontPx * 1.2, line.main.height);
         qreal contentH = mainH;
@@ -637,6 +736,7 @@ void AmllLyricsView::rebuildLayout(bool preservePosition)
         if (preservePosition && i < static_cast<int>(previousY.size())) {
             line.y.setPosition(previousY[static_cast<std::size_t>(i)]);
             line.scale.setPosition(previousScale[static_cast<std::size_t>(i)]);
+            line.highlight = previousHighlight[static_cast<std::size_t>(i)];
         } else {
             line.y.setPosition(height() * 2.0 + i * 2.0);
             line.scale.setPosition(1.0);
@@ -663,9 +763,7 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
         : -1;
 
     int focus = qBound(0, m_impl->scrollToIndex, lineCount - 1);
-    if (m_impl->autoAlignSuspended && m_impl->frozenFocusIndex >= 0)
-        focus = qBound(0, m_impl->frozenFocusIndex, lineCount - 1);
-    else if (hasInterlude)
+    if (hasInterlude)
         focus = qMax(0, interludeAnchor);
     else if (m_impl->endOfSong)
         focus = lineCount - 1;
@@ -677,9 +775,9 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
         focalTop += focusLine.height;
         focalHeight = interludeHeight;
     }
-    const qreal anchorBase = height() * fx.alignPosition()
-        - focalTop
-        - focalHeight * 0.5;
+    const qreal anchorBase = m_impl->autoAlignSuspended ? m_impl->frozenAnchorBase
+        : height() * fx.alignPosition() - focalTop - focalHeight * 0.5;
+    m_impl->anchorBase = anchorBase;
     const qreal contentBottom = anchorBase + m_impl->lines.back().top
         + m_impl->lines.back().height
         + (hasInterlude ? interludeHeight : 0.0);
@@ -690,19 +788,18 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
     const qreal base = anchorBase + m_impl->manualScroll;
 
     qreal delay = 0;
-    qreal delayStep = stagger ? 0.05 : 0.0;
+    const bool cascade = stagger && !m_impl->autoAlignSuspended;
     const qint64 intervalMs = focus > 0
         ? focusLine.startMs
             - m_impl->lines[static_cast<std::size_t>(focus - 1)].startMs
         : 0;
     for (int i = 0; i < lineCount; ++i) {
         LineLayout &line = m_impl->lines[static_cast<std::size_t>(i)];
-        setPosYSpringPolicy(line, seeking, hasInterlude, intervalMs,
-                            m_impl->endOfSong);
         if (m_impl->autoAlignSuspended) {
-            line.y.setParams(190 * fx.springStrength(),
-                             29 * fx.springDamping(), 1.0);
-        }
+            line.y.setParams((m_impl->touchScrolling ? 520 : 190) * fx.springStrength(),
+                             (m_impl->touchScrolling ? 46 : 27.5) * fx.springDamping());
+        } else
+            setPosYSpringPolicy(line, seeking, hasInterlude, intervalMs, m_impl->endOfSong);
         const qreal extra = hasInterlude && i > interludeAnchor
             ? interludeHeight
             : 0.0;
@@ -711,154 +808,142 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
         const qreal scaleTarget = line.highlighted
             ? 1.0
             : (m_impl->playing ? fx.inactiveScale() : 1.0);
-        line.scale.setParams(100, 25, 2.0);
-        line.scale.setTarget(scaleTarget, delay);
+        line.scale.setParams(185, 25);
+        line.scale.setTarget(scaleTarget, delay * 0.5);
 
-        if (target + line.height >= 0) {
-            delay += delayStep;
-            if (i >= focus)
-                delayStep /= 1.05;
-        }
+        if (cascade && target + line.height >= 0)
+            delay = qMin(0.11, delay + 0.022);
+    }
+    updateBlurTargets();
+    scheduleFrame();
+}
+
+void AmllLyricsView::updateBlurTargets()
+{
+    const auto &fx = LyricEffectSettings::instance();
+    const bool enabled = fx.distanceBlur() && !m_impl->pointerInside
+        && !m_impl->autoAlignSuspended;
+    const int latest = m_impl->latestHighlighted >= 0
+        ? m_impl->latestHighlighted : m_impl->scrollToIndex;
+    for (int i = 0; i < static_cast<int>(m_impl->lines.size()); ++i) {
+        auto &line = m_impl->lines[static_cast<std::size_t>(i)];
+        const int distance = i < m_impl->scrollToIndex
+            ? m_impl->scrollToIndex - i + 1 : qAbs(i - latest);
+        line.blurTarget = enabled && !line.highlighted
+            ? fx.blurStrength() * qMin(kBlurMax, (width() <= 1024 ? 0.8 : 1.0) * (1.0 + distance))
+            : 0.0;
     }
 }
 
-bool AmllLyricsView::updateTimeline(qint64 positionMs, bool seek)
+void AmllLyricsView::scheduleFrame()
 {
-    if (m_impl->lines.empty())
-        return false;
-
-    const int lineCount = static_cast<int>(m_impl->lines.size());
-    std::vector<uint8_t> previousPlaying(lineCount, 0);
-    std::vector<uint8_t> previousHighlighted(lineCount, 0);
-    for (int i = 0; i < lineCount; ++i) {
-        previousPlaying[static_cast<std::size_t>(i)] =
-            m_impl->lines[static_cast<std::size_t>(i)].playing ? 1 : 0;
-        previousHighlighted[static_cast<std::size_t>(i)] =
-            m_impl->lines[static_cast<std::size_t>(i)].highlighted ? 1 : 0;
+    if (!m_impl->frameTimer->isActive() && isVisible() && !m_impl->lines.empty()) {
+        m_impl->frameClock.start();
+        m_impl->frameTimer->start();
     }
+}
+
+void AmllLyricsView::updateTimeline(qint64 positionMs, bool jumped)
+{
+    if (m_impl->lines.empty() || (!jumped && positionMs == m_impl->positionMs))
+        return;
 
     const int previousScrollTo = m_impl->scrollToIndex;
     const int previousInterlude = m_impl->activeInterlude;
     const bool previousEnd = m_impl->endOfSong;
-    const bool jumped = seek || positionMs < m_impl->lastPositionMs - 250;
-    m_impl->positionMs = qMax<qint64>(0, positionMs);
-    m_impl->lastPositionMs = m_impl->positionMs;
-
-    std::vector<uint8_t> playing(lineCount, 0);
-    for (int i = 0; i < lineCount; ++i) {
-        LineLayout &line = m_impl->lines[static_cast<std::size_t>(i)];
-        line.playing = line.endMs > line.startMs
-            && m_impl->positionMs >= line.startMs
-            && m_impl->positionMs < line.endMs;
-        playing[static_cast<std::size_t>(i)] = line.playing ? 1 : 0;
-    }
+    m_impl->positionMs = positionMs;
 
     bool addedPlaying = false;
-    for (int i = 0; i < lineCount; ++i) {
-        if (playing[static_cast<std::size_t>(i)]
-            && !previousPlaying[static_cast<std::size_t>(i)]) {
-            addedPlaying = true;
-            break;
-        }
-    }
-
-    if (addedPlaying) {
-        for (int i = 0; i < lineCount; ++i) {
-            if (!playing[static_cast<std::size_t>(i)])
-                m_impl->lines[static_cast<std::size_t>(i)].highlighted = false;
-        }
-        for (int i = 0; i < lineCount; ++i) {
-            if (playing[static_cast<std::size_t>(i)])
-                m_impl->lines[static_cast<std::size_t>(i)].highlighted = true;
-        }
-    } else if (jumped) {
-        for (int i = 0; i < lineCount; ++i) {
-            m_impl->lines[static_cast<std::size_t>(i)].highlighted =
-                playing[static_cast<std::size_t>(i)] != 0;
-        }
+    bool anyPlaying = false;
+    for (auto &line : m_impl->lines) {
+        const bool playing = positionMs >= line.startMs && positionMs < line.endMs;
+        addedPlaying |= playing && !line.playing;
+        anyPlaying |= playing;
+        line.playing = playing;
     }
 
     int active = -1;
     for (int i = 0; i < static_cast<int>(m_impl->interludes.size()); ++i) {
-        const Interlude &inter = m_impl->interludes[static_cast<std::size_t>(i)];
-        if (m_impl->positionMs >= inter.startMs && m_impl->positionMs < inter.endMs) {
+        const auto &inter = m_impl->interludes[static_cast<std::size_t>(i)];
+        if (positionMs >= inter.startMs && positionMs < inter.endMs) {
             active = i;
             break;
         }
     }
-    if (active >= 0) {
-        bool anyPlaying = false;
-        for (uint8_t p : playing)
-            anyPlaying = anyPlaying || p;
-        if (!anyPlaying) {
-            for (LineLayout &line : m_impl->lines)
-                line.highlighted = false;
-        }
-    }
-
-    m_impl->endOfSong = m_impl->maxEndMs > 0 && m_impl->positionMs >= m_impl->maxEndMs;
-    if (m_impl->endOfSong) {
-        for (LineLayout &line : m_impl->lines)
-            line.highlighted = false;
-    }
     m_impl->activeInterlude = active;
+    if (active >= 0) {
+        if (active != m_impl->visibleInterlude) {
+            m_impl->visibleInterlude = active;
+            m_impl->interludeVisibility = 0;
+        }
+        m_impl->interludePositionMs = positionMs;
+    }
+    m_impl->endOfSong = m_impl->maxEndMs > 0 && positionMs >= m_impl->maxEndMs;
 
-    int minHighlighted = lineCount;
+    int firstHighlighted = -1;
     int latestHighlighted = -1;
-    for (int i = 0; i < lineCount; ++i) {
-        if (m_impl->lines[static_cast<std::size_t>(i)].highlighted) {
-            minHighlighted = qMin(minHighlighted, i);
-            latestHighlighted = qMax(latestHighlighted, i);
-        }
-    }
-    if (minHighlighted < lineCount)
-        m_impl->scrollToIndex = minHighlighted;
-    m_impl->latestHighlighted = latestHighlighted;
-    m_impl->scrollToIndex = qBound(0, m_impl->scrollToIndex, lineCount - 1);
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (m_impl->autoAlignSuspended && addedPlaying
-        && now - m_impl->interactionEndMs >= kAutoAlignResumeDelayMs) {
-        m_impl->manualScroll = 0;
-        m_impl->autoAlignSuspended = false;
-        m_impl->frozenFocusIndex = -1;
-    }
-    if (jumped && !m_impl->touchScrolling) {
-        m_impl->manualScroll = 0;
-        m_impl->autoAlignSuspended = false;
-        m_impl->frozenFocusIndex = -1;
-    }
-
     bool highlightedChanged = false;
-    for (int i = 0; i < lineCount; ++i) {
-        const uint8_t nowHighlighted =
-            m_impl->lines[static_cast<std::size_t>(i)].highlighted ? 1 : 0;
-        if (nowHighlighted != previousHighlighted[static_cast<std::size_t>(i)]) {
-            highlightedChanged = true;
-            break;
+    for (int i = 0; i < static_cast<int>(m_impl->lines.size()); ++i) {
+        auto &line = m_impl->lines[static_cast<std::size_t>(i)];
+        const bool wasHighlighted = line.highlighted;
+        if (m_impl->endOfSong || (active >= 0 && !anyPlaying))
+            line.highlighted = false;
+        else if (addedPlaying || jumped)
+            line.highlighted = line.playing;
+        highlightedChanged |= wasHighlighted != line.highlighted;
+        if (line.highlighted) {
+            if (firstHighlighted < 0)
+                firstHighlighted = i;
+            latestHighlighted = i;
         }
     }
-    const bool needsTargets = jumped || previousInterlude != active
-        || previousScrollTo != m_impl->scrollToIndex || highlightedChanged
-        || previousEnd != m_impl->endOfSong;
-    if (needsTargets)
-        updateLineTargets(!jumped, jumped);
-    else if (m_impl->playing) {
-        const auto &fx = LyricEffectSettings::instance();
-        for (LineLayout &line : m_impl->lines)
-            line.scale.setTarget(
-                line.highlighted ? 1.0 : fx.inactiveScale());
+    if (firstHighlighted >= 0)
+        m_impl->scrollToIndex = firstHighlighted;
+    else if (jumped && active < 0 && !m_impl->endOfSong) {
+        const auto next = std::upper_bound(m_impl->lines.cbegin(), m_impl->lines.cend(), positionMs,
+            [](qint64 position, const LineLayout &line) { return position < line.startMs; });
+        m_impl->scrollToIndex = qMax(0, int(next - m_impl->lines.cbegin()) - 1);
     }
+    m_impl->latestHighlighted = latestHighlighted;
 
-    if (!m_impl->frameTimer->isActive() && isVisible())
-        m_impl->frameTimer->start();
-    return needsTargets;
+    const bool resume = m_impl->autoAlignSuspended && !m_impl->touchScrolling
+        && (jumped || (addedPlaying && qFuzzyIsNull(m_impl->inertiaVelocity)
+                       && QDateTime::currentMSecsSinceEpoch() - m_impl->interactionEndMs
+                           >= kAutoAlignResumeDelayMs));
+    if (resume) {
+        m_impl->manualScroll = 0;
+        m_impl->autoAlignSuspended = false;
+        m_impl->inertiaVelocity = 0;
+    }
+    if (jumped || resume || previousInterlude != active || highlightedChanged
+        || previousScrollTo != m_impl->scrollToIndex || previousEnd != m_impl->endOfSong) {
+        updateLineTargets(!jumped, jumped);
+    }
 }
 
 void AmllLyricsView::setPosition(qint64 positionMs, bool seek)
 {
     if (m_impl->lyrics.isEmpty() || height() <= 0)
         return;
-    updateTimeline(positionMs, seek);
+    positionMs = qMax<qint64>(0, positionMs);
+    if (m_impl->waitingForSeek) {
+        // 点击歌词后，等待引擎确认，避免用残留的旧进度反向拉动歌词。
+        if (!seek && m_impl->sampleClock.isValid() && m_impl->sampleClock.elapsed() < 350
+            && qAbs(positionMs - m_impl->sampledPositionMs) > 120) {
+            return;
+        }
+        m_impl->waitingForSeek = false;
+    }
+    const bool jumped = seek || positionMs < m_impl->sampledPositionMs - 250
+        || positionMs > m_impl->positionMs + 500;
+    if (!m_impl->sampleClock.isValid() || jumped || positionMs != m_impl->sampledPositionMs) {
+        m_impl->sampledPositionMs = positionMs;
+        m_impl->sampleClock.start();
+    }
+    // 播放时只补齐相邻位置通知之间的小空隙，不倒播扫光，也不在缓冲时继续跑。
+    if (jumped || !m_impl->playing || !isVisible() || positionMs > m_impl->positionMs)
+        updateTimeline(positionMs, jumped);
+    scheduleFrame();
     update();
 }
 
@@ -867,13 +952,11 @@ void AmllLyricsView::setPlaying(bool playing)
     if (m_impl->playing == playing)
         return;
     m_impl->playing = playing;
-    m_impl->frameClock.restart();
+    m_impl->sampleClock.invalidate();
     const auto &fx = LyricEffectSettings::instance();
-    for (LineLayout &line : m_impl->lines)
-        line.scale.setTarget(
-            playing && !line.highlighted ? fx.inactiveScale() : 1.0);
-    if (playing && isVisible())
-        m_impl->frameTimer->start();
+    for (auto &line : m_impl->lines)
+        line.scale.setTarget(playing && !line.highlighted ? fx.inactiveScale() : 1.0);
+    scheduleFrame();
     update();
 }
 
@@ -906,8 +989,10 @@ void AmllLyricsView::setEmptyText(const QString &text)
 void AmllLyricsView::resetView()
 {
     updateLineTargets(false, false);
-    for (LineLayout &line : m_impl->lines)
+    for (LineLayout &line : m_impl->lines) {
         line.y.setPosition(line.y.target());
+        line.blur = line.blurTarget;
+    }
     update();
 }
 
@@ -921,12 +1006,12 @@ QImage AmllLyricsView::sharpLineImage(int index)
     const qreal sidePadding = qBound<qreal>(16.0, fontPx, 34.0);
     const int logicalWidth = qMax(1, qRound(width() - sidePadding * 2.0));
     const int logicalHeight = qMax(1, qCeil(line.height));
-    if (line.cacheValid && line.cacheWidth == logicalWidth
-        && !line.sharpCache.isNull()) {
+    const qreal dpr = devicePixelRatioF();
+    if (line.cacheWidth == logicalWidth && !line.sharpCache.isNull()
+        && line.sharpCache.devicePixelRatio() == dpr) {
         return line.sharpCache;
     }
 
-    const qreal dpr = devicePixelRatioF();
     QImage image(qCeil(logicalWidth * dpr), qCeil(logicalHeight * dpr),
                  QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::transparent);
@@ -934,7 +1019,6 @@ QImage AmllLyricsView::sharpLineImage(int index)
     QPainter painter(&image);
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setRenderHint(QPainter::TextAntialiasing, true);
-    painter.scale(dpr, dpr);
 
     QColor secondary = m_impl->secondaryColor;
     secondary.setAlphaF(qMin<qreal>(secondary.alphaF(), 0.30));
@@ -960,7 +1044,6 @@ QImage AmllLyricsView::sharpLineImage(int index)
     line.sharpCache = image;
     line.blurCache.clear();
     line.cacheWidth = logicalWidth;
-    line.cacheValid = true;
     return line.sharpCache;
 }
 
@@ -992,111 +1075,78 @@ void AmllLyricsView::drawKaraokeLine(QPainter &painter, int index)
             line.translation.layout->draw(&painter, QPointF(0, y));
         }
     };
-    if (!fx.wordSweep()) {
+    if (line.glyphs.empty() || (!fx.wordSweep() && !fx.wordFloat() && !fx.emphasisGlow())) {
         painter.setPen(m_impl->activeColor);
         line.main.layout->draw(&painter, QPointF(0, padY));
         drawSubLines();
         return;
     }
 
-    QVector<int> graphemeOffsets;
-    const QVector<QString> graphemes =
-        graphemeSegments(line.main.text, &graphemeOffsets);
-    const auto wordAt = [&line](int position) -> const WordSpan * {
-        for (const WordSpan &word : line.words) {
-            if (position >= word.start && position < word.start + word.length)
-                return &word;
-        }
-        return nullptr;
-    };
-    const WordSpan *cachedWord = nullptr;
-    int cachedWordFirstGrapheme = 0;
-    int cachedWordGraphemeCount = 1;
-
-    for (int li = 0; li < line.main.layout->lineCount(); ++li) {
-        const QTextLine textLine = line.main.layout->lineAt(li);
-        const int lineStart = textLine.textStart();
-        const int lineEnd = lineStart + textLine.textLength();
-        for (int gi = 0; gi < graphemes.size(); ++gi) {
-            const int globalStart = graphemeOffsets.at(gi);
-            const int globalEnd = globalStart + graphemes.at(gi).size();
-            if (globalEnd <= lineStart || globalStart >= lineEnd)
-                continue;
-
-            const WordSpan *word = wordAt(globalStart);
-            qreal rawProgress = 0.0;
-            qreal floatY = 0.0;
-            qreal emphasis = 0.0;
-            QColor color = m_impl->dimColor;
-            if (word && word->length > 0) {
-                qint64 wordStart = word->startMs;
-                qint64 wordEnd = word->endMs;
-                if (wordEnd <= wordStart)
-                    wordEnd = wordStart + 180;
-                const qreal duration = qMax<qint64>(1, wordEnd - wordStart);
-                rawProgress = std::clamp<qreal>(
-                    (m_impl->positionMs - wordStart) / duration, 0.0, 1.0);
-                const qreal floatProgress = std::clamp<qreal>(
-                    (m_impl->positionMs - wordStart)
-                        / qMax<qint64>(1000, wordEnd - wordStart),
-                    0.0,
-                    1.0);
-                if (fx.wordFloat()) {
-                    floatY = -0.05 * fontPx * easeOutCubic(floatProgress)
-                        * (line.source.background ? 2.0 : 1.0);
+    for (const auto &glyph : line.glyphs) {
+        if (glyph.text.isEmpty())
+            continue;
+        QPen pen(fx.wordSweep() ? m_impl->dimColor : m_impl->activeColor);
+        qreal floatY = 0.0;
+        qreal emphasis = 0.0;
+        if (glyph.word >= 0) {
+            const auto &word = line.words[static_cast<std::size_t>(glyph.word)];
+            const qreal elapsed = m_impl->positionMs - word.startMs;
+            const qreal duration = qMax<qreal>(1.0, word.endMs - word.startMs);
+            const qreal progress = std::clamp(elapsed / duration, 0.0, 1.0);
+            if (progress >= 1.0) {
+                pen.setColor(m_impl->activeColor);
+            } else if (progress > 0.0 && fx.wordSweep()) {
+                // 按文字的实际宽度推进柔边扫光，而不是整字一起切换颜色。
+                const qreal feather = qMin(0.25, fontPx * 0.23 / word.sweepWidth);
+                const qreal head = progress * (1.0 + 2.0 * feather) - feather;
+                if (head - feather >= glyph.sweepEnd) {
+                    pen.setColor(m_impl->activeColor);
+                } else if (head + feather > glyph.sweepStart) {
+                    const qreal fraction = glyph.sweepEnd - glyph.sweepStart;
+                    if (qAbs(glyph.advance) >= 1.0) {
+                        const auto xAt = [&](qreal t) {
+                            return glyph.x + glyph.advance * (t - glyph.sweepStart) / fraction;
+                        };
+                        QLinearGradient sweep(xAt(head - feather), 0, xAt(head + feather), 0);
+                        sweep.setColorAt(0.0, m_impl->activeColor);
+                        sweep.setColorAt(0.25, blendColor(m_impl->activeColor, m_impl->dimColor, 0.16));
+                        sweep.setColorAt(0.75, blendColor(m_impl->activeColor, m_impl->dimColor, 0.84));
+                        sweep.setColorAt(1.0, m_impl->dimColor);
+                        pen.setBrush(sweep);
+                    } else {
+                        pen.setColor(blendColor(m_impl->dimColor, m_impl->activeColor,
+                            smoothStep((head + feather - glyph.sweepStart) / (2.0 * feather))));
+                    }
                 }
-                if (cachedWord != word) {
-                    cachedWord = word;
-                    cachedWordFirstGrapheme = qMax(
-                        0, int(std::lower_bound(graphemeOffsets.cbegin(),
-                                                graphemeOffsets.cend(),
-                                                word->start)
-                                   - graphemeOffsets.cbegin()));
-                    cachedWordGraphemeCount = qMax(
-                        1, int(graphemeSegments(
-                                   line.main.text.mid(word->start, word->length))
-                                   .size()));
-                }
-                const int wordGrapheme = gi - cachedWordFirstGrapheme;
-                const qreal glyphProgress = std::clamp<qreal>(
-                    (rawProgress * cachedWordGraphemeCount - wordGrapheme)
-                        / qMax(1, int(cachedWordGraphemeCount * 0.5)),
-                    0.0,
-                    1.0);
-                color = blendColor(m_impl->dimColor, m_impl->activeColor,
-                                   smoothStep(glyphProgress));
-
-                const QString wordText =
-                    line.main.text.mid(word->start, word->length);
-                const bool emphasize = fx.emphasisGlow()
-                    && (wordEnd - wordStart) >= 1000
-                    && (isCjkText(wordText)
-                        || (wordText.trimmed().size() <= 7
-                            && wordText.trimmed().size() > 1));
-                emphasis = emphasize ? std::sin(rawProgress * kPi) : 0.0;
             }
-
-            int cursor = globalStart;
-            const qreal x = textLine.cursorToX(&cursor);
-            const qreal baseline = textLine.y() + textLine.ascent();
-            painter.save();
-            if (emphasis > 0.001) {
-                const qreal cx = textLine.cursorToX(globalEnd);
-                const qreal cy = baseline + floatY;
-                painter.translate(cx, cy);
-                const qreal s = 1.0 + emphasis * 0.06;
-                painter.scale(s, s);
-                painter.translate(-cx, -cy);
-                QColor glow = m_impl->activeColor;
-                glow.setAlphaF(0.16 * emphasis);
-                painter.setPen(glow);
-                painter.drawText(QPointF(x - 1.0, baseline + floatY - 0.5),
-                                 graphemes.at(gi));
+            if (fx.wordFloat()) {
+                const qreal lift = easeOutCubic(elapsed / qBound(360.0, duration, 900.0));
+                floatY = -fontPx * (line.background ? 0.065 : 0.045) * lift;
             }
-            painter.setPen(color);
-            painter.drawText(QPointF(x, baseline + floatY), graphemes.at(gi));
-            painter.restore();
+            if (fx.emphasisGlow() && word.canEmphasize) {
+                const qreal pulse = std::sin(progress * kPi);
+                emphasis = pulse * pulse;
+            }
         }
+
+        const QPointF position(qMin(glyph.x, glyph.x + glyph.advance),
+                               padY + glyph.baseline + floatY);
+        painter.save();
+        if (emphasis > 0.001) {
+            const QPointF pivot = position + QPointF(qAbs(glyph.advance) * 0.5, -fontPx * 0.3);
+            painter.translate(pivot);
+            const qreal scale = 1.0 + emphasis * 0.047;
+            painter.scale(scale, scale);
+            painter.translate(-pivot);
+            QColor glow = m_impl->activeColor;
+            glow.setAlphaF(glow.alphaF() * 0.11 * emphasis);
+            painter.setPen(glow);
+            painter.drawText(position + QPointF(-0.85, -0.6), glyph.text);
+            painter.drawText(position + QPointF(0.85, 0.35), glyph.text);
+        }
+        painter.setPen(pen);
+        painter.drawText(position, glyph.text);
+        painter.restore();
     }
 
     drawSubLines();
@@ -1135,112 +1185,75 @@ void AmllLyricsView::paintEvent(QPaintEvent *event)
     }
 
     const qreal fontPx = effectiveFontPx(m_impl->mainFontPx);
-    const auto &fx = LyricEffectSettings::instance();
     const qreal sidePadding = qBound<qreal>(16.0, fontPx, 34.0);
-    const bool hasInterlude = m_impl->activeInterlude >= 0;
-    const int interludeAnchor = hasInterlude
-        ? m_impl->interludes[static_cast<std::size_t>(m_impl->activeInterlude)]
-              .anchorIndex
-        : -1;
-    const qreal interludeHeight = fontPx * 1.2;
-
-    if (m_impl->pointerInside && m_impl->hoveredIndex >= 0
-        && m_impl->hoveredIndex < static_cast<int>(m_impl->lines.size())) {
-        LineLayout &line =
-            m_impl->lines[static_cast<std::size_t>(m_impl->hoveredIndex)];
-        const qreal y = line.y.current()
-            + (hasInterlude && m_impl->hoveredIndex > interludeAnchor
-                   ? interludeHeight
-                   : 0.0);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor(255, 255, 255, 17));
-        painter.drawRoundedRect(
-            QRectF(sidePadding * 0.35, y + 2,
-                   width() - sidePadding * 0.70, qMax(1.0, line.height - 4)),
-            8, 8);
-    }
 
     for (int i = 0; i < static_cast<int>(m_impl->lines.size()); ++i) {
-        LineLayout &line = m_impl->lines[static_cast<std::size_t>(i)];
-        const qreal extra = hasInterlude && i > interludeAnchor
-            ? interludeHeight
-            : 0.0;
-        const qreal y = line.y.current() + extra;
-        const qreal scaleValue = line.scale.current();
-        const qreal scaledHeight = line.height * scaleValue;
-        if (y + scaledHeight < -16 || y > height() + 16)
+        auto &line = m_impl->lines[static_cast<std::size_t>(i)];
+        const qreal y = line.y.current();
+        const qreal scale = line.scale.current();
+        const qreal scaledHeight = line.height * scale;
+        if (y + scaledHeight < -16 || y > height() + 16) {
+            line.screenRect = {};
             continue;
-
-        line.screenRect = QRectF(0, y, width(), qMax<qreal>(1.0, scaledHeight));
-        const bool hovered = m_impl->pointerInside && m_impl->hoveredIndex == i;
-        qreal blur = 0;
-        if (!m_impl->pointerInside && !m_impl->autoAlignSuspended && !hovered
-            && fx.distanceBlur()) {
-            if (line.highlighted) {
-                blur = 0;
-            } else {
-                const int latest = m_impl->latestHighlighted >= 0
-                    ? m_impl->latestHighlighted
-                    : m_impl->scrollToIndex;
-                const int distance = i < m_impl->scrollToIndex
-                    ? qAbs(m_impl->scrollToIndex - i) + 1
-                    : qAbs(i - latest);
-                blur = fx.blurStrength()
-                    * qMin<qreal>(
-                        kBlurMax,
-                        (width() <= 1024 ? 0.8 : 1.0) * (1.0 + distance));
-            }
         }
-        line.blur = blur;
-        const bool nonDynamic =
-            line.words.size() == 1 && line.words.front().sourceIndex < 0;
-        line.opacity = line.highlighted
-            ? 0.85
-            : (nonDynamic ? 0.20 : 1.0);
 
+        line.screenRect = QRectF(0, y, width(), qMax(1.0, scaledHeight));
+        if (line.hover > 0.0) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(255, 255, 255, qRound(19 * smoothStep(line.hover))));
+            painter.drawRoundedRect(
+                QRectF(sidePadding * 0.35, y + 2,
+                       width() - sidePadding * 0.70, qMax(1.0, scaledHeight - 4)),
+                8, 8);
+        }
+
+        const qreal focus = smoothStep(line.highlight);
+        const bool lineTimed = line.glyphs.empty();
         painter.save();
-        painter.setOpacity(line.opacity);
         painter.translate(sidePadding, y);
-        painter.scale(scaleValue, scaleValue);
-        if (line.highlighted) {
-            drawKaraokeLine(painter, i);
-        } else {
+        painter.scale(scale, scale);
+        if (focus < 1.0) {
             const QImage sharp = sharpLineImage(i);
             QImage image = sharp;
-            if (blur > 0.1) {
-                const int key = qRound(blur * 4.0);
-                auto it = line.blurCache.constFind(key);
-                if (it == line.blurCache.cend()) {
-                    image = blurImage(sharp, blur);
-                    line.blurCache.insert(key, image);
+            const int key = qRound(line.blur * 4.0);
+            if (key > 0) {
+                const auto cached = line.blurCache.constFind(key);
+                if (cached != line.blurCache.cend()) {
+                    image = cached.value();
                 } else {
-                    image = it.value();
+                    image = blurImage(sharp, key / 4.0);
+                    if (line.blurCache.size() >= 6)
+                        line.blurCache.erase(line.blurCache.begin());
+                    line.blurCache.insert(key, image);
                 }
             }
+            painter.setOpacity((1.0 - focus) * (lineTimed ? 0.20 : 1.0));
             painter.drawImage(QPointF(0, 0), image);
+        }
+        if (focus > 0.0) {
+            painter.setOpacity(0.85 * focus);
+            drawKaraokeLine(painter, i);
         }
         painter.restore();
     }
 
-    if (hasInterlude && interludeAnchor >= 0
-        && interludeAnchor < static_cast<int>(m_impl->lines.size())) {
-        const LineLayout &anchor =
-            m_impl->lines[static_cast<std::size_t>(interludeAnchor)];
-        const qreal dotSize = fontPx * 0.30;
-        const qreal gap = fontPx * 0.18;
-        const qreal x = sidePadding;
-        const qreal y = anchor.y.current() + anchor.height
-            + (interludeHeight - dotSize) * 0.5;
-        const qreal phase = (m_impl->positionMs % 1200) / 1200.0;
+    if (m_impl->visibleInterlude >= 0 && m_impl->interludeVisibility > 0.0) {
+        const auto &interlude = m_impl->interludes[static_cast<std::size_t>(m_impl->visibleInterlude)];
+        const auto &anchor = m_impl->lines[static_cast<std::size_t>(interlude.anchorIndex)];
+        const qreal visibility = smoothStep(m_impl->interludeVisibility);
+        const qreal dotSize = fontPx * 0.22;
+        const qreal spacing = fontPx * 0.44;
+        const qreal y = anchor.y.current() + anchor.height + fontPx * (0.35 + 0.25 * visibility);
+        const qreal time = m_impl->interludePositionMs - interlude.startMs;
         painter.setPen(Qt::NoPen);
         for (int i = 0; i < 3; ++i) {
-            const qreal local = std::fmod(phase + i * 0.16, 1.0);
-            const qreal bounce = std::sin(local * kPi) * fontPx * 0.20;
+            const qreal wave = 0.5 - 0.5 * std::cos(2.0 * kPi * (time / 1350.0 - i * 0.17));
+            const qreal radius = dotSize * (0.44 + 0.13 * wave);
             QColor dot = m_impl->activeColor;
-            dot.setAlphaF(0.48 + 0.35 * std::sin(local * kPi));
+            dot.setAlphaF(dot.alphaF() * visibility * (0.38 + 0.45 * wave));
             painter.setBrush(dot);
-            painter.drawEllipse(
-                QRectF(x + i * (dotSize + gap), y - bounce, dotSize, dotSize));
+            painter.drawEllipse(QPointF(sidePadding + dotSize * 0.5 + i * spacing,
+                                        y - fontPx * 0.12 * wave), radius, radius);
         }
     }
 }
@@ -1255,9 +1268,7 @@ void AmllLyricsView::resizeEvent(QResizeEvent *event)
 void AmllLyricsView::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
-    m_impl->frameClock.restart();
-    if (!m_impl->lines.empty())
-        m_impl->frameTimer->start();
+    scheduleFrame();
 }
 
 void AmllLyricsView::hideEvent(QHideEvent *event)
@@ -1265,6 +1276,10 @@ void AmllLyricsView::hideEvent(QHideEvent *event)
     QWidget::hideEvent(event);
     m_impl->frameTimer->stop();
     m_impl->inertiaVelocity = 0;
+    m_impl->touchScrolling = false;
+    m_impl->pointerInside = false;
+    m_impl->hoveredIndex = -1;
+    updateBlurTargets();
 }
 
 void AmllLyricsView::wheelEvent(QWheelEvent *event)
@@ -1279,14 +1294,12 @@ void AmllLyricsView::wheelEvent(QWheelEvent *event)
         : event->angleDelta().y() * 0.55;
     // 与原生滚动方向一致：滚轮向上看更早的歌词（内容向下），向下看后续歌词。
     if (!m_impl->autoAlignSuspended)
-        m_impl->frozenFocusIndex = m_impl->scrollToIndex;
+        m_impl->frozenAnchorBase = m_impl->anchorBase;
     m_impl->manualScroll += delta;
     m_impl->autoAlignSuspended = true;
     m_impl->interactionEndMs = QDateTime::currentMSecsSinceEpoch();
     m_impl->inertiaVelocity = 0;
     updateLineTargets(false, false);
-    if (!m_impl->frameTimer->isActive())
-        m_impl->frameTimer->start();
     update();
     event->accept();
 }
@@ -1302,12 +1315,17 @@ int AmllLyricsView::lineIndexAt(const QPointF &position) const
 
 void AmllLyricsView::mouseMoveEvent(QMouseEvent *event)
 {
+    const bool entered = !m_impl->pointerInside;
     m_impl->pointerInside = true;
     const int index = lineIndexAt(event->position());
+    if (entered) {
+        updateBlurTargets();
+        scheduleFrame();
+    }
     if (m_impl->hoveredIndex != index) {
         m_impl->hoveredIndex = index;
         setCursor(index >= 0 ? Qt::PointingHandCursor : Qt::ArrowCursor);
-        update();
+        scheduleFrame();
     }
     QWidget::mouseMoveEvent(event);
 }
@@ -1323,9 +1341,8 @@ void AmllLyricsView::mousePressEvent(QMouseEvent *event)
             // 回传 positionChanged 时先出现一帧无动画瞬移。
             m_impl->inertiaVelocity = 0;
             m_impl->touchScrolling = false;
-            m_impl->autoAlignSuspended = false;
-            m_impl->frozenFocusIndex = -1;
             setPosition(targetMs, true);
+            m_impl->waitingForSeek = true;
             emit seekRequested(targetMs);
             event->accept();
             return;
@@ -1339,7 +1356,8 @@ void AmllLyricsView::leaveEvent(QEvent *event)
     m_impl->pointerInside = false;
     m_impl->hoveredIndex = -1;
     unsetCursor();
-    update();
+    updateBlurTargets();
+    scheduleFrame();
     QWidget::leaveEvent(event);
 }
 
@@ -1354,7 +1372,8 @@ bool AmllLyricsView::event(QEvent *event)
         const auto points = touch->points();
         if (event->type() == QEvent::TouchBegin && !points.isEmpty()) {
             if (!m_impl->autoAlignSuspended)
-                m_impl->frozenFocusIndex = m_impl->scrollToIndex;
+                m_impl->frozenAnchorBase = m_impl->anchorBase;
+            m_impl->inertiaVelocity = 0;
             m_impl->touchScrolling = true;
             m_impl->touchStart = points.first().position();
             m_impl->touchLastY = m_impl->touchStart.y();
@@ -1363,6 +1382,7 @@ bool AmllLyricsView::event(QEvent *event)
             m_impl->touchLastTimeMs = QDateTime::currentMSecsSinceEpoch();
             m_impl->interactionEndMs = m_impl->touchLastTimeMs;
             m_impl->autoAlignSuspended = true;
+            updateLineTargets(false, false);
             touch->accept();
             return true;
         }
@@ -1373,19 +1393,20 @@ bool AmllLyricsView::event(QEvent *event)
             m_impl->manualScroll =
                 m_impl->touchStartScroll + (y - m_impl->touchStart.y());
             // 手指上推时内容继续向上滑，惯性方向必须与最后一帧位移一致。
-            m_impl->touchVelocity = (y - m_impl->touchLastY) / dt;
+            const qreal velocity = (y - m_impl->touchLastY) / dt;
+            m_impl->touchVelocity += (velocity - m_impl->touchVelocity)
+                * (1.0 - std::exp(-dt / 0.026));
             m_impl->touchLastY = y;
             m_impl->touchLastTimeMs = now;
             m_impl->interactionEndMs = now;
             updateLineTargets(false, false);
-            if (!m_impl->frameTimer->isActive())
-                m_impl->frameTimer->start();
             update();
             touch->accept();
             return true;
         }
         if (event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel) {
-            if (event->type() == QEvent::TouchEnd) {
+            const qint64 now = QDateTime::currentMSecsSinceEpoch();
+            if (event->type() == QEvent::TouchEnd && now - m_impl->touchLastTimeMs <= 90) {
                 m_impl->inertiaVelocity = std::clamp<qreal>(
                     m_impl->touchVelocity, -2200.0, 2200.0);
                 if (qAbs(m_impl->inertiaVelocity) < 20.0)
@@ -1394,9 +1415,8 @@ bool AmllLyricsView::event(QEvent *event)
                 m_impl->inertiaVelocity = 0;
             }
             m_impl->touchScrolling = false;
-            m_impl->interactionEndMs = QDateTime::currentMSecsSinceEpoch();
-            if (!m_impl->frameTimer->isActive())
-                m_impl->frameTimer->start();
+            m_impl->interactionEndMs = now;
+            updateLineTargets(false, false);
             touch->accept();
             return true;
         }
