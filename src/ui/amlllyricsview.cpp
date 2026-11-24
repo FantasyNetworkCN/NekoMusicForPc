@@ -256,6 +256,7 @@ struct LineLayout {
     qreal hover = 0.0;
     qreal blur = 0.0;
     qreal blurTarget = 0.0;
+    qint64 fadeOutPositionMs = 0;
     bool highlighted = false;
     bool playing = false;
     QRectF screenRect;
@@ -286,10 +287,12 @@ qreal smoothStep(qreal value)
     return t * t * (3.0 - 2.0 * t);
 }
 
-qreal easeOutCubic(qreal value)
+qreal wordLift(qreal elapsed, qreal duration, qreal glyphStart)
 {
-    const qreal t = 1.0 - std::clamp(value, 0.0, 1.0);
-    return 1.0 - t * t * t;
+    // 让字形沿扫光方向依次离开基线；起步和收尾都没有瞬时速度。
+    const qreal spread = qMin(95.0, duration * 0.25);
+    const qreal riseTime = qBound(175.0, duration * 0.60 + 55.0, 560.0);
+    return smoothStep((elapsed - glyphStart * spread) / riseTime);
 }
 
 bool approach(qreal &value, qreal target, qreal step)
@@ -491,8 +494,8 @@ void setPosYSpringPolicy(LineLayout &line, bool seeking, bool interlude,
     const qreal clamped = std::clamp<qreal>(qreal(intervalMs), 100.0, 800.0);
     qreal ratio = 1.0 - (clamped - 100.0) / 700.0;
     ratio = std::pow(ratio, 0.2);
-    const qreal stiffness = 170.0 + ratio * 50.0;
-    apply(line, stiffness, std::sqrt(stiffness) * 1.75);
+    const qreal stiffness = 150.0 + ratio * 105.0;
+    apply(line, stiffness, 2.0 * std::sqrt(stiffness * 0.9));
 }
 
 } // namespace
@@ -694,6 +697,7 @@ void AmllLyricsView::rebuildLayout(bool preservePosition)
     QFont mainFont = font();
     mainFont.setPixelSize(fontPx);
     mainFont.setWeight(QFont::Normal);
+    mainFont.setHintingPreference(QFont::PreferNoHinting);
     QFont subFont = font();
     subFont.setPixelSize(qMax(10, qRound(fontPx * 0.5)));
     subFont.setWeight(QFont::Normal);
@@ -787,12 +791,12 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
         m_impl->manualScroll, m_impl->manualScrollMin, m_impl->manualScrollMax);
     const qreal base = anchorBase + m_impl->manualScroll;
 
-    qreal delay = 0;
     const bool cascade = stagger && !m_impl->autoAlignSuspended;
     const qint64 intervalMs = focus > 0
         ? focusLine.startMs
             - m_impl->lines[static_cast<std::size_t>(focus - 1)].startMs
         : 0;
+    const qreal cascadeStep = qBound(0.006, intervalMs / 42000.0, 0.017);
     for (int i = 0; i < lineCount; ++i) {
         LineLayout &line = m_impl->lines[static_cast<std::size_t>(i)];
         if (m_impl->autoAlignSuspended) {
@@ -804,15 +808,14 @@ void AmllLyricsView::updateLineTargets(bool stagger, bool seeking)
             ? interludeHeight
             : 0.0;
         const qreal target = base + line.top + extra;
+        // 前后焦点行一起上移，只让后面的几行略微跟拍。
+        const qreal delay = cascade ? qBound(0, i - focus, 3) * cascadeStep : 0.0;
         line.y.setTarget(target, delay);
         const qreal scaleTarget = line.highlighted
             ? 1.0
             : (m_impl->playing ? fx.inactiveScale() : 1.0);
         line.scale.setParams(185, 25);
-        line.scale.setTarget(scaleTarget, delay * 0.5);
-
-        if (cascade && target + line.height >= 0)
-            delay = qMin(0.11, delay + 0.022);
+        line.scale.setTarget(scaleTarget);
     }
     updateBlurTargets();
     scheduleFrame();
@@ -851,6 +854,7 @@ void AmllLyricsView::updateTimeline(qint64 positionMs, bool jumped)
     const int previousScrollTo = m_impl->scrollToIndex;
     const int previousInterlude = m_impl->activeInterlude;
     const bool previousEnd = m_impl->endOfSong;
+    const qint64 previousPositionMs = m_impl->positionMs;
     m_impl->positionMs = positionMs;
 
     bool addedPlaying = false;
@@ -890,6 +894,8 @@ void AmllLyricsView::updateTimeline(qint64 positionMs, bool jumped)
             line.highlighted = false;
         else if (addedPlaying || jumped)
             line.highlighted = line.playing;
+        if (wasHighlighted && !line.highlighted)
+            line.fadeOutPositionMs = jumped ? previousPositionMs : qMin(positionMs, line.endMs);
         highlightedChanged |= wasHighlighted != line.highlighted;
         if (line.highlighted) {
             if (firstHighlighted < 0)
@@ -917,7 +923,9 @@ void AmllLyricsView::updateTimeline(qint64 positionMs, bool jumped)
     }
     if (jumped || resume || previousInterlude != active || highlightedChanged
         || previousScrollTo != m_impl->scrollToIndex || previousEnd != m_impl->endOfSong) {
-        updateLineTargets(!jumped, jumped);
+        const bool advancing = !jumped && previousInterlude == active && active < 0
+            && m_impl->scrollToIndex > previousScrollTo;
+        updateLineTargets(advancing, jumped);
     }
 }
 
@@ -1019,6 +1027,7 @@ QImage AmllLyricsView::sharpLineImage(int index)
     QPainter painter(&image);
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setRenderHint(QPainter::TextAntialiasing, true);
+    painter.setRenderHint(QPainter::VerticalSubpixelPositioning, true);
 
     QColor secondary = m_impl->secondaryColor;
     secondary.setAlphaF(qMin<qreal>(secondary.alphaF(), 0.30));
@@ -1082,6 +1091,8 @@ void AmllLyricsView::drawKaraokeLine(QPainter &painter, int index)
         return;
     }
 
+    const qint64 positionMs = line.highlighted ? m_impl->positionMs : line.fadeOutPositionMs;
+    const qreal liftHeight = fontPx * (line.background ? 0.08 : 0.055) * smoothStep(line.highlight);
     for (const auto &glyph : line.glyphs) {
         if (glyph.text.isEmpty())
             continue;
@@ -1090,7 +1101,7 @@ void AmllLyricsView::drawKaraokeLine(QPainter &painter, int index)
         qreal emphasis = 0.0;
         if (glyph.word >= 0) {
             const auto &word = line.words[static_cast<std::size_t>(glyph.word)];
-            const qreal elapsed = m_impl->positionMs - word.startMs;
+            const qreal elapsed = positionMs - word.startMs;
             const qreal duration = qMax<qreal>(1.0, word.endMs - word.startMs);
             const qreal progress = std::clamp(elapsed / duration, 0.0, 1.0);
             if (progress >= 1.0) {
@@ -1119,10 +1130,8 @@ void AmllLyricsView::drawKaraokeLine(QPainter &painter, int index)
                     }
                 }
             }
-            if (fx.wordFloat()) {
-                const qreal lift = easeOutCubic(elapsed / qBound(360.0, duration, 900.0));
-                floatY = -fontPx * (line.background ? 0.065 : 0.045) * lift;
-            }
+            if (fx.wordFloat())
+                floatY = -liftHeight * wordLift(elapsed, duration, glyph.sweepStart);
             if (fx.emphasisGlow() && word.canEmphasize) {
                 const qreal pulse = std::sin(progress * kPi);
                 emphasis = pulse * pulse;
@@ -1158,6 +1167,7 @@ void AmllLyricsView::paintEvent(QPaintEvent *event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setRenderHint(QPainter::TextAntialiasing, true);
+    painter.setRenderHint(QPainter::VerticalSubpixelPositioning, true);
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
     if (m_impl->lines.empty()) {
