@@ -788,4 +788,5 @@ void PlayerEngine::onMediaStateChanged(QMediaPlayer::PlaybackState state)
 void PlayerEngine::setCurrentMusic(const MusicInfo& music)
 {
     m_currentMusic = music;
+    emit currentMusicChanged(m_currentMusic);
 }

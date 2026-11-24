@@ -469,7 +469,8 @@ static QMap<QString, QString> zhCN()
     m["stemActive"] = QStringLiteral("人声分离已生效，主音量控制双轨总音量。");
     m["stemDisabled"] = QStringLiteral("人声分离已关闭，恢复原曲播放。");
     m["volumeAndStem"] = QStringLiteral("音量与人声伴奏");
-    m["volumeAndStemHint"] = QStringLiteral("主音量独立调节；分离音轨就绪后接管原曲，缺片或失败时继续播放原曲，关闭面板恢复原声。");
+    m["volumeAndStemHint"] = QStringLiteral("分离就绪后自动接管；缺片或失败时仍播放原曲。开启状态在切歌、关闭面板和重启后保留。");
+    m["stemOnlineTrackRequired"] = QStringLiteral("仅可播放的在线曲目支持人声分离；开启状态会保留。");
     m["stemPreparing"] = QStringLiteral("正在准备人声与伴奏…");
     m["stemLoadingAudio"] = QStringLiteral("正在加载双轨音频…");
     m["stemReady"] = QStringLiteral("双轨已就绪");
@@ -1811,7 +1812,8 @@ static QMap<QString, QString> enUS()
     m["stemActive"] = "Stem separation is active. Main volume controls the overall stem mix.";
     m["stemDisabled"] = "Stem separation is off. Original playback restored.";
     m["volumeAndStem"] = "Volume & Stems";
-    m["volumeAndStemHint"] = "Adjust the main volume separately. Stems take over when ready; missing chunks or errors continue with the original track, and closing the panel restores the original mix.";
+    m["volumeAndStemHint"] = "Stems take over when ready; missing chunks or errors keep the original audio. The setting stays on across track changes, closing this panel, and restarts.";
+    m["stemOnlineTrackRequired"] = "Stem separation requires a playable online track. Your setting is kept.";
     m["stemPreparing"] = "Preparing vocals and accompaniment…";
     m["stemLoadingAudio"] = "Loading separated tracks…";
     m["stemReady"] = "Separated tracks ready";

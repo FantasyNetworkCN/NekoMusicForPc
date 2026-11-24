@@ -14,6 +14,7 @@
 #include <QLabel>
 #include <QMediaDevices>
 #include <QNetworkProxy>
+#include <QPointer>
 #include <QSettings>
 #include <QSignalSpy>
 #include <QSlider>
@@ -22,6 +23,8 @@
 #include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QTest>
+
+#include <algorithm>
 
 namespace {
 
@@ -51,6 +54,7 @@ class StemTest : public QObject
 private slots:
     void masterVolumeFollowsEngine();
     void cachedJobWithOnlyDone();
+    void followsTracksAndRestoresPreference();
     void reportsHttpErrorBody();
 };
 
@@ -61,7 +65,7 @@ void StemTest::masterVolumeFollowsEngine()
     PlayerEngine engine;
     QWidget host;
     PlayerBar bar(&engine, &host);
-    StemMixerDialog dialog(nullptr, &engine, {});
+    StemMixerDialog dialog(nullptr, &engine);
     auto *popup = host.findChild<QSlider *>(QStringLiteral("pbVolumeSlider"));
     auto *percentage = host.findChild<QLabel *>(QStringLiteral("pbVolumeLabel"));
     auto *master = dialog.findChild<QSlider *>(QStringLiteral("stemMasterSlider"));
@@ -123,7 +127,8 @@ void StemTest::cachedJobWithOnlyDone()
     engine.setVolume(0.42f);
     MusicInfo song;
     song.id = musicId;
-    StemMixerDialog dialog(&api, &engine, song);
+    engine.setCurrentMusic(song);
+    StemMixerDialog dialog(&api, &engine);
     auto *toggle = dialog.findChild<QCheckBox *>(QStringLiteral("stemToggle"));
     QVERIFY(toggle && !toggle->isEnabled());
     UserManager::instance().setLoginInfo(QStringLiteral("fixture"), {{QStringLiteral("isVip"), true}});
@@ -201,6 +206,115 @@ void StemTest::cachedJobWithOnlyDone()
         QVERIFY(!original->isMuted() && !output.last().first().toBool());
         QCOMPARE(engine.volume(), 0.42f);
         engine.stop();
+    }
+}
+
+void StemTest::followsTracksAndRestoresPreference()
+{
+    const auto setting = QStringLiteral("stem/enabled");
+    QSettings().remove(setting);
+    UserManager::instance().setLoginInfo(QStringLiteral("fixture"), {{QStringLiteral("isVip"), true}});
+    QList<int> started;
+    QList<QPointer<QTcpSocket>> oldDownloads;
+    QTcpServer server;
+    QVERIFY(server.listen(QHostAddress::LocalHost));
+    connect(&server, &QTcpServer::newConnection, &server, [&]() {
+        while (auto *socket = server.nextPendingConnection()) {
+            connect(socket, &QTcpSocket::readyRead, &server, [&, socket, request = QByteArray()]() mutable {
+                request += socket->readAll();
+                if (!request.contains("\r\n\r\n"))
+                    return;
+                const QByteArray target = request.split(' ').value(1);
+                if (target.startsWith("/api/music/file/") && target.endsWith("/stream?separate=1")) {
+                    const int track = target.split('/').value(4).toInt();
+                    started.append(track);
+                    if (track == 40104) {
+                        socket->write("HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\n"
+                                      "Connection: close\r\n\r\n{\"message\":\"fixture VIP required\"}");
+                        socket->disconnectFromHost();
+                        return;
+                    }
+                    socket->write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+                                  "Connection: close\r\n\r\n");
+                    if (track == 40101) {
+                        socket->write("event: done\ndata: {\"vocalsUrl\":\"/old-vocals.mp3\","
+                                      "\"accompanimentUrl\":\"/old-accompaniment.mp3\"}\n\n");
+                        socket->disconnectFromHost();
+                    } else {
+                        socket->write("event: queued\ndata: {\"queuePosition\":1}\n\n");
+                    }
+                } else if (target.startsWith("/old-")) {
+                    oldDownloads.append(socket); // 故意不响应，验证切歌会取消旧下载。
+                } else {
+                    socket->disconnectFromHost();
+                }
+            });
+        }
+    });
+    Theme::setApiBase(QStringLiteral("http://127.0.0.1:%1").arg(server.serverPort()));
+    ApiClient api;
+    const auto song = [](int id) {
+        MusicInfo info;
+        info.id = id;
+        info.title = QString::number(id);
+        return info;
+    };
+    {
+        PlayerEngine engine;
+        engine.setCurrentMusic(song(40101));
+        StemMixerDialog dialog(&api, &engine);
+        auto *toggle = dialog.findChild<QCheckBox *>(QStringLiteral("stemToggle"));
+        QVERIFY(toggle && toggle->isEnabled() && !toggle->isChecked());
+        toggle->setChecked(true);
+        dialog.close();
+        QVERIFY(QSettings().value(setting).toBool());
+        QTRY_COMPARE(oldDownloads.size(), 2);
+
+        engine.setCurrentMusic(song(40102));
+        QTRY_COMPARE(started, (QList<int>{40101, 40102}));
+        QTRY_VERIFY(std::all_of(oldDownloads.cbegin(), oldDownloads.cend(), [](const auto &socket) {
+            return !socket || socket->state() == QAbstractSocket::UnconnectedState;
+        }));
+        QVERIFY(toggle->isChecked());
+
+        MusicInfo local;
+        local.localPath = QStringLiteral("/fixture.wav");
+        engine.setCurrentMusic(local);
+        QVERIFY(toggle->isChecked() && !toggle->isEnabled());
+        UserManager::instance().setVipStatus(false);
+        engine.setCurrentMusic(song(40103));
+        QVERIFY(toggle->isChecked() && !toggle->isEnabled());
+        QTest::qWait(100);
+        QCOMPARE(started.size(), 2);
+        QVERIFY(QSettings().value(setting).toBool());
+        UserManager::instance().setVipStatus(true);
+        QTRY_COMPARE(started, (QList<int>{40101, 40102, 40103}));
+    }
+    {
+        PlayerEngine engine;
+        StemMixerDialog dialog(&api, &engine);
+        auto *toggle = dialog.findChild<QCheckBox *>(QStringLiteral("stemToggle"));
+        QVERIFY(toggle && toggle->isChecked() && !toggle->isEnabled());
+        engine.setCurrentMusic(song(40104));
+        QTRY_COMPARE(started, (QList<int>{40101, 40102, 40103, 40104}));
+        auto *mixer = dialog.findChild<StemAudioMixer *>();
+        QVERIFY(mixer);
+        QTRY_VERIFY(!mixer->isEnabled());
+        QVERIFY(QSettings().value(setting).toBool());
+        QVERIFY(toggle->isChecked() && toggle->isEnabled());
+        toggle->setChecked(false);
+        engine.setCurrentMusic(song(40105));
+        QTest::qWait(100);
+        QCOMPARE(started.size(), 4);
+        QVERIFY(!QSettings().value(setting, true).toBool());
+    }
+    {
+        PlayerEngine engine;
+        engine.setCurrentMusic(song(40106));
+        StemMixerDialog dialog(&api, &engine);
+        auto *toggle = dialog.findChild<QCheckBox *>(QStringLiteral("stemToggle"));
+        QVERIFY(toggle && !toggle->isChecked());
+        QCOMPARE(started.size(), 4);
     }
 }
 

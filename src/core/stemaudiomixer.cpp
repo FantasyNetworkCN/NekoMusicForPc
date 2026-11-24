@@ -205,6 +205,10 @@ void StemAudioMixer::clearChunks()
     m_failedLoads.clear();
     m_specs.clear();
     m_fullTracks.reset();
+    for (auto *decoder : findChildren<QAudioDecoder *>(QString(), Qt::FindDirectChildrenOnly)) {
+        decoder->stop();
+        decoder->deleteLater();
+    }
     resetOutput();
 }
 

@@ -29,17 +29,21 @@ class QTimer;
 class StemMixerDialog final : public QDialog
 {
 public:
-    explicit StemMixerDialog(ApiClient *apiClient, PlayerEngine *engine,
-                             const MusicInfo &music, QWidget *parent = nullptr);
+    explicit StemMixerDialog(ApiClient *apiClient, PlayerEngine *engine, QWidget *parent = nullptr);
     ~StemMixerDialog() override;
+
+    static bool enabledPreference();
 
 private:
     void setupUi();
+    void setTrack(const MusicInfo &music);
+    bool trackSupportsStems() const;
     void ensureMixer();
     void registerReadyChunk(int index, const QVariantMap &chunk);
     void loadCachedStems();
     void startStemStream();
     void stopStemStream();
+    void cancelStemRequests();
     void onStemStreamEvent(const QString &event, const QVariantMap &data);
     void onStemStreamError(int statusCode, const QString &message);
     void onMixerOutputUnavailable(const QString &message);
@@ -52,6 +56,7 @@ private:
     void updateProgress();
     void updateStemControls();
     void refreshStemAccess();
+    void syncStemState();
     void persistGains();
     void setStatus(const QString &text);
     void setStemActive(bool active);
@@ -94,6 +99,8 @@ private:
     StemAudioMixer *m_audioMixer = nullptr;
     NekoNetworkAccessManager *m_cacheNam = nullptr;
     QNetworkReply *m_streamReply = nullptr;
+    QSet<QNetworkReply *> m_downloadReplies;
+    quint64 m_requestGeneration = 0;
     QString m_jobId;
     QMap<int, QVariantMap> m_readyChunks;
     QSet<int> m_chunkDownloads;
@@ -104,6 +111,8 @@ private:
     bool m_fullDownloadPending = false;
     bool m_fullDecodePending = false;
     bool m_fullReady = false;
+    bool m_stemRequested = false;
     bool m_stemActive = false;
     bool m_mixerOutputFailed = false;
+    int m_accessFailure = 0;
 };

@@ -108,6 +108,7 @@ private:
     void playMusicFromInfo(const MusicInfo &info);
     /** 打开当前在线曲目的服务端人声/伴奏分离播放器。 */
     void openStemMixer(int musicId);
+    void ensureStemMixer();
     /** 「播放全部」：房间里原子替换临时列表并从指定位置起播，否则走本机队列。 */
     void playAllMusic(const QList<MusicInfo> &songs, int startIndex = 0);
     /** 「下一首播放」：把曲目插到当前曲目之后并强制下一首为它 */
@@ -252,7 +253,6 @@ private:
     McpBridge *m_mcpBridge = nullptr;
     TogetherRoomClient *m_together = nullptr;
     StemMixerDialog *m_stemMixerDialog = nullptr;
-    int m_stemMixerMusicId = -1;
     QTimer *m_togetherSyncTimer = nullptr;
     QString m_pendingTogetherToken;
 

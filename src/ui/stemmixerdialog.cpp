@@ -34,12 +34,14 @@
 #include <QVBoxLayout>
 
 #include <memory>
+#include <utility>
 
 namespace {
 
 constexpr int kSliderMax = 100;
 constexpr int kDefaultGain = 80;
 constexpr qint64 kCacheTtlMs = 180LL * 24 * 60 * 60 * 1000;
+const auto kEnabledSetting = QStringLiteral("stem/enabled");
 
 QString percentText(int value)
 {
@@ -75,12 +77,16 @@ QString chunkPathsKey(int index)
 
 } // namespace
 
-StemMixerDialog::StemMixerDialog(ApiClient *apiClient, PlayerEngine *engine,
-                                 const MusicInfo &music, QWidget *parent)
+bool StemMixerDialog::enabledPreference()
+{
+    return QSettings().value(kEnabledSetting, false).toBool();
+}
+
+StemMixerDialog::StemMixerDialog(ApiClient *apiClient, PlayerEngine *engine, QWidget *parent)
     : QDialog(parent)
     , m_apiClient(apiClient)
     , m_engine(engine)
-    , m_music(music)
+    , m_stemRequested(enabledPreference())
 {
     setWindowTitle(I18n::instance().tr(QStringLiteral("volumeAndStem")));
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
@@ -95,22 +101,56 @@ StemMixerDialog::StemMixerDialog(ApiClient *apiClient, PlayerEngine *engine,
     connect(m_gainSaveTimer, &QTimer::timeout, this, &StemMixerDialog::persistGains);
     connect(this, &QDialog::finished, this, [this]() { persistGains(); });
     setupUi();
-    loadCachedStems();
-
     auto &user = UserManager::instance();
     connect(&user, &UserManager::loginStateChanged, this, &StemMixerDialog::refreshStemAccess);
     connect(&user, &UserManager::vipStatusChanged, this, &StemMixerDialog::refreshStemAccess);
-    refreshStemAccess();
+    if (m_engine)
+        connect(m_engine, &PlayerEngine::currentMusicChanged, this, &StemMixerDialog::setTrack);
+    setTrack(m_engine ? m_engine->currentMusic() : MusicInfo{});
 }
 
 StemMixerDialog::~StemMixerDialog()
 {
     persistGains();
     m_stemActive = false;
-    stopStemStream();
+    cancelStemRequests();
     stopPlayback();
     if (m_audioMixer)
         m_audioMixer->clearChunks();
+}
+
+void StemMixerDialog::setTrack(const MusicInfo &music)
+{
+    const bool changed = m_music.id != music.id || m_music.localPath != music.localPath
+        || m_music.playable != music.playable;
+    if (changed) {
+        // 取消的是旧曲目的会话，不改变用户开启分离的偏好。
+        setStemActive(false);
+        if (m_audioMixer)
+            m_audioMixer->clearChunks();
+        m_readyChunks.clear();
+        m_seenChunkEvents.clear();
+        m_fullStemData.clear();
+        m_jobId.clear();
+        m_totalChunks = 0;
+        m_streamDone = false;
+        m_fullDecodePending = false;
+        m_fullReady = false;
+        m_accessFailure = 0;
+    }
+
+    m_music = music;
+    const auto title = I18n::instance().tr(QStringLiteral("volumeAndStem"));
+    m_titleLabel->setText(m_music.title.isEmpty() ? title
+                          : QStringLiteral("%1 · %2").arg(title, m_music.title));
+    if (changed && trackSupportsStems())
+        loadCachedStems();
+    syncStemState();
+}
+
+bool StemMixerDialog::trackSupportsStems() const
+{
+    return m_music.id > 0 && !m_music.isLocalFile() && m_music.playable;
 }
 
 void StemMixerDialog::setupUi()
@@ -143,9 +183,6 @@ void StemMixerDialog::setupUi()
     root->setSpacing(13);
 
     m_titleLabel = new QLabel(this);
-    m_titleLabel->setText(QStringLiteral("%1 · %2")
-                              .arg(I18n::instance().tr(QStringLiteral("volumeAndStem")),
-                                   m_music.title));
     QFont titleFont = m_titleLabel->font();
     titleFont.setPixelSize(20);
     titleFont.setBold(true);
@@ -255,7 +292,10 @@ void StemMixerDialog::setupUi()
     bindStemGain(m_vocalsSlider, m_vocalsValue);
     bindStemGain(m_accompanimentSlider, m_accompanimentValue);
     connect(m_stemToggle, &QCheckBox::toggled, this, [this](bool checked) {
-        setStemActive(checked);
+        m_stemRequested = checked;
+        QSettings().setValue(kEnabledSetting, checked);
+        m_accessFailure = 0;
+        syncStemState();
     });
 
     auto *actions = new QHBoxLayout();
@@ -286,11 +326,6 @@ void StemMixerDialog::setupUi()
             if (m_stemActive)
                 setStatus(I18n::instance().tr(QStringLiteral("stemTrackFinished")));
         });
-        connect(m_engine, &PlayerEngine::musicStarted, this,
-                [this](const MusicInfo &info) {
-                    if (m_stemActive && info.id != m_music.id)
-                        m_stemToggle->setChecked(false);
-                });
     }
 }
 
@@ -415,14 +450,15 @@ void StemMixerDialog::startStemStream()
     }
     setStatus(I18n::instance().tr(QStringLiteral("stemPreparing")));
     QPointer<StemMixerDialog> self(this);
+    const quint64 generation = m_requestGeneration;
     m_streamReply = m_apiClient->streamStemSeparation(
         m_music.id,
-        [self](const QString &event, const QVariantMap &data) {
-            if (self)
+        [self, generation](const QString &event, const QVariantMap &data) {
+            if (self && self->m_requestGeneration == generation)
                 self->onStemStreamEvent(event, data);
         },
-        [self](int statusCode, const QString &message) {
-            if (self)
+        [self, generation](int statusCode, const QString &message) {
+            if (self && self->m_requestGeneration == generation)
                 self->onStemStreamError(statusCode, message);
         });
     if (!m_streamReply)
@@ -444,20 +480,27 @@ void StemMixerDialog::stopStemStream()
     reply->abort();
 }
 
+void StemMixerDialog::cancelStemRequests()
+{
+    ++m_requestGeneration;
+    stopStemStream();
+    const auto replies = std::exchange(m_downloadReplies, {});
+    m_chunkDownloads.clear();
+    m_fullDownloadPending = false;
+    for (auto *reply : replies) {
+        disconnect(reply, nullptr, this, nullptr);
+        reply->abort();
+        reply->deleteLater();
+    }
+}
+
 void StemMixerDialog::onStemStreamError(int statusCode, const QString &message)
 {
     if (!m_stemActive)
         return;
-    if (statusCode == 401) {
-        m_stemToggle->setChecked(false);
-        m_stemToggle->setEnabled(false);
-        setStatus(I18n::instance().tr(QStringLiteral("stemLoginRequired")));
-        return;
-    }
-    if (statusCode == 403) {
-        m_stemToggle->setChecked(false);
-        m_stemToggle->setEnabled(false);
-        setStatus(I18n::instance().tr(QStringLiteral("stemVipRequired")));
+    if (statusCode == 401 || statusCode == 403) {
+        m_accessFailure = statusCode;
+        syncStemState();
         return;
     }
 
@@ -729,22 +772,35 @@ void StemMixerDialog::updateStemControls()
     m_vocalsSlider->setEnabled(m_stemActive);
     m_accompanimentSlider->setEnabled(m_stemActive);
     m_resetMixButton->setEnabled(m_stemActive);
-    m_stemToggle->setEnabled(UserManager::instance().isLoggedIn()
+    const QSignalBlocker blocker(m_stemToggle);
+    m_stemToggle->setChecked(m_stemRequested);
+    m_stemToggle->setEnabled(trackSupportsStems() && UserManager::instance().isLoggedIn()
                              && UserManager::instance().isVip());
 }
 
 void StemMixerDialog::refreshStemAccess()
 {
+    m_accessFailure = 0;
+    syncStemState();
+}
+
+void StemMixerDialog::syncStemState()
+{
     const auto &user = UserManager::instance();
-    if (!user.isLoggedIn() || !user.isVip()) {
-        m_stemToggle->setChecked(false);
-        setStatus(I18n::instance().tr(user.isLoggedIn()
-            ? QStringLiteral("stemVipRequired") : QStringLiteral("stemLoginRequired")));
-    } else if (!m_stemActive) {
-        setStatus(I18n::instance().tr(m_readyChunks.isEmpty() && !m_fullReady
-            ? QStringLiteral("stemEnableHint") : QStringLiteral("stemCacheRestored")));
-    }
+    const bool loggedIn = user.isLoggedIn() && m_accessFailure != 401;
+    const bool vip = user.isVip() && m_accessFailure != 403;
+    const bool supported = trackSupportsStems();
+    setStemActive(m_stemRequested && supported && loggedIn && vip);
     updateStemControls();
+    updateProgress();
+    if (!supported)
+        setStatus(I18n::instance().tr(QStringLiteral("stemOnlineTrackRequired")));
+    else if (!loggedIn)
+        setStatus(I18n::instance().tr(QStringLiteral("stemLoginRequired")));
+    else if (!vip)
+        setStatus(I18n::instance().tr(QStringLiteral("stemVipRequired")));
+    else if (!m_stemRequested)
+        setStatus(I18n::instance().tr(QStringLiteral("stemDisabled")));
 }
 
 void StemMixerDialog::persistGains()
@@ -774,19 +830,9 @@ void StemMixerDialog::setStemActive(bool active)
     if (!active) {
         m_stemActive = false;
         m_mixerOutputFailed = false;
-        stopStemStream();
+        cancelStemRequests();
         if (m_audioMixer)
             m_audioMixer->setEnabled(false);
-        updateStemControls();
-        updateProgress();
-        setStatus(I18n::instance().tr(QStringLiteral("stemDisabled")));
-        return;
-    }
-
-    if (!UserManager::instance().isLoggedIn() || !UserManager::instance().isVip()) {
-        const QSignalBlocker blocker(m_stemToggle);
-        m_stemToggle->setChecked(false);
-        m_stemToggle->setEnabled(false);
         return;
     }
 
@@ -799,8 +845,6 @@ void StemMixerDialog::setStemActive(bool active)
     applyStemVolumes();
     if (m_audioMixer)
         m_audioMixer->setEnabled(true);
-    updateStemControls();
-    updateProgress();
     if (m_fullReady || allChunksReady()) {
         setStatus(I18n::instance().tr(QStringLiteral("stemCacheRestored")));
     } else if (m_fullDownloadPending || m_fullDecodePending
@@ -864,18 +908,15 @@ void StemMixerDialog::downloadFile(const QString &url, const QString &destinatio
     }
 
     QDir().mkpath(QFileInfo(destination).absolutePath());
+    auto file = std::make_shared<QSaveFile>(destination);
+    if (!file->open(QIODevice::WriteOnly)) {
+        callback(false, file->errorString());
+        return;
+    }
     QNetworkRequest request{QUrl(absoluteMediaUrl(url))};
     request.setTransferTimeout(120000);
     QNetworkReply *reply = m_cacheNam->get(request);
-    auto *file = new QSaveFile(destination, reply);
-    if (!file->open(QIODevice::WriteOnly)) {
-        QMetaObject::invokeMethod(this, [reply, callback, message = file->errorString()] {
-            reply->abort();
-            reply->deleteLater();
-            callback(false, message);
-        }, Qt::QueuedConnection);
-        return;
-    }
+    m_downloadReplies.insert(reply);
 
     auto bytes = std::make_shared<qint64>(0);
     const auto writeData = [reply, file, bytes]() {
@@ -887,7 +928,8 @@ void StemMixerDialog::downloadFile(const QString &url, const QString &destinatio
     };
     connect(reply, &QNetworkReply::readyRead, this, writeData);
     connect(reply, &QNetworkReply::finished, this,
-            [reply, file, bytes, writeData, callback]() {
+            [this, reply, file, bytes, writeData, callback]() {
+                m_downloadReplies.remove(reply);
                 writeData();
                 const int status =
                     reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();

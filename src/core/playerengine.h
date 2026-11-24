@@ -74,6 +74,7 @@ signals:
     void positionChanged(qint64 position);
     void durationChanged(qint64 duration);
     void fadeComplete();
+    void currentMusicChanged(const MusicInfo &music);
     void musicStarted(const MusicInfo& music);
     void mediaError(const QString &error);
     void playbackFinished();

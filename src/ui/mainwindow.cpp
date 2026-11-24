@@ -401,6 +401,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_downloader = &MusicDownloader::instance();
     m_together = &TogetherRoomClient::instance();
     setupUi();
+    if (StemMixerDialog::enabledPreference())
+        ensureStemMixer();
     m_playabilityTimer = new QTimer(this);
     m_playabilityTimer->setInterval(10000);
     connect(m_playabilityTimer, &QTimer::timeout,
@@ -557,6 +559,9 @@ MainWindow::~MainWindow()
 
     // 清理下载器连接
     disconnectDownloader();
+    // 先结束分轨会话，再由窗口析构播放器和网络客户端。
+    delete m_stemMixerDialog;
+    m_stemMixerDialog = nullptr;
 
     if (m_desktopLrc) {
         m_desktopLrc->hide();
@@ -2067,24 +2072,22 @@ void MainWindow::openStemMixer(int musicId)
         return;
     MusicInfo info = m_engine->currentMusic();
     if (info.id != musicId)
-        info = musicInfoForPlayerAction(musicId);
-    if (info.id <= 0 || info.isLocalFile()) {
+        return;
+    if (info.isLocalFile()) {
         Toast::show(this, I18n::instance().tr(QStringLiteral("musicNotPlayable")), Toast::Info);
         return;
     }
 
-    if (m_stemMixerDialog && m_stemMixerMusicId != info.id) {
-        delete m_stemMixerDialog;
-        m_stemMixerDialog = nullptr;
-        m_stemMixerMusicId = -1;
-    }
-    if (!m_stemMixerDialog) {
-        m_stemMixerDialog = new StemMixerDialog(m_apiClient, m_engine, info, this);
-        m_stemMixerMusicId = info.id;
-    }
+    ensureStemMixer();
     m_stemMixerDialog->show();
     m_stemMixerDialog->raise();
     m_stemMixerDialog->activateWindow();
+}
+
+void MainWindow::ensureStemMixer()
+{
+    if (!m_stemMixerDialog)
+        m_stemMixerDialog = new StemMixerDialog(m_apiClient, m_engine, this);
 }
 
 void MainWindow::playAllMusic(const QList<MusicInfo> &songs, int startIndex)
